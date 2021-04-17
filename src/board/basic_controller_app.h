@@ -2,6 +2,7 @@
 #include "../lib/logger.h"
 #include "../lib/http_server.h"
 #include "../lib/file_system.h"
+#include "../lib/led_strip.h"
 
 namespace DevRelief {
 
@@ -10,6 +11,7 @@ namespace DevRelief {
     class BasicControllerApplication : public Application {
     public: 
         BasicControllerApplication() {
+            m_pos = 0;
             m_logger = new Logger("BasicControllerApplication");
             m_httpServer = new HttpServer();
             m_fileSystem = new DRFileSystem();
@@ -24,6 +26,19 @@ namespace DevRelief {
                 this->notFound(req,resp);
             });
             m_logger->info("BasicControllerApplication constructed");
+            m_strip1 = new DRLedStrip(1,100);
+            m_strip2 = new DRLedStrip(2,100);
+            m_strip3 = new DRLedStrip(3,20);
+            setSolidColor(m_strip1,CRGB(255,0,0));
+            setSolidColor(m_strip2,CRGB(0,255,0));            
+            setSolidColor(m_strip3,CRGB(0,0,255));
+        }
+
+        void setSolidColor(DRLedStrip * strip, CRGB color) {
+            strip->clear();
+            for(int i=0;i<strip->getCount();i++) {
+                strip->setColor(i,color);
+            }
         }
 
         String getMimeType(String path) {
@@ -59,6 +74,15 @@ namespace DevRelief {
 
         void loop() {
             m_httpServer->handleClient();
+            m_pos = (m_pos + 1) % 100;
+            m_strip1->clear();
+            m_strip2->clear();
+            for(int i=0;i<20;i++) {
+                m_strip1->setColor((m_pos+i) % 100,CRGB(255,0,0));
+                m_strip2->setColor((m_pos+i) % 100,CRGB(0,255,0));
+                m_strip3->setColor((m_pos+i) % 100,CRGB(0,0,255));
+            }
+            DRLedStrip::show();
         }
 
     private: 
@@ -66,6 +90,10 @@ namespace DevRelief {
         DRFileSystem * m_fileSystem;
         HttpServer * m_httpServer;
         int m_count = 1;
+        DRLedStrip * m_strip1;
+        DRLedStrip * m_strip2;
+        DRLedStrip * m_strip3;
+        int m_pos;
     };
 
 }
