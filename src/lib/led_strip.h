@@ -20,7 +20,6 @@ namespace DevRelief {
         }
 
         CLEDController*  getController(int pin,CRGB* colors,int count) {
-            // I can only get 2 pins working on my ESP8266.  Adding a 3rd results in unwanted flashes
             switch(pin) {
                 case 1: {
                     m_logger->debug("Create FastLED on pin 1");
@@ -29,6 +28,10 @@ namespace DevRelief {
                 case 2: {
                     m_logger->debug("Create FastLED on pin 2");
                     return &FastLED.addLeds<NEOPIXEL,2>(colors,count);
+                }
+                case 3: {
+                    m_logger->debug("Create FastLED on pin 3");
+                    return &FastLED.addLeds<NEOPIXEL,3>(colors,count);
                 }
                 default: {
                     m_logger->error("pin must be 1, 2, or 3.  got %d",pin);

@@ -30,8 +30,7 @@ namespace DevRelief {
                     return &FastLED.addLeds<NEOPIXEL,2>(colors,count);
                 }
                 case 3: {
-                    m_logger->debug("Create FastLED on pin 0");
-
+                    m_logger->debug("Create FastLED on pin 3");
                     return &FastLED.addLeds<NEOPIXEL,3>(colors,count);
                 }
                 default: {
