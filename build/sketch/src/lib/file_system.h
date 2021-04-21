@@ -21,6 +21,12 @@ public:
         return m_data;
     }
 
+    String text() {
+        String text;
+        text.concat((char*)m_data,m_length);
+        return text;
+    }
+
     uint8_t* reserve(size_t length) {
         if (length > m_maxLength) {
             m_logger->debug("increase buffer length. old length=%d, new length=%d",m_maxLength,length);
@@ -102,8 +108,17 @@ public:
         size_t size = file.size();
         auto data = buffer.reserve((long)size);
         size_t readBytes = file.read(data,size);
+        file.close();
         buffer.setLength(size);
         m_logger->debug("read %d bytes.  buffer has %d bytes",readBytes, buffer.getLength());
+        return true;
+    }
+
+    bool write(String path, const String& data) {
+        auto fullPath = getFullPath(path);
+        File file = LittleFS.open(fullPath,"w");
+        file.write(data.c_str(),data.length());
+        file.close();
         return true;
     }
 

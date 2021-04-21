@@ -11,6 +11,11 @@
   },
   {
     "Sourcefile": "d:\\dev\\arduino\\led_app\\build\\sketch\\basic_controller.ino.cpp",
+    "Include": "ArduinoJson.h",
+    "Includepath": "D:\\dev\\arduino\\libraries\\ArduinoJson\\src"
+  },
+  {
+    "Sourcefile": "d:\\dev\\arduino\\led_app\\build\\sketch\\basic_controller.ino.cpp",
     "Include": "ESP8266WiFi.h",
     "Includepath": "C:\\Users\\fredc\\AppData\\Local\\Arduino15\\packages\\esp8266\\hardware\\esp8266\\2.7.4\\libraries\\ESP8266WiFi\\src"
   },
