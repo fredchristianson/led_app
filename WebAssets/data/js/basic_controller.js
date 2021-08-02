@@ -24,7 +24,7 @@ class LedSelector {
         this.container = document.getElementById('leds');
         this.app = app;
         this.selected = [];
-        this.xhrOpen = false;
+        
     }
 
     setCount(count) {
@@ -87,6 +87,19 @@ class LedSelector {
         });
     }
 
+    setColorAtIndex(index,color) {
+        const nodes = this.container.querySelectorAll('.led');
+        if (nodes[index]) {
+            const c = color;
+            nodes[index].style.backgroundColor = c;
+            nodes[index].dataset.color = c;
+        }
+        this.selected.forEach(sel=>{
+            sel.style.backgroundColor = color;
+            sel.dataset.color = color;
+        });
+    }
+
     getRGBColors() {
         const nodes = this.container.querySelectorAll('.led');
         const rgb = [];
@@ -109,8 +122,41 @@ class BasicControllerApp {
         this.ledSelector = new LedSelector(this);
         document.body.addEventListener('change',(changeEvent)=>{ this.handleChange(changeEvent);},true);
         document.body.addEventListener('click',(clickEvent)=>{ this.handleClick(clickEvent);},true);
+        this.xhrOpen = false;
+        this.initialize();
+    }
+
+    d2h(d){
+        const hex = d.toString(16);
+        if (hex.length==1) {
+            return '0'+hex;
+        }
+        return hex;
+    }
+    toHexColor(led) {
+        const hex = `#${this.d2h(led.r)}${this.d2h(led.g)}${this.d2h(led.b)}`;
+        return hex;
+    }
+    async initialize() {
+        const response = await this.get("config");
+        if (response && response.result) {
+            const config = response.data;
+            this.setValue('#pin1',config.pins[0].status);
+            this.setValue('#pin2',config.pins[1].status);
+            this.setValue('#pin3',config.pins[2].status);
+            this.setValue('#pin1-count',config.pins[0].count);
+            this.setValue('#pin2-count',config.pins[1].count);
+            this.setValue('#pin3-count',config.pins[2].count);
+            this.setValue('#brightness',config.brightness || 30);
+        }
         this.initializeTriggers();
         this.updateLedCount();
+        if (response && response.result) {
+            for(var idx=0;idx<response.data.leds.length;idx++){
+                const led = this.toHexColor(response.data.leds[idx]);
+                this.ledSelector.setColorAtIndex(idx,led);
+            }
+        }
     }
 
     isPinActive(pin) {
@@ -209,6 +255,18 @@ class BasicControllerApp {
         return '';
     }
 
+    getIntValue(selector,defaultValue=30) {
+        var val = this.getValue(selector);
+        if (val == null || val == '') {
+            return defaultValue;
+        }
+        var ival = Number.parseInt(val);
+        if (isNaN(ival)) {
+            return defaultValue;
+        }
+        return ival;
+    }
+
     setSelection(first,last) {
         this.setValue('#first-led',first);
         this.setValue('#last-led',last);
@@ -263,8 +321,9 @@ class BasicControllerApp {
         }
         this.stopAnimate();
         this.interval = setInterval(()=>{
-            this.ledSelector.rotate(1);
-            this.sendColors();
+            if (this.sendColors()) {
+                this.ledSelector.rotate(1);
+            }
         },freq);
     }
 
@@ -334,10 +393,11 @@ class BasicControllerApp {
 
     saveLeds() {
         const json = {
+            "brightness": this.getIntValue('#brightness',50),
             "pins": [
-                {"status": this.getValue('#pin1'),"count":this.getValue('#pin1-count')},
-                {"status": this.getValue('#pin2'),"count":this.getValue('#pin2-count')},
-                {"status": this.getValue('#pin3'),"count":this.getValue('#pin3-count')}
+                {"status": this.getValue('#pin1'),"count":this.getIntValue('#pin1-count')},
+                {"status": this.getValue('#pin2'),"count":this.getIntValue('#pin2-count')},
+                {"status": this.getValue('#pin3'),"count":this.getIntValue('#pin3-count')}
             ],
             "leds": this.ledSelector.getRGBColors()
         };
@@ -347,23 +407,53 @@ class BasicControllerApp {
 
     sendColors() {
         const json = {
+            "brightness": this.getIntValue('#brightness',50),
             "pins": [
-                {"status": this.getValue('#pin1'),"count":this.getValue('#pin1-count')},
-                {"status": this.getValue('#pin2'),"count":this.getValue('#pin2-count')},
-                {"status": this.getValue('#pin3'),"count":this.getValue('#pin3-count')}
+                {"status": this.getValue('#pin1'),"count":this.getIntValue('#pin1-count')},
+                {"status": this.getValue('#pin2'),"count":this.getIntValue('#pin2-count')},
+                {"status": this.getValue('#pin3'),"count":this.getIntValue('#pin3-count')}
             ],
             "leds": this.ledSelector.getRGBColors()
         };
         this.logger.debug("JSON " + JSON.stringify(json,null,2));
-        this.post('colors',json);
+        return this.post('colors',json);
+    }
+
+    get(api){
+        return new Promise((resolve,reject)=>{
+            const xhr = new XMLHttpRequest();
+            //xhr.responseType = 'json';
+            xhr.onload = (e)=>{
+                const text = xhr.responseText;
+                const json = JSON.parse(text);
+                resolve(json);
+                //resolve(xhr.response);
+            };
+            xhr.onerror = (e)=>{
+                reject(xhr.response);
+            }
+            //const url = "http://192.168.10.127/api/"+api;
+            const url = "/api/"+api;
+            xhr.open("GET",url);
+        
+            xhr.send();
+        
+        })
     }
 
     post(api,json){
         if (this.xhrOpen) {
             this.logger.error("too fast");
+            if (this.resetTimeout == null) {
+                this.resetTimeout = setTimeout(()=>{
+                    this.resetTimeout = null;
+                    this.xhrOpen = false;
+                },5000);
+            }
             return false;
         }
         this.xhrOpen = true;
+
         const xhr = new XMLHttpRequest();
 
         const url = "/api/"+api;
@@ -377,6 +467,7 @@ class BasicControllerApp {
 
         const data = JSON.stringify(json);
         xhr.send(data);
+        return true;
     }
 }
 

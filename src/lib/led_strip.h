@@ -4,7 +4,7 @@
 #include "./logger.h"
 
 namespace DevRelief {
-    #define MAX_LEDS 300
+    #define MAX_LEDS 350
 
     class DRLedStrip {
     public:
@@ -17,6 +17,10 @@ namespace DevRelief {
         
             m_controller = getController(pin,m_colors,count);
             FastLED.setBrightness(50);  // all strips have same max brightness at the FastLED global level.
+        }
+
+        void setBrightness(int value) {
+            FastLED.setBrightness(value);
         }
 
         CLEDController*  getController(int pin,CRGB* colors,int count) {
@@ -57,6 +61,11 @@ namespace DevRelief {
         uint16_t getCount() {
             return m_count;
         }
+
+        void setCount(int count) {
+            m_count = count;
+        }
+
         static void show() {
             FastLED.show();
         }

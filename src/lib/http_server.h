@@ -45,10 +45,12 @@ class HttpServer {
         }
 
         void routeNotFound(HttpHandler httpHandler){
+            
             m_logger->debug("routing Not Found");
             auto server = m_server;
             auto handler = httpHandler;
             m_server->onNotFound([this,handler,server](){
+                this->cors(server);
                 m_logger->debug("not found");
                 handler(server,server);
             });
@@ -59,6 +61,7 @@ class HttpServer {
             auto server = m_server;
             auto handler = httpHandler;
             m_server->on(UriBraces(uri.c_str()),[this,handler,server](){
+                this->cors(server);
                 m_logger->debug("uri found");
                 handler(server,server);
             });
@@ -69,6 +72,7 @@ class HttpServer {
             auto server = m_server;
             auto handler = httpHandler;
             m_server->on(uri,[this,handler,server](){
+                this->cors(server);
                 m_logger->debug("path found");
 
                 handler(server,server);
@@ -78,7 +82,8 @@ class HttpServer {
             m_logger->debug("routing %s",uri.c_str());
              auto server = m_server;
             auto handler = httpHandler;
-            m_server->on(uri,method, [handler,server](){
+            m_server->on(uri,method, [this,handler,server](){
+                this->cors(server);
                 handler(server,server);
             });
         }
@@ -86,6 +91,10 @@ class HttpServer {
         void send(String type, String value) {
 
             m_server->send(200,type,value);
+        }
+
+        void cors(ESP8266WebServer * server) {
+            server->sendHeader("Access-Control-Allow-Origin","*");
         }
 
     private:
