@@ -1,0 +1,17 @@
+H,V,S
+1) solid
+2) LED gradient 
+3) Time gradient
+4) LED speed
+5) Time speed
+
+command:
+    start led (0=first),end led(100.0=last),zoom (start/end multiplier), h,v,s,rotation/second (+/-), hue/second, v/second, s/second
+
+
+File:
+scene/12345.cmd:
+    name: Displayable Name
+    speed: 1.0
+    cmd: s,e,z,h,...
+    

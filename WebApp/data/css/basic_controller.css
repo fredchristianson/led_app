@@ -1,0 +1,106 @@
+body {
+    font-size: 18px;
+    background-color:#444444;
+    color: #ffffff;
+}
+
+#content {
+    display: grid;
+    grid-template-areas: 
+        'tabs debug'
+        'pages debug';
+        grid-template-rows: auto 1fr;
+    min-height: 80vh;
+}
+
+.tabs {
+    grid-area:tabs;
+    display: flex;
+}
+
+.tabs .tab {
+    flex: 0 0 auto;
+    border: 1px solid white;
+    border-top-left-radius: 15px;
+    border-top-right-radius: 9px;
+    padding: 0 5rem;
+}
+
+.tab.active {
+    display: block;
+    background-color: #ffffff;
+    color: #000000;
+}
+
+.pages {
+    grid-area:pages;
+    background-color: #ffffff;
+    min-height: 50%;
+    padding: 4rem;
+    color: #444444;
+}
+
+
+.pages .page {
+    display: none;
+}
+
+.page.active {
+    display: block;
+}
+
+.debug {
+    background-color: beige;
+    color: #444444;
+    grid-area: debug;
+    border-left: 2px solid #444444;
+    max-height: 80vh;
+    overflow: scroll;
+    position: relative;
+}
+
+.debug > pre {
+    margin-top: 4px;
+    border-top: 1px dotted #777777;
+    padding-top: 4px;
+    padding-left: 2rem;
+    display: block
+}
+.debug > pre:first-child {
+    border-top: 0;
+    
+} 
+
+#leds {
+    padding: 4rem;
+}
+
+#leds .led {
+    width: 4px; 
+    height: 4px;
+    border-radius: 2px;
+    border: 1px solid #aaaaaa;
+    display: inline-block;
+    margin-top: 8px;
+    text-align: center;
+    margin-top: 14px;;
+    vertical-align: bottom;
+}
+
+#leds .led.big  {
+}
+
+#leds .led.selected {
+    margin-top: 0px;
+    height: 18px;
+}
+
+#save-leds {
+    margin-top: 20px;
+}
+
+#clear-messages {
+    position: sticky;
+    top: 0;
+    left:0;
+}

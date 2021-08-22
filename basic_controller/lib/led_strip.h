@@ -43,6 +43,15 @@ namespace DevRelief {
                 }
             }
         }
+        
+        void solid(CRGB color, int brightness) {
+            m_logger->debug("set solid color %d %d %d",color.red,color.green,color.blue);
+            for(int i=0;i<m_count;i++) {
+                m_colors[i] = color;
+            }
+            FastLED.setBrightness(brightness);
+            FastLED.show();
+        }
 
         void clear() {
             for(int i=0;i<m_count;i++) {

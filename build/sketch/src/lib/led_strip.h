@@ -4,7 +4,7 @@
 #include "./logger.h"
 
 namespace DevRelief {
-    #define MAX_LEDS 350
+    #define MAX_LEDS 150
 
     class DRLedStrip {
     public:

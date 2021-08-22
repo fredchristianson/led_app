@@ -48,9 +48,9 @@ namespace DevRelief {
                 this->notFound(req,resp);
             });
             m_httpServer->begin();
-            m_strip1 = new DRLedStrip(1,50);
-            m_strip2 = new DRLedStrip(2,350);
-            m_strip3 = new DRLedStrip(3,50);
+            m_strip1 = new DRLedStrip(1,150);
+            m_strip2 = new DRLedStrip(2,150);
+            m_strip3 = new DRLedStrip(3,150);
             auto found = m_fileSystem->read("/config.json",fileBuffer);
             if (found) {
                 String config = fileBuffer.text();
@@ -197,49 +197,21 @@ namespace DevRelief {
             m_strip2->setBrightness(brightness);
             m_strip3->setBrightness(brightness);
 
-            for(const JsonObject& led : leds) {
-               // //m_logger->debug("set led %d ",number);
+            for(number=0;number<pin1Count;number++) {
+                JsonObject led = leds[number];
                 int r = led["r"];
                 int g = led["g"];
                 int b = led["b"];
-                ////m_logger->debug("rgb: %d,%d,%d",r,g,b);
-                auto strip = m_strip1;
-                auto index = 0;
-                auto count = 0;
-                bool reverse = false;
-                yield();
-                
-                if (number < pin1End) {
-                    strip = m_strip1;
-                    count = pin1Count;
-                    index = number;
-                    reverse = pin1["status"] == "reverse";
-                    //m_logger->debug("strip1");
-                } else if (number < pin2End) {
-                    strip = m_strip2;
-                    count = pin2Count;
-                    index = number - pin1End-1;
-                    reverse = pin2["status"] == "reverse";                
-                    //m_logger->debug("strip2 %d %d",number,pin2End);
-                } else if (number < pin3End) {
-                    strip = m_strip3;
-                    count = pin3Count;
-                    index = number - pin2End-1;
-                    reverse = pin3["status"] == "reverse";                
-                    //m_logger->debug("strip3");
-                } else {
-                    strip = NULL;
-                    //m_logger->debug("no strip ");
-                }
-                if (strip != NULL) {
-                    if (reverse) {
-                        index = count - index;
-                    }
-                    //m_logger->debug("set color %d %d %d,%d,%d",number,index,r,g,b);
-                    strip->setColor(index,CRGB(r,g,b));
-                }
-                number++;
+                m_strip1->setColor(number,CRGB(r,g,b));
             }
+            for(number=pin1End;number<pin1End+pin2Count;number++) {
+                JsonObject led = leds[number];
+                int r = led["r"];
+                int g = led["g"];
+                int b = led["b"];
+                m_strip2->setColor(number,CRGB(r,g,b));
+            }
+
             ////m_logger->debug("done %d",millis());
          //   DRLedStrip::show();
         }

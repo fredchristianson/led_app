@@ -2,11 +2,11 @@
 #include <ArduinoJson.h>
 
 
-#include "../lib/application.h"
-#include "../lib/logger.h"
-#include "../lib/http_server.h"
-#include "../lib/file_system.h"
-#include "../lib/led_strip.h"
+#include "./lib/application.h"
+#include "./lib/logger.h"
+#include "./lib/http_server.h"
+#include "./lib/file_system.h"
+#include "./lib/led_strip.h"
 
 extern EspClass ESP;
 
@@ -14,6 +14,13 @@ extern EspClass ESP;
 namespace DevRelief {
 
     DRFileBuffer fileBuffer;
+    struct StripData {
+      uint16_t brightness;
+      uint16_t strip1Length;
+      uint16_t strip2Length;
+      CRGB leds[300];
+    };
+
 
     class BasicControllerApplication : public Application {
     public: 
@@ -50,11 +57,11 @@ namespace DevRelief {
             m_httpServer->begin();
             m_strip1 = new DRLedStrip(1,150);
             m_strip2 = new DRLedStrip(2,150);
-            m_strip3 = new DRLedStrip(3,150);
-            auto found = m_fileSystem->read("/config.json",fileBuffer);
+
+            auto found = m_fileSystem->readBinary("/stripData",(byte *)&stripData,sizeof(stripData));
             if (found) {
-                String config = fileBuffer.text();
-                parseConfig(config);
+                m_logger->debug("found data");
+                setLeds();
             }
 
         }
@@ -81,6 +88,8 @@ namespace DevRelief {
         }
 
         void apiRequest(String api,Request * req,Response * resp) {
+            Serial.begin(115200);
+
            // //m_logger->debug("handle API %s",api.c_str());
             if (api == "restart") {
                 //m_logger->warn("restart API called");
@@ -96,10 +105,14 @@ namespace DevRelief {
                         resp->send(200,"application/json","{\"result\":false,\"data\":{}, \"message\": \"no configuration exists.\" }");    
                     }
                 } else {
+                    m_logger->debug("set config");
                     String config = req->arg("plain");
-                    ////m_logger->debug("body: " + config);
+                    m_logger->debug("got config body");
+                    m_logger->debug("body: " + config);
                     parseConfig(config);
+                    m_logger->debug("parsed config body");
                     m_fileSystem->write("/config.json",config);
+                    m_logger->debug("wrote config body");
                     resp->send(200,"application/json","{result:true}");
                 }
                 resp->send(200,"application/json","{result:true,message:\"config saved\"}");
@@ -107,6 +120,18 @@ namespace DevRelief {
                 String config = req->arg("plain");
                    // //m_logger->debug("body: " + config);
                     parseConfig(config);
+                resp->send(200,"application/json","{result:true}");
+            }  else if (api == "setcolors") {
+               int start = req->arg("start").toInt();
+                int count = req->arg("count").toInt();
+                int r = req->arg("r").toInt();
+                int g = req->arg("g").toInt();
+                int b = req->arg("b").toInt();
+                int c1 = req->arg("count1").toInt();
+                int c2 = req->arg("count2").toInt();
+                m_logger->debug("set colors %d %d %d %d %d %d %d",start,count,r,g,b,c1,c2);
+                updateConfig(start,count,r,g,b,c1,c2);
+               
                 resp->send(200,"application/json","{result:true}");
             } else if (api == "echo") {
                 char result[60];
@@ -155,7 +180,8 @@ namespace DevRelief {
 
         }
 
-        bool parseConfig(const String & config){
+        bool parseConfig(String & config){
+
            //m_logger->debug("Process config %d",millis());
             DynamicJsonDocument doc(14000);
             deserializeJson(doc,config);
@@ -180,68 +206,90 @@ namespace DevRelief {
 
             m_strip1->clear();
             m_strip2->clear();
-            m_strip3->clear();
 
             uint16_t pin1Count = (pin1Status == "off") ? 0 : pin1["count"];
             uint16_t pin2Count = (pin2Status.equals("off")) ? 0 : pin2["count"];
-            uint16_t pin3Count = (pin3Status == "off") ? 0 : pin3["count"];
             uint16_t pin1End = pin1Count;
             uint16_t pin2End = pin1End + pin2Count;
-            uint16_t pin3End = pin2End + pin3Count;
 
-            m_strip1->setCount(pin1Count);
-            m_strip2->setCount(pin2Count);
-            m_strip3->setCount(pin3Count);
+            m_logger->debug("set leds %d %d %d %d",pin1Count,pin2Count,pin1End,pin2End);
+           // m_strip1->setCount(pin1Count);
+            //m_strip2->setCount(pin2Count);
             m_logger->debug("set brightness %d",brightness);
             m_strip1->setBrightness(brightness);
             m_strip2->setBrightness(brightness);
-            m_strip3->setBrightness(brightness);
 
-            for(const JsonObject& led : leds) {
-               // //m_logger->debug("set led %d ",number);
-                int r = led["r"];
-                int g = led["g"];
-                int b = led["b"];
-                ////m_logger->debug("rgb: %d,%d,%d",r,g,b);
-                auto strip = m_strip1;
-                auto index = 0;
-                auto count = 0;
-                bool reverse = false;
-                yield();
-                
-                if (number < pin1End) {
-                    strip = m_strip1;
-                    count = pin1Count;
-                    index = number;
-                    reverse = pin1["status"] == "reverse";
-                    //m_logger->debug("strip1");
-                } else if (number < pin2End) {
-                    strip = m_strip2;
-                    count = pin2Count;
-                    index = number - pin1End-1;
-                    reverse = pin2["status"] == "reverse";                
-                    //m_logger->debug("strip2 %d %d",number,pin2End);
-                } else if (number < pin3End) {
-                    strip = m_strip3;
-                    count = pin3Count;
-                    index = number - pin2End-1;
-                    reverse = pin3["status"] == "reverse";                
-                    //m_logger->debug("strip3");
-                } else {
-                    strip = NULL;
-                    //m_logger->debug("no strip ");
-                }
-                if (strip != NULL) {
-                    if (reverse) {
-                        index = count - index;
-                    }
-                    //m_logger->debug("set color %d %d %d,%d,%d",number,index,r,g,b);
-                    strip->setColor(index,CRGB(r,g,b));
-                }
-                number++;
+            for(number=0;number<pin1Count;number++) {
+                int r = leds[number]["r"];
+                int g = leds[number]["g"];
+                int b = leds[number]["b"];
+                m_strip1->setColor(number,CRGB(r,g,b));
             }
-            ////m_logger->debug("done %d",millis());
-         //   DRLedStrip::show();
+            for(number=pin1End;number<pin1End+pin2Count;number++) {
+                int r = leds[number]["r"];
+                int g = leds[number]["g"];
+                int b = leds[number]["b"];
+                m_strip2->setColor(number,CRGB(r,g,b));
+            }
+            m_logger->debug("done %d",number);
+            DRLedStrip::show();
+        }
+
+
+      bool updateConfig(int startColor, int colorCount, int r, int g, int b,int count1,int count2){
+            
+        stripData.brightness = 40;
+        stripData.strip1Length = count1;
+        stripData.strip2Length = count2;
+              
+
+            uint16_t pin1Count = count1;
+            uint16_t pin2Count = count2;
+            uint16_t pin1End = pin1Count;
+            uint16_t pin2End = pin1End + pin2Count;
+
+            m_logger->debug("set leds %d %d %d %d",pin1Count,pin2Count,pin1End,pin2End);
+           // m_strip1->setCount(pin1Count);
+            //m_strip2->setCount(pin2Count);
+            m_strip1->setBrightness(40);
+            m_strip2->setBrightness(40);
+
+            int number;
+            for(number=startColor;number<startColor+colorCount;number++) {
+              stripData.leds[number] = CRGB(r,g,b);
+              if (number < pin1End) {
+                  m_strip1->setColor(number,CRGB(r,g,b));
+              } else {
+                m_strip2->setColor(number-pin1End,CRGB(r,g,b));
+              }
+            }
+          
+
+            m_logger->debug("done %d",number);
+            DRLedStrip::show();
+            m_fileSystem->writeBinary("/stripData",(const byte *)&stripData,sizeof(stripData));
+            return true;
+        }
+
+        
+      bool setLeds(){
+        m_logger->debug("set leds %d %d %d",stripData.brightness,stripData.strip1Length,stripData.strip1Length);            
+            m_strip1->setBrightness(stripData.brightness);
+            m_strip2->setBrightness(stripData.brightness);
+
+            int number;
+            for(number=0;number<stripData.strip1Length+stripData.strip2Length;number++) {
+              CRGB& color = stripData.leds[number];
+              if (number < stripData.strip1Length) {
+                  m_strip1->setColor(number,color);
+              } else {
+                m_strip2->setColor(number-stripData.strip1Length,color);
+              }
+            }
+          
+
+            DRLedStrip::show();
+            return true;
         }
 
 
@@ -266,8 +314,9 @@ namespace DevRelief {
         int m_count = 1;
         DRLedStrip * m_strip1;
         DRLedStrip * m_strip2;
-        DRLedStrip * m_strip3;
         int m_pos;
+        StripData stripData;
+
     };
 
 }
