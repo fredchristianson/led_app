@@ -1,81 +1,41 @@
 <html>
-<link rel="stylesheet" type="text/css" href="css/basic_controller.css" />
+<link rel="stylesheet" type="text/css" href="css/ledapp.css" />
 <link rel="icon" type="image/png" href="/image/favico.png">
 <script type="module">
-    import BasicControllerApp from './js/basic_controller.js';
-    var app = new BasicControllerApp();
+    import LedApp from './js/ledapp.js';
+    var app = new LedApp();
 </script>
 
 <body>
-    <div id='content'>
-        <div class='tabs'>
-            <div class="tab active" data-page='#page-pins'>
-                Pins
-            </div>
-            <div class="tab" data-page='#page-leds'>
-                Leds
+    <section class='preview'>
+        <h2>Preview  <span class='first'></span><span class='last'></span><span class='current'></span>
+        <a class='select-all'>all</a><a class='select-clear'>clear</a></h2>
+        <div id='preview-leds' class='leds'></div>
+    </section>
+    <section class='hsv'>
+        <div class="hue">
+            <h2>Hue</h2>
+            <div class='select' data-value='0'>
+                <img src='./image/spectrum.png'/>
+                <div class='selected'>
+                    <div class='position'></div>
+                    <div class='color'></div>
+                </div>
             </div>
         </div>
-        <div class="pages">
-            <div class="page active" id='page-pins'>
-                <div class="pin-details'>" <label for="pin1">Pin 1
-                    <select id="pin1" name="pin1-status" class='pin-status trigger trigger-show'>
-                        <option value="on" data-show='#pin1-count'>On</option>
-                        <option value="reverse" data-show='#pin1-count'>Reverse</option>
-                        <option value="off" data-hide='#pin1-count'>Off</option>
-                    </select>
-                    <input name='pin1-count' id='pin1-count' type="number" value="150"  data-display-type='inline' class='pin-count'/>
-                    </label>
-                </div>
-                <div class="pin-details">
-                    <label for="pin2">Pin 2
-                        <select id="pin2" name="pin2-status" class='pin-status trigger trigger-show'>
-                            <option value="on" data-show='#pin2-count'>On</option>
-                            <option value="reverse" data-show='#pin2-count'>Reverse</option>
-                            <option selected value="off" data-hide='#pin2-count'>Off</option>
-                        </select>
-                        <input id='pin2-count' name='pin2-count' type="number" value="150" data-display-type='inline' class='pin-count' />
-                    </label>
-                </div>
-                <div class="pin-details">
-                    <label for="pin3">Pin 3
-                        <select id="pin3" name="pin3-status" class='pin-status trigger trigger-show'>
-                            <option value="on" data-show='#pin3-count'>On</option>
-                            <option value="reverse" data-show='#pin3-count'>Reverse</option>
-                            <option selected value="off" data-hide='#pin3-count'>Off</option>
-                        </select>
-                        <input name='pin3-count' id='pin3-count' type="number" value="150"  data-display-type='inline'  class='pin-count'/>
-                    </label>
-                </div>
-            </div>
-
-            <div class="page" id='page-leds'>
-                <a href='#' class='select-all'>All</a>
-                <a href='#' class='select-none'>None</a>
-                <input name='first' id='first-led' type='number' placeholder='first'/>
-                <input name='last' id='last-led'  type='number' placeholder='last'/>
-                <div id='leds'></div>
-                <input type='color' name='led-color' />
-                <div>
-                    <button id='save-leds'>Save</button>
-                </div>
-                <div>
-                    <button id='update-leds'>Update</button>
-                </div>
-                <div>
-                    <input type='number' id='animate-speed' val="100"/>
-                    <button id='animate-leds'>Animate</button>
-                    <button id='animate-stop'>Stop Animation</button>
-                </div>
-                <input name='brightness' id='brightness' type='number' placeholder='brightness'/>
-            </div>
-
+        <div class='saturation'>
+            <h2>Saturation</h2>
+            <input type='range' id='saturation' name='saturation' min="0" max="100"/>
         </div>
-        <div id='debug-messages' class='debug'>
-            <button id='clear-messages'>Clear</button>
+        <div class='level'>
+            <h2>Level</h2>
+            <input type='range' id='level' name='level' min="0" max="100"/>
         </div>
-    </div>
-   
+    </section>
+    <section class='commands'>
+        <h2>Commands</h2>
+        <textarea name='commands'></textarea>
+    </section>
 </body>
 
 </html>

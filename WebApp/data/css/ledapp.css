@@ -1,0 +1,104 @@
+body {
+    font-size: 18px;
+    background-color:#444444;
+    color: #ffffff;
+}
+
+section {
+    min-height: 4rem;
+    border-bottom: 1px solid white;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+}
+
+section.preview {
+    background-color: white;
+    color: #444444;
+    position: relative;
+    height: 80px;
+}
+
+#preview-leds {
+    position: absolute;
+    left: 2rem;
+    right: 2rem;
+    top: 3rem;
+    height: 80px;
+}
+
+#preview-leds .led {
+    position: relative;
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 9999px;
+    background-color: #aaaaaa;
+    margin-bottom: 8px;
+    border: 2px solid white;
+}
+
+#preview-leds .led.selected {
+    border-color: #aaaaaa;
+}
+
+h2 .current {
+    display: none;
+}
+
+h2 a {
+    color: blue;
+    text-decoration: none;
+    font-size: 14px;
+    margin-left: 10px;
+}
+h2 span {
+    font-size: 14px;
+    padding-left: 1rem;
+}
+
+.hsv .hue {
+    position: relative;
+    height: 150px;
+    margin-bottom: 30px;
+}
+
+.hsv .hue .select {
+    position: absolute;
+    height: 100px;
+}
+
+.hsv .hue .selected {
+    top: 0px;
+    position: absolute;
+    height: 100px;
+}
+
+.hsv .hue .selected .position {
+    position: absolute;
+    top: 0px;
+    height: 100%;
+    width: 3px;
+    margin-left: -1px;
+    background-color: #ffffff;
+    pointer-events: none;
+}
+
+.hsv .hue .selected .color {
+    position: relative;
+    height: 20px;
+    width: 20px;
+    bottom: -20px;
+    margin-left: -10px;
+    background-color: #ffffff;
+    border: 1px solid #ffffff;
+    pointer-events: none;
+}
+
+.commands {
+
+}
+
+.commands textarea {
+    width: 100%;
+    min-height: 8rem;
+}
