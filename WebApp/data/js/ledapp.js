@@ -48,14 +48,15 @@ class HueSelector {
     constructor(app){
         this.app = app;
         this.hueRangeValue = 0;
+        this.hueRangeOffset = 0;
         this.htmlHue = 0;
         this.logger = new Logger("HueSelector");
         this.section = document.querySelector('section.hsv');
         this.image = DOM.first('.hsv .hue img');
         this.selected = DOM.first(this.section,'.selected');
         this.colorElement = DOM.first(this.section,'.color');
-        DOM.onTouch(this,this.image);
         DOM.onTouch(this,'.hsv .hue img','*');
+        this.showHue(this.hueRangeOffset);
 
     }
 
@@ -67,23 +68,24 @@ class HueSelector {
         return this.htmlHue;
     }
 
-    showHue(hueRangeValue) {
-        this.colorData = DOM.getPixel(this.image,hueRangeValue,50);
+    showHue(hueRangeOffset) {
+        this.colorData = DOM.getPixel(this.image,hueRangeOffset,50);
         const r = this.colorData[0];
         const g = this.colorData[1];
         const b = this.colorData[2];
         this.rgb = {red:r,green:g, blue:b};
         this.htmlHue = rgb2hsv(r,g,b).hue;
-        this.hueRangeValue = hueRangeValue;
-        const htmlColor = `#${this.toHex2(r)}${this.toHex2(g)}${this.toHex2(b)}`;
-        this.htmlColor = htmlColor;
-        this.logger.debug("Color: " + htmlColor);
-        this.colorElement.style.backgroundColor = htmlColor;
-        this.app.hueChanged();
+        this.hueRangeOffset = hueRangeOffset;
+        this.htmlColor = `hsl(${this.htmlHue},${this.saturation}%,${this.level}%)`;
+
+        this.colorElement.style.backgroundColor = this.htmlColor;
     }
 
-    updateColor(htmlColor) {
-        this.colorElement.style.backgroundColor = htmlColor;
+    updateColor(saturation,level) {
+        this.saturation = saturation;
+        this.level = level;
+        this.htmlColor = `hsl(${this.htmlHue},${this.saturation}%,${this.level}%)`;
+        this.colorElement.style.backgroundColor = this.htmlColor;
     }
     toHex2(i) {
         var str = i.toString(16);
@@ -95,22 +97,28 @@ class HueSelector {
 
     touchStart(element,event) {
         this.logger.debug("touch start pos: " + event.offsetX);
-        const x = event.offsetX;
+        this.hueRangeValue  = this.offsetToRangeValue(event.offsetX);
        // this.logger.debug("pos: " + x);
-        this.selected.style.left = ''+x+'px';
-        this.showHue(x); 
+        this.selected.style.left = ''+event.offsetX+'px';
+        this.showHue(event.offsetX); 
     }
 
     touchMove(element,event) {
-        const x = event.offsetX;
-       // this.logger.debug("pos: " + x);
-        this.selected.style.left = ''+x+'px';
-        this.showHue(x);        
+        this.hueRangeValue  = this.offsetToRangeValue(event.offsetX);
+        this.logger.debug("pos: " + event.offsetX+" "  + this.hueRangeValue);
+        this.selected.style.left = ''+event.offsetX+'px';
+        this.showHue(event.offsetX);        
     }
 
     touchEnd(element,event) {
-        this.logger.debug("touch end pos: " + event.offsetX);
+        this.logger.debug("touch end pos: " + this.offsetToRangeValue(event.offsetX)+" " + event.offsetX);
+        this.app.hueChanged();
+    }
 
+    offsetToRangeValue(offset) {
+        const maxWidth = this.image.naturalWidth;
+        const value = Math.round(offset*255/maxWidth);
+        return value;
     }
 }
 
@@ -124,8 +132,9 @@ class LedSelector {
         this.selLast = this.section.querySelector("h2 .last");
         this.selCurrent = this.section.querySelector("h2 .current");
         this.app = app;
-        this.selectedStartIndex = -1;
-        this.selectedEndIndex = -1;
+        this.selectedStartPercent = null;
+        this.selectedEndPercent = null;
+        this.createLeds(100);
         DOM.html(this.selFirst,'--');
         DOM.html(this.selCurrent,'--');
         DOM.html(this.selLast,'--');
@@ -135,18 +144,18 @@ class LedSelector {
         DOM.onClick('.select-clear',this.selectClear.bind(this));
     }
 
-    getStartLed() { return this.selectedStartIndex;}
-    getEndLed() { return this.selectedEndIndex;}
+    getStartLed() { return this.selectedStartPercent;}
+    getEndLed() { return this.selectedEndPercent;}
 
     selectAll() {
-        this.selectedStartIndex = 0;
-        this.selectedEndIndex = this.count;
+        this.selectedStartPercent = 0;
+        this.selectedEndPercent = 100;
         this.showSelectedLeds();
     }
 
     selectClear() {
-        this.selectedStartIndex = null;
-        this.selectedEndIndex = null;
+        this.selectedStartPercent = null;
+        this.selectedEndPercent = null;
         this.showSelectedLeds();
     }
 
@@ -154,7 +163,7 @@ class LedSelector {
         const idx = 1*target.dataset.index;
         this.logger.debug("touch start "+idx);
         this.selFirst.innerHTML =""+idx;
-        this.selectedStartIndex = idx;
+        this.selectedStartPercent = idx;
         this.selLast.innerHTML="--";
     }
 
@@ -163,7 +172,7 @@ class LedSelector {
         this.logger.debug("touch end "+idx);
         this.selLast.innerHTML =""+idx;
         
-        this.selectedEndIndex = idx;
+        this.selectedEndPercent = idx;
         this.showSelectedLeds();
     }
 
@@ -171,13 +180,13 @@ class LedSelector {
         const idx = 1*target.dataset.index;
         this.logger.debug("touch move "+idx);
         this.selLast.innerHTML =""+idx;
-        this.selectedEndIndex = idx;
+        this.selectedEndPercent = idx;
         this.showSelectedLeds();
     }
 
     showSelectedLeds() {
-        const from = Math.min(this.selectedStartIndex,this.selectedEndIndex);
-        const to = Math.max(this.selectedStartIndex,this.selectedEndIndex);
+        const from = Math.min(this.selectedStartPercent,this.selectedEndPercent);
+        const to = Math.max(this.selectedStartPercent,this.selectedEndPercent);
 
         this.selFirst.innerHTML =""+from;
         this.selLast.innerHTML= "" + to;
@@ -194,6 +203,8 @@ class LedSelector {
         });
     }
 
+    
+
     updateColor(color) {
         const leds = DOM.find('#preview-leds .led.selected');
         leds.forEach(led=>{
@@ -201,6 +212,16 @@ class LedSelector {
         });
     }
 
+    setColors(colors) {
+        const leds = DOM.find('#preview-leds .led.selected');
+        leds.forEach(led=>{
+            var idx = led.dataset.index;
+            var color = colors[idx];
+            if (color != null) {
+                led.style.backgroundColor = color.htmlColor;
+            }
+        });
+    }
 
     hoverStart(target,event) {
         const idx = 1*target.dataset.index;
@@ -213,26 +234,29 @@ class LedSelector {
     }
 
     setCount(count) {
+        this.count = count;
+    }
+
+    getCount() {
+        return this.count;
+    }
+
+    createLeds(number) {
         const leds = this.container.querySelectorAll('.led');
         leds.forEach(led=>{
             if (led.dataset.index > count){
                 this.container.removeChild(led);
             }
         });
-        for(var i=this.count;i<count;i++) {
+        for(var i=leds.length;i<number;i++) {
             const led = document.createElement('span');
             led.className = 'led';
-            led.dataset.index = i;
+            led.dataset.index = i+1;
 
             led.style.backgroundColor = "#000000";
             led.dataset.color = '#000000';
             this.container.appendChild(led);
         }
-        this.count = count;
-    }
-
-    getCount() {
-        return this.count;
     }
 
 }
@@ -255,33 +279,137 @@ class LedApp {
         this.levelControl = DOM.first('#level');
         this.saturationControl = DOM.first('#saturation');
         this.levelControl.value = this.level;
+        this.hueMap = {}; // map FastLED spectrum value to HTML hsl
         this.saturationControl.value = this.saturation;
         DOM.onChange(this.levelControl,this.levelChange.bind(this));
         DOM.onChange(this.saturationControl,this.saturationChange.bind(this));
+        DOM.onInput(this.levelControl,this.levelMove.bind(this));
+        DOM.onInput(this.saturationControl,this.saturationMove.bind(this));
+        DOM.onClick('.run-commands',this.runCommands.bind(this));
+        this.zoom = 1;
+        this.animateSpeedPerSecond = 0;
+        this.hueSelector.updateColor(this.saturation,this.level);
     }
 
+    levelMove(control,event) {
+        this.logger.debug("level: "+ control.value);
+        this.level = control.value;
+        this.hueSelector.updateColor(this.saturation,this.level);
+        
+    }
+
+    saturationMove(control,event) {
+        this.logger.debug("saturation: "+ control.value);
+        this.saturation = control.value;
+        this.hueSelector.updateColor(this.saturation,this.level);
+    }
     levelChange(control,event) {
         this.logger.debug("level: "+ control.value);
         this.level = control.value;
-        this.updateColor();
+        const start = this.ledSelector.getStartLed();
+        const end = this.ledSelector.getEndLed();
+        this.addCommand('l',start,end,this.level,this.level,this.zoom,this.animateSpeedPerSecond);
+        this.hueSelector.updateColor(this.saturation,this.level);
     }
+
     saturationChange(control,event) {
         this.logger.debug("saturation: "+ control.value);
         this.saturation = control.value;
+        const start = this.ledSelector.getStartLed();
+        const end = this.ledSelector.getEndLed();
+        this.addCommand('s',start,end,this.saturation,this.saturation,this.zoom,this.animateSpeedPerSecond);
         this.updateColor();
     }
+
+    addCommand(cmd,startLed,endLed,startValue,endValue,zoom,animateSpeed){
+        if (startLed == null || endLed == null || isNaN(startLed) || isNaN(endLed)) {
+            this.logger.error("invalid range "+startLed+" " +endLed);
+            return;
+        }
+        var list = DOM.getValue('#commands');
+        var cmd = `${cmd},${startLed},${endLed},${startValue},${endValue},${zoom},${animateSpeed};\n`;
+        list = list + cmd;
+        DOM.setValue('#commands',list);
+        this.runCommands();
+    }
+
+    runCommands() {
+        const leds = [];
+        const sat = this.saturation;
+        const level = this.level;
+        var list = DOM.getValue('#commands');
+        var commands = list.split(';');
+        commands.forEach(cmd=>{
+            const parts = cmd.trim().split(',');
+            for(var p=1;p<parts.length;p++){
+                var v = Number.parseFloat(parts[p]);
+                if (!isNaN(v)) {
+                    parts[p] = v;
+                }
+            }
+            if (parts.length>1) {
+                this.logger.debug("command: "+parts[0]);
+                var led;
+                for(var i=parts[1];i<=parts[2];i++) {
+                    if (parts[0] == 'h'){
+                        led = leds[i] || {};
+                        led.hue = this.hueMap[parts[3]];
+                        if (led.saturation == null) {
+                            led.saturation = this.saturation;
+                        }
+                        if (led.level == null) {
+                            led.level = this.level;
+                        }
+                        led.htmlColor = `hsl(${led.hue},${led.saturation}%,${led.level}%)`;
+                        leds[i] = led;
+                    } else if (parts[0] == 's'){
+                        led = leds[i] || {};
+                        if (led.level == null) {
+                            led.level = level;
+                        }
+                        if (led.hue==null){
+                            led.hue = 0;
+                            led.saturation = 0;
+                        }
+
+                        led.saturation = parts[3];
+                        
+                        led.htmlColor = `hsl(${led.hue},${led.saturation}%,${led.level}%)`;
+                        leds[i] = led;
+                    } else if (parts[0] == 'l'){
+                        led = leds[i] || {};
+                        if (led.saturation == null) {
+                            led.saturation = saturation;
+                        }
+                        if (led.hue==null){
+                            led.hue = 0;
+                            led.saturation = 0;
+                        }
+                        led.level = parts[3];
+                        
+                        led.htmlColor = `hsl(${led.hue},${led.saturation}%,${led.level}%)`;
+                        leds[i] = led;
+                    }
+
+                }
+            }
+        });
+        this.ledSelector.setColors(leds);
+    }
+
     updateColor() {
-        this.color = `hsl(${this.htmlHue},${this.saturation}%,${this.level}%)`;
-        this.ledSelector.updateColor(this.color);
-        this.hueSelector.updateColor(this.color);
+        //this.color = `hsl(${this.htmlHue},${this.saturation}%,${this.level}%)`;
+        //this.ledSelector.updateColor(this.color);
+        //this.hueSelector.updateColor(this.color);
     }
 
     hueChanged(){
         this.htmlHue = this.hueSelector.getHtmlHue();
         this.hueRangeValue = this.hueSelector.getHueRangeValue();
+        this.hueMap[this.hueRangeValue] = this.htmlHue;
         const start = this.ledSelector.getStartLed();
         const end = this.ledSelector.getEndLed();
-        this.addCommand('h',start,end,)
+        this.addCommand('h',start,end,this.hueRangeValue,this.hueRangeValue,this.zoom,this.animateSpeedPerSecond);
         this.updateColor();
     }
 
@@ -387,9 +515,7 @@ class LedApp {
         return true;*/
     }
 
-    runCommands() {
-        this.logger.debug("runCommands not implemented");
-    }
+
 }
 
 function rgb2hsv (r, g, b) {
@@ -591,7 +717,7 @@ class Dom {
                 const target = event.target;
                 if (this.match(target,selector)){
                     startHandler(target,event);
-                    return handled;
+                    return true;
                 }
                 return false;
             });
@@ -630,6 +756,19 @@ class Dom {
     }
 
     onChange(selector,handler) {
+        this.listen('change',selector,(event)=>{
+            const target = event.target;
+            if (this.match(target,selector)) {
+                var value = target.value;
+                var type = target.type;
+                if (target.type == 'number' || target.type == 'range') {
+                    value = 1*value;
+                }
+                handler(target,event,value);
+            }
+        });
+    }
+    onInput(selector,handler) {
         this.listen('input',selector,(event)=>{
             const target = event.target;
             if (this.match(target,selector)) {
@@ -685,6 +824,16 @@ class Dom {
         let pixelData = this.canvas.getContext('2d').getImageData(x,y, 1, 1).data;
     
         return pixelData; 
+    }
+
+    getValue(selector) {
+        const elem = this.first(selector);
+        return elem.value;
+    }
+
+    setValue(selector,value) {
+        const elem = this.first(selector);
+        elem.value = value;
     }
 }
 
