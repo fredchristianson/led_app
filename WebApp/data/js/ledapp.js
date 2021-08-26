@@ -50,6 +50,8 @@ class HueSelector {
         this.hueRangeValue = 0;
         this.hueRangeOffset = 0;
         this.htmlHue = 0;
+        this.hueMap = {}; // map FastLED spectrum value to HTML hsl
+
         this.logger = new Logger("HueSelector");
         this.section = document.querySelector('section.hsv');
         this.image = DOM.first('.hsv .hue img');
@@ -66,6 +68,20 @@ class HueSelector {
 
     getHtmlHue() {
         return this.htmlHue;
+    }
+
+    hueRangeValueToHtmlHue(rangeValue) {
+        if (this.hueMap[rangeValue]) {
+            return this.hueMap[rangeValue];
+        }
+        const hueRangeOffset = this.image.naturalWidth*rangeValue/255;
+        const colorData = DOM.getPixel(this.image,hueRangeOffset,50);
+        const r = colorData[0];
+        const g = colorData[1];
+        const b = colorData[2];
+        const htmlHue = rgb2hsv(r,g,b).hue;
+        this.hueMap[rangeValue] = htmlHue;
+        return htmlHue;
     }
 
     showHue(hueRangeOffset) {
@@ -281,7 +297,6 @@ class LedApp {
         this.levelControl = DOM.first('#level');
         this.saturationControl = DOM.first('#saturation');
         this.levelControl.value = this.level;
-        this.hueMap = {}; // map FastLED spectrum value to HTML hsl
         this.saturationControl.value = this.saturation;
         DOM.onChange(this.levelControl,this.levelChange.bind(this));
         DOM.onChange(this.saturationControl,this.saturationChange.bind(this));
@@ -355,7 +370,7 @@ class LedApp {
                 for(var i=parts[1];i<=parts[2];i++) {
                     if (parts[0] == 'h'){
                         led = leds[i] || {};
-                        led.hue = this.hueMap[parts[3]];
+                        led.hue = this.hueSelector.hueRangeValueToHtmlHue(parts[3]);
                         if (led.saturation == null) {
                             led.saturation = this.saturation;
                         }
@@ -408,7 +423,6 @@ class LedApp {
     hueChanged(){
         this.htmlHue = this.hueSelector.getHtmlHue();
         this.hueRangeValue = this.hueSelector.getHueRangeValue();
-        this.hueMap[this.hueRangeValue] = this.htmlHue;
         const start = this.ledSelector.getStartLed();
         const end = this.ledSelector.getEndLed();
         this.addCommand('h',start,end,this.hueRangeValue,this.hueRangeValue,this.zoom,this.animateSpeedPerSecond);
