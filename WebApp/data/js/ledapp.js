@@ -213,12 +213,14 @@ class LedSelector {
     }
 
     setColors(colors) {
-        const leds = DOM.find('#preview-leds .led.selected');
+        const leds = DOM.find('#preview-leds .led');
         leds.forEach(led=>{
             var idx = led.dataset.index;
             var color = colors[idx];
             if (color != null) {
                 led.style.backgroundColor = color.htmlColor;
+            } else {
+                led.style.backgroundColor = '#000000';
             }
         });
     }
@@ -334,7 +336,7 @@ class LedApp {
     }
 
     runCommands() {
-        const leds = [];
+        const leds = {};
         const sat = this.saturation;
         const level = this.level;
         var list = DOM.getValue('#commands');
