@@ -1,7 +1,7 @@
 import assert from './assert.js';
 
 const LOG_LEVEL = {
-    Dom: {debug:false},
+    Dom: {debug:true},
     LedSelector: { debug: false}    
     
 
@@ -43,31 +43,20 @@ class Logger {
     }
 }
 
-
-class HueSelector {
-    constructor(app){
-        this.app = app;
+class ColorSlider {
+    constructor(control,container,selector) {
+        this.control = control;
+        this.image = control.image;
+        this.selector = selector;
+        this.container = DOM.first(container);
+        this.element = DOM.first(container,this.selector);
+        this.moveable = this.element.parentNode;
+        DOM.onTouch(this,container,selector);
+        this.logger = new Logger("ColorSlider");
         this.hueRangeValue = 0;
         this.hueRangeOffset = 0;
         this.htmlHue = 0;
-        this.hueMap = {}; // map FastLED spectrum value to HTML hsl
-
-        this.logger = new Logger("HueSelector");
-        this.section = document.querySelector('section.hsv');
-        this.image = DOM.first('.hsv .hue img');
-        this.selected = DOM.first(this.section,'.selected');
-        this.colorElement = DOM.first(this.section,'.color');
-        DOM.onTouch(this,'.hsv .hue img','*');
         this.showHue(this.hueRangeOffset);
-
-    }
-
-    getHueRangeValue() { 
-        return this.hueRangeValue;
-    }
-
-    getHtmlHue() {
-        return this.htmlHue;
     }
 
     hueRangeValueToHtmlHue(rangeValue) {
@@ -94,14 +83,84 @@ class HueSelector {
         this.hueRangeOffset = hueRangeOffset;
         this.htmlColor = `hsl(${this.htmlHue},${this.saturation}%,${this.level}%)`;
 
-        this.colorElement.style.backgroundColor = this.htmlColor;
+        this.element.style.backgroundColor = this.htmlColor;
+    }
+
+
+    touchStart(movement,event) {
+        this.logger.debug("start touch "+movement.moveTarget.id);
+        this.control.sliderSelect(this,movement);
+    }
+
+    touchMove(movement,event) {
+        try {
+            this.logger.debug(`move touch ${movement.moveTarget.id} ${movement.moveTarget.className} ${movement.currentPos.x},${movement.lastMovement.dx}`);
+            var target = movement.moveTarget;
+            var pos = movement.currentPos.x;
+            if (isNaN(pos)) {
+                return;
+            }
+            while(target != null && target != this.container) {
+                pos += target.offsetLeft;
+                if (isNaN(pos)) {
+                    return;
+                }
+                target = target.parentNode;
+                
+            }
+            pos = Math.max(pos,0);
+            pos = Math.min(pos,this.image.naturalWidth-1);
+            this.moveable.style.left = `${pos}px`;
+            this.control.sliderMove(this,pos,movement);
+            this.showHue(pos);
+            this.hueRangeOffset = pos;
+            this.hueRangeValue = pos*255/this.image.naturalWidth;
+        } catch(ex) {
+            this.logger.error("move faile "+ex);
+        }
+    }
+
+    touchEnd(movement,event) {
+        this.logger.debug("end touch "+movement.moveTarget.id);
+        this.control.sliderEndMove(this,movement);
     }
 
     updateColor(saturation,level) {
         this.saturation = saturation;
         this.level = level;
         this.htmlColor = `hsl(${this.htmlHue},${this.saturation}%,${this.level}%)`;
-        this.colorElement.style.backgroundColor = this.htmlColor;
+        this.element.style.backgroundColor = this.htmlColor;
+    }
+}
+
+class HueSelector {
+    constructor(app){
+
+        this.hueMap = {}; // map FastLED spectrum value to HTML hsl
+
+        this.logger = new Logger("HueSelector");
+        this.section = document.querySelector('section.hsv');
+        this.image = DOM.first('.hsv .hue img');
+        this.selected = DOM.first(this.section,'.selected');
+        this.colorElement = DOM.first(this.section,'.color');
+        this.firstSlider = new ColorSlider(this,'.hsv .hue .select','.first .color');
+        this.lastSlider = new ColorSlider(this,'.hsv .hue .select','.last .color');
+        this.selectedSlider = null;
+
+    }
+
+    getHueRangeValue() { 
+        return 0;//this.hueRangeValue;
+    }
+
+    getHtmlHue() {
+        return 0;//this.htmlHue;
+    }
+
+
+    updateColor(saturation,level) {
+        this.firstSlider.updateColor(saturation,level);
+        this.lastSlider.updateColor(saturation,level);
     }
     toHex2(i) {
         var str = i.toString(16);
@@ -111,7 +170,16 @@ class HueSelector {
         return str;
     }
 
-    touchStart(element,event) {
+    sliderSelect(slider,movement) {
+        this.selectedSlider = slider;
+    }
+    sliderMove(slider,movement){
+    }
+
+    sliderEndMove(slider,movement){
+    }
+
+    touchStart(movement,event) {
         this.logger.debug("touch start pos: " + event.offsetX);
         this.hueRangeValue  = this.offsetToRangeValue(event.offsetX);
        // this.logger.debug("pos: " + x);
@@ -175,29 +243,42 @@ class LedSelector {
         this.showSelectedLeds();
     }
 
-    touchStart(target,event) {
-        const idx = 1*target.dataset.index;
-        this.logger.debug("touch start "+idx);
-        this.selFirst.innerHTML =""+idx;
-        this.selectedStartPercent = idx;
-        this.selLast.innerHTML="--";
+    touchStart(movement,event) {
+        const target = movement.moveTarget;
+        if (target && target.dataset && target.dataset.index){
+            const idx = 1*target.dataset.index;
+            this.logger.debug("touch start "+idx);
+            this.selFirst.innerHTML =""+idx;
+            this.selectedStartPercent = idx;
+            this.selLast.innerHTML="--";
+        } else {
+            this.selectedStartPercent = null;
+        }
     }
 
-    touchEnd(target,event) {
-        const idx = 1*target.dataset.index;
-        this.logger.debug("touch end "+idx);
-        this.selLast.innerHTML =""+idx;
-        
-        this.selectedEndPercent = idx;
+    touchEnd(movement,event) {
+        this.logger.debug("touch end ");
         this.showSelectedLeds();
     }
 
-    touchMove(target,event) {
-        const idx = 1*target.dataset.index;
-        this.logger.debug("touch move "+idx);
-        this.selLast.innerHTML =""+idx;
-        this.selectedEndPercent = idx;
-        this.showSelectedLeds();
+    touchMove(movement,event) {
+        const target = movement.moveTarget;
+        this.logger.debug("touchmove "+target.id+" " +target.className);
+        if (target && target.dataset && target.dataset.index){
+            const idx = 1*target.dataset.index;
+            this.logger.debug("touch move "+idx);
+            if (this.selectedStartPercent == null){
+                this.selFirst.innerHTML =""+idx;
+                this.selectedStartPercent = idx;
+                this.selLast.innerHTML="--";
+    
+            } else {
+                this.selLast.innerHTML =""+idx;
+                this.selectedEndPercent = idx;
+                this.selLast.innerHTML="--";
+            }
+            this.showSelectedLeds();
+        }
     }
 
     showSelectedLeds() {
@@ -603,7 +684,7 @@ class Dom {
         if (opts.length == 1) {
             selector = opts[0];
         } else if (opts.length == 2) {
-            parent = opts[0];
+            parent = this.first(opts[0]);
             selector = opts[1];
         } else {
             assert.false("invalid options passed.  expect (selector) or (parent,selector)");
@@ -705,9 +786,7 @@ class Dom {
     }
 
     onTouch(handler,parent,selector=null) {
-        if (selector == null) {
-            selector = parent;
-        }
+        parent = this.first(parent);
         var instance = null;
         var startHandler=handler;
         var endHandler=handler;
@@ -719,12 +798,61 @@ class Dom {
             moveHandler = instance['touchMove']?.bind(instance);
         }
 
-        this.touchHandlers(parent,selector,startHandler,moveHandler,endHandler);
+        this.listen('mousedown',parent,(event)=>{
+            var self = this;
+            const movement = {
+                startPos: {x:event.offsetX,y:event.offsetY},
+                currentPos: {x:event.offsetX,y:event.offsetY},
+                lastPos: {x:event.offsetX,y:event.offsetY},
+                totalMovement: {dx:0,dy:0},
+                lastMovement: {dx:0,dy:0},
+                container: parent,
+                moveTarget: event.target
+            };
+            function move(event) {
+                const target =  event.target;
+                movement.moveTarget = target;
+                movement.lastPos = movement.currentPos;
+                movement.currentPos = {x:event.offsetX,y:event.offsetY};
+                movement.lastMovement = {dx:movement.currentPos.x-movement.lastPos.x,dy:movement.currentPos.y-movement.lastPos.y}
+                movement.totalMovement = {dx:movement.currentPos.x-movement.startPos.x,dy:movement.startPos.y-movement.lastPos.y}
+                self.logger.debug("mousemove "+target.id);
+                moveHandler(movement,event);
+                
+                return true;
+            }
+
+            function up(event){
+                const target = event.target;
+                movement.moveTarget = target;
+                self.logger.debug("mouseup "+target.id);
+                document.removeEventListener('mouseup',up);
+                document.removeEventListener('mousemove',move);
+                endHandler(movement,event);
+                return true;
+            }
+
+            const target = event.target;
+            if (target == parent || this.match(target,selector)) {
+                this.logger.debug("mousedown "+target.id);
+                if (startHandler) {
+                    startHandler(movement,event);
+                }
+                document.addEventListener('mousemove',move);
+                document.addEventListener('mouseup',up);
+                return true;
+            } else {
+                this.logger.debug("mousedown not matched "+target.id);
+                return false;
+            }
+        });
+
+        //this.touchHandlers(parent,selector,startHandler,moveHandler,endHandler);
     }
 
-    touchHandlers(parent,selector,startHandler,moveHandler,endHandler) {
+    touchHandlers(parentOrSelector,selector,startHandler,moveHandler,endHandler) {
         var touching = false;
-        
+        const parent = this.first(parentOrSelector);
         this.logger.debug("touch handlers "+selector+"  "+touching);
         if (startHandler) {
             this.listen('mousedown',parent,(event)=>{
@@ -765,7 +893,7 @@ class Dom {
     }
 
     match(elem,selector) {
-        if (elem == selector) {
+        if (elem == selector || selector == null) {
             return true;
         }
         return elem && elem.matches(selector);

@@ -14,13 +14,18 @@
     </section>
     <section class='hsv'>
         <div class="hue">
-            <h2>Hue</h2>
+            <h2>Hue <label><input type='checkbox' id='gradient'/> gradient</label></h2>
             <div class='select' data-value='0'>
                 <img src='./image/spectrum.png'/>
-                <div class='selected'>
+                <div id='first-hue' class='selected first'>
                     <div class='position'></div>
-                    <div class='color'></div>
+                    <div id='first-color' class='color'></div>
                 </div>
+                <div id='last-hue' class='selected last'>
+                    <div class='position'></div>
+                    <div id='last-color'  class='color'></div>
+                </div>
+
             </div>
         </div>
         <div class='saturation'>
