@@ -377,18 +377,37 @@ class LedApp {
         this.saturation = 100;
         this.levelControl = DOM.first('#level');
         this.saturationControl = DOM.first('#saturation');
+        this.levelControlLast = DOM.first('#level');
+        this.saturationControlLast = DOM.first('#saturation');
         this.levelControl.value = this.level;
         this.saturationControl.value = this.saturation;
         DOM.onChange(this.levelControl,this.levelChange.bind(this));
         DOM.onChange(this.saturationControl,this.saturationChange.bind(this));
         DOM.onInput(this.levelControl,this.levelMove.bind(this));
         DOM.onInput(this.saturationControl,this.saturationMove.bind(this));
+        DOM.onChange(this.levelControlLast,this.levelChange.bind(this));
+        DOM.onChange(this.saturationControlLast,this.saturationChange.bind(this));
+        DOM.onInput(this.levelControlLast,this.levelMove.bind(this));
+        DOM.onInput(this.saturationControlLast,this.saturationMove.bind(this));
         DOM.onClick('.run-commands',this.runCommands.bind(this));
         this.zoom = 1;
         this.animateSpeedPerSecond = 0;
         this.hueSelector.updateColor(this.saturation,this.level);
+        DOM.onClick('#gradient',this.toggleGradient.bind(this));
     }
 
+    isGradient() {
+        const elem = DOM.first("#gradient");
+        return elem.checked;
+    }
+    toggleGradient(elem,event) {
+        if (elem.checked) {
+            DOM.addClass(document.body,'gradient');
+        } else {
+            DOM.removeClass(document.body,'gradient');
+        }
+        return false;
+    }
     levelMove(control,event) {
         this.logger.debug("level: "+ control.value);
         this.level = control.value;
@@ -404,6 +423,7 @@ class LedApp {
     levelChange(control,event) {
         this.logger.debug("level: "+ control.value);
         this.level = control.value;
+        
         const start = this.ledSelector.getStartLed();
         const end = this.ledSelector.getEndLed();
         this.addCommand('l',start,end,this.level,this.level,this.zoom,this.animateSpeedPerSecond);
@@ -908,7 +928,7 @@ class Dom {
                 if (target.type == 'number' || target.type == 'range') {
                     value = 1*value;
                 }
-                handler(target,event,value);
+               return handler(target,event,value);
             }
         });
     }
@@ -921,7 +941,7 @@ class Dom {
                 if (target.type == 'number' || target.type == 'range') {
                     value = 1*value;
                 }
-                handler(target,event,value);
+                return handler(target,event,value);
             }
         });
     }
@@ -930,7 +950,7 @@ class Dom {
         this.listen('click',selector,(event)=>{
             const target = event.target;
             if (this.match(target,selector)) {
-                handler(target,event);
+                return handler(target,event);
             }
         });
     }

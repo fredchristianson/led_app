@@ -21,7 +21,7 @@
                     <div class='position'></div>
                     <div id='first-color' class='color'></div>
                 </div>
-                <div id='last-hue' class='selected last'>
+                <div id='last-hue' class='selected last if-gradient'>
                     <div class='position'></div>
                     <div id='last-color'  class='color'></div>
                 </div>
@@ -30,11 +30,13 @@
         </div>
         <div class='saturation'>
             <h2>Saturation</h2>
-            <input type='range' id='saturation' name='saturation' min="0" max="100"/>
+            <label><span class='if-gradient'>Start</span><input type='range' id='saturation' name='saturation' min="0" max="100"/></label>
+            <label class='if-gradient'><span >End</span><input type='range' id='saturation-last' name='saturation-last' min="0" max="100"/></label>
         </div>
         <div class='level'>
             <h2>Level</h2>
-            <input type='range' id='level' name='level' min="0" max="100"/>
+            <label><span class='if-gradient'>Start</span><input type='range' id='level' name='level' min="0" max="100"/></label>
+            <label class='if-gradient'><span >End</span><input type='range' id='level-last' name='level-last' min="0" max="100"/></label>
         </div>
     </section>
     <section class='commands'>

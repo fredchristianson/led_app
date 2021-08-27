@@ -113,3 +113,11 @@ h2 span {
     width: 100%;
     min-height: 8rem;
 }
+
+.if-gradient {
+    display: none;
+}
+
+.gradient .if-gradient {
+    display: inline-block;
+}
