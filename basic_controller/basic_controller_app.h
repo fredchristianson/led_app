@@ -43,6 +43,33 @@ namespace DevRelief {
             });
 
 
+            m_httpServer->routeBracesGet( "/api/scene/config",[this](Request* req, Response* resp){
+                m_logger->debug("handling API  %s", req->uri().c_str());
+                resp->send(200,"text/html","get /api/scene/config");
+                //this->apiRequest(req->pathArg(0),req,resp);
+            });
+
+
+            m_httpServer->routeBracesPost( "/api/scene/config",[this](Request* req, Response* resp){
+                m_logger->debug("handling API  %s", req->uri().c_str());
+                resp->send(200,"text/html","post /api/scene/%s",req->pathArg(0).c_str());
+                //this->apiRequest(req->pathArg(0),req,resp);
+            });
+
+            m_httpServer->routeBraces(HTTPMethod.HTTP_GET, "/api/scene/{}}",[this](Request* req, Response* resp){
+                m_logger->debug("get scene %s", req->pathArg(0).c_str());
+                resp->send(200,"text/html","get /api/scene/config");
+                //this->apiRequest(req->pathArg(0),req,resp);
+            });
+
+
+            m_httpServer->routeBraces(HTTPMethod.HTTP_POST, "/api/scene/{}}",[this](Request* req, Response* resp){
+                m_logger->debug("post scene %s", req->pathArg(0).c_str());
+                resp->send(200,"text/html","post /api/scene/%s",req->pathArg(0).c_str());
+                //this->apiRequest(req->pathArg(0),req,resp);
+            });
+
+
             m_httpServer->routeBraces("/api/{}",[this](Request* req, Response* resp){
                 ////m_logger->debug("handling API  %s", req->uri().c_str());
                 //resp->send(200,"text/html","working");

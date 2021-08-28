@@ -1,9 +1,9 @@
 import assert from './assert.js';
 
 const LOG_LEVEL = {
-    Dom: {debug:true},
-    LedSelector: { debug: false}    
-    
+    Dom: {debug:false},
+    LedSelector: { debug: false}, 
+    ColorSlider: {debug: true}
 
 };
 
@@ -36,27 +36,160 @@ class Logger {
         }
     }
 
-    error(message) {
+    error(message, exception=null) {
         if (this.enabled('error')) {
             this.write(message);
+            if (exception) {
+                this.write(exception);
+                if (exception.stack){
+                    this.write(exception.stack);
+                }
+            }
         }
     }
 }
 
-class ColorSlider {
-    constructor(control,container,selector) {
-        this.control = control;
-        this.image = control.image;
-        this.selector = selector;
-        this.container = DOM.first(container);
-        this.element = DOM.first(container,this.selector);
-        this.moveable = this.element.parentNode;
-        DOM.onTouch(this,container,selector);
-        this.logger = new Logger("ColorSlider");
+class Observable {
+    constructor() {
+        this.observers = [];
+    }
+
+    observe(observer) {
+        this.observers.push(observer);
+    }
+
+    changed() {
+        this.observers.forEach(observer=>{
+            observer(this);
+        });
+    }
+}
+
+class Gradient {
+    constructor(startValue, endValue) {
+        this.startValue = startValue;
+        this.endValue = endValue;
+    }
+
+    setValue(value) { throw new Exception("setValue() not implemented");}
+
+    apply(leds,startIdx,endIdx){
+        const ledCount = (endIdx-startIdx)+1.0;
+        const valueCount = (this.endValue-this.startValue)+1.0;
+        for(var i=Math.max(0,startIdx);i<leds.length && i<=endIdx;i++) {
+            const pct = (i-startIdx)/ledCount;
+            const increment = pct*valueCount;
+            this.setValue(leds[i],this.startValue+increment);
+        }
+    }
+}
+
+class HueGradient extends Gradient {
+    constructor(startValue,endValue) {
+        super(startValue,endValue);
+    }
+    setValue(led,value) {
+        led.hue = colorMgr.hueRangeValueToHtmlHue(value);
+    }
+}
+
+class SaturationGradient extends Gradient {
+    constructor(startValue,endValue) {
+        super(startValue,endValue);
+    }
+    setValue(led,value) {
+        led.saturation = value;
+    }
+}
+
+class LevelGradient extends Gradient {
+    constructor(startValue,endValue) {
+        super(startValue,endValue);
+    }
+    setValue(led,value) {
+        led.level = value;
+    }
+}
+
+
+
+class HslColor extends Observable {
+    constructor(colorMgr){
+        super();
+        this.colorMgr = colorMgr;
         this.hueRangeValue = 0;
-        this.hueRangeOffset = 0;
         this.htmlHue = 0;
-        this.showHue(this.hueRangeOffset);
+        this.saturation = 100;
+        this.level = 50;
+        this.ledNumber = 0;
+    }
+
+    setHueRangeValue(value) {
+        this.hueRangeValue = value;
+        this.htmlHue = this.colorMgr.hueRangeValueToHtmlHue(value);
+        this.changed();
+        this.colorMgr.changed();
+    }
+
+    setSaturation(value) {
+        this.saturation = value;
+        this.changed();
+        this.colorMgr.changed();
+    }
+    setLevel(value) {
+        this.level = value;
+        this.changed();
+        this.colorMgr.changed();
+    }
+
+    getHueRangeValue() {
+        return this.hueRangeValue;
+    }
+    getHtmlHue() {
+        return this.htmlHue;
+    }
+
+    getSaturation() { 
+        return this.saturation;
+    }
+
+    getLevel() {
+        return this.level;
+    }
+
+    getHsl() {
+        const saturation = this.colorMgr.saturationEnabled ? this.saturation : 100;
+        const level = this.colorMgr.levelEnabled ? this.level : 50;
+        this.htmlColor = `hsl(${this.htmlHue},${saturation}%,${level}%)`;
+        return this.htmlColor;
+    }
+}
+
+class ColorManager extends Observable {
+    constructor() {
+        super();
+        this.first = new HslColor(this);
+        this.last = new HslColor(this);
+        this.image = DOM.first('#image-spectrum');
+        this.hueMap = {};
+        this.hueEnabled = true;
+        this.saturationEnabled = true;
+        this.levelEnabled = true;
+        this.gradientEnabled = false;
+    }
+
+    enableGradient(isEnabled=true) { this.gradientEnabled = isEnabled; this.changed();}
+
+    disableHue() { this.hueEnabled = false; this.changed();}
+    enableHue(isEnabled=true) { this.hueEnabled = isEnabled; this.changed();}
+    disableSaturation() { this.saturationEnabled = false; this.changed();}
+    enableSaturation(isEnabled=true) { this.saturationEnabled = isEnabled; this.changed();}
+    disableLevel() { this.levelEnabled = false; this.changed();}
+    enableLevel(isEnabled=true) { this.levelEnabled = isEnabled; this.changed();}
+    setSelectedRange(first,last) {
+        this.first.ledNumber = first;
+        this.last.ledNumber = last;
+        this.changed();
     }
 
     hueRangeValueToHtmlHue(rangeValue) {
@@ -73,23 +206,61 @@ class ColorSlider {
         return htmlHue;
     }
 
-    showHue(hueRangeOffset) {
-        this.colorData = DOM.getPixel(this.image,hueRangeOffset,50);
-        const r = this.colorData[0];
-        const g = this.colorData[1];
-        const b = this.colorData[2];
-        this.rgb = {red:r,green:g, blue:b};
-        this.htmlHue = rgb2hsv(r,g,b).hue;
-        this.hueRangeOffset = hueRangeOffset;
-        this.htmlColor = `hsl(${this.htmlHue},${this.saturation}%,${this.level}%)`;
-
-        this.element.style.backgroundColor = this.htmlColor;
+    getStartHslColor(){
+        return this.first;
+    }
+    getEndHslColor(){
+        return this.gradientEnabled ? this.last : this.first;
     }
 
 
+    updateColors(leds) {
+        const gradient = this.gradientEnabled;
+        const start = this.first;
+        const end = gradient ? this.last : this.first;
+        const hueGradient = new HueGradient(start.getHueRangeValue(),end.getHueRangeValue());
+        const levelGradient = new LevelGradient(start.getLevel(),end.getLevel());
+        const saturationGradient = new SaturationGradient(start.getSaturation(),end.getSaturation());
+        if (this.hueEnabled) {
+            hueGradient.apply(leds,this.first.ledNumber-1,this.last.ledNumber-1);
+        }
+        if (this.levelEnabled) {
+            levelGradient.apply(leds,this.first.ledNumber-1,this.last.ledNumber-1);
+        }
+        if (this.saturationEnabled) {
+            saturationGradient.apply(leds,this.first.ledNumber-1,this.last.ledNumber-1);
+        }
+        leds.forEach(led=>{
+            if (led.hue != null) {
+                led.htmlColor = `hsl(${led.hue},${led.saturation??100}%,${led.level??50}%)`;
+            } else {
+                led.htmlColor = "hsl(0,0%,0%)";
+            }
+        });
+    }
+}
+
+class ColorSlider {
+    constructor(control,container,selector,hslColor) {
+        this.control = control;
+        this.image = control.image;
+        this.selector = selector;
+        this.hslColor = hslColor;
+        hslColor.observe(this.onColorChanged.bind(this));
+        colorMgr.observe(this.onColorChanged.bind(this));
+        this.container = DOM.first(container);
+        this.element = DOM.first(container,this.selector);
+        this.moveable = this.element.parentNode;
+        DOM.onTouch(this,container,selector);
+        this.logger = new Logger("ColorSlider");
+        this.hueRangeValue = 0;
+        this.hueRangeOffset = 0;
+        this.htmlHue = 0;
+        this.hslColor.setHueRangeValue(this.hueRangeValue);
+    }
+
     touchStart(movement,event) {
         this.logger.debug("start touch "+movement.moveTarget.id);
-        this.control.sliderSelect(this,movement);
     }
 
     touchMove(movement,event) {
@@ -111,25 +282,21 @@ class ColorSlider {
             pos = Math.max(pos,0);
             pos = Math.min(pos,this.image.naturalWidth-1);
             this.moveable.style.left = `${pos}px`;
-            this.control.sliderMove(this,pos,movement);
-            this.showHue(pos);
             this.hueRangeOffset = pos;
             this.hueRangeValue = pos*255/this.image.naturalWidth;
+            this.hslColor.setHueRangeValue(this.hueRangeValue);
+            this.logger.debug(`hue: ${pos}, ${this.image.naturalWidth}, ${this.hueRangeValue}`);
         } catch(ex) {
-            this.logger.error("move faile "+ex);
+            this.logger.error("move failed ",ex);
         }
     }
 
     touchEnd(movement,event) {
         this.logger.debug("end touch "+movement.moveTarget.id);
-        this.control.sliderEndMove(this,movement);
     }
 
-    updateColor(saturation,level) {
-        this.saturation = saturation;
-        this.level = level;
-        this.htmlColor = `hsl(${this.htmlHue},${this.saturation}%,${this.level}%)`;
-        this.element.style.backgroundColor = this.htmlColor;
+    onColorChanged(observable) {
+        this.element.style.backgroundColor = this.hslColor.getHsl();
     }
 }
 
@@ -143,10 +310,9 @@ class HueSelector {
         this.image = DOM.first('.hsv .hue img');
         this.selected = DOM.first(this.section,'.selected');
         this.colorElement = DOM.first(this.section,'.color');
-        this.firstSlider = new ColorSlider(this,'.hsv .hue .select','.first .color');
-        this.lastSlider = new ColorSlider(this,'.hsv .hue .select','.last .color');
+        this.firstSlider = new ColorSlider(this,'.hsv .hue .select','.first .color',colorMgr.first);
+        this.lastSlider = new ColorSlider(this,'.hsv .hue .select','.last .color',colorMgr.last);
         this.selectedSlider = null;
-
     }
 
     getHueRangeValue() { 
@@ -157,11 +323,6 @@ class HueSelector {
         return 0;//this.htmlHue;
     }
 
-
-    updateColor(saturation,level) {
-        this.firstSlider.updateColor(saturation,level);
-        this.lastSlider.updateColor(saturation,level);
-    }
     toHex2(i) {
         var str = i.toString(16);
         if (str.length ==1) {
@@ -170,40 +331,6 @@ class HueSelector {
         return str;
     }
 
-    sliderSelect(slider,movement) {
-        this.selectedSlider = slider;
-    }
-    sliderMove(slider,movement){
-    }
-
-    sliderEndMove(slider,movement){
-    }
-
-    touchStart(movement,event) {
-        this.logger.debug("touch start pos: " + event.offsetX);
-        this.hueRangeValue  = this.offsetToRangeValue(event.offsetX);
-       // this.logger.debug("pos: " + x);
-        this.selected.style.left = ''+event.offsetX+'px';
-        this.showHue(event.offsetX); 
-    }
-
-    touchMove(element,event) {
-        this.hueRangeValue  = this.offsetToRangeValue(event.offsetX);
-        this.logger.debug("pos: " + event.offsetX+" "  + this.hueRangeValue);
-        this.selected.style.left = ''+event.offsetX+'px';
-        this.showHue(event.offsetX);        
-    }
-
-    touchEnd(element,event) {
-        this.logger.debug("touch end pos: " + this.offsetToRangeValue(event.offsetX)+" " + event.offsetX);
-        this.app.hueChanged();
-    }
-
-    offsetToRangeValue(offset) {
-        const maxWidth = this.image.naturalWidth;
-        const value = Math.round(offset*255/maxWidth);
-        return value;
-    }
 }
 
 class LedSelector {
@@ -222,10 +349,10 @@ class LedSelector {
         DOM.html(this.selFirst,'--');
         DOM.html(this.selCurrent,'--');
         DOM.html(this.selLast,'--');
-        DOM.onHover(this,'#preview-leds','.led');
         DOM.onTouch(this,'#preview-leds','.led');
         DOM.onClick('.select-all',this.selectAll.bind(this));
         DOM.onClick('.select-clear',this.selectClear.bind(this));
+
     }
 
     getStartLed() { return this.selectedStartPercent;}
@@ -298,22 +425,14 @@ class LedSelector {
                 DOM.removeClass(led,'selected');
             }
         });
-    }
-
-    
-
-    updateColor(color) {
-        const leds = DOM.find('#preview-leds .led.selected');
-        leds.forEach(led=>{
-            led.style.backgroundColor = color;
-        });
+        colorMgr.setSelectedRange(from,to);
     }
 
     setColors(colors) {
         const leds = DOM.find('#preview-leds .led');
         leds.forEach(led=>{
             var idx = led.dataset.index;
-            var color = colors[idx];
+            var color = colors[idx-1];
             if (color != null) {
                 led.style.backgroundColor = color.htmlColor;
             } else {
@@ -322,15 +441,7 @@ class LedSelector {
         });
     }
 
-    hoverStart(target,event) {
-        const idx = 1*target.dataset.index;
-        this.logger.debug("mouse over "+idx);
-        this.selCurrent.innerHTML =""+idx;
-    }
 
-    hoverEnd(target,event) {
-        DOM.html(this.selCurrent,'--');
-    }
 
     setCount(count) {
         this.count = count;
@@ -358,6 +469,49 @@ class LedSelector {
         }
     }
 
+
+}
+
+class InputRangeSelector {
+    constructor(selector){
+        this.elem = DOM.first(selector);
+        DOM.onInput(this.elem,this.onChange.bind(this));
+        DOM.onChange(this.elem,this.onSelected.bind(this));
+    }
+
+    changed(value) {
+        alert("changed(value) not implemented");
+    }
+    onChange(element,event) {
+        this.changed(DOM.getValue(element));
+    }
+
+    onSelected(element,event) {
+        this.changed(DOM.getValue(element));
+    }
+}
+
+class SaturationSelector extends InputRangeSelector {
+    constructor(selector,hslColor){
+        super(selector);
+        this.hslColor = hslColor;
+    }
+
+    changed(value){
+        this.hslColor.setSaturation(value);
+    }
+}
+
+
+class LevelSelector extends InputRangeSelector {
+    constructor(selector,hslColor){
+        super(selector);
+        this.hslColor = hslColor;
+    }
+
+    changed(value){
+        this.hslColor.setLevel(value);
+    }
 }
 
 
@@ -368,44 +522,63 @@ class LedApp {
         this.ledSelector = new LedSelector(this);
         this.hueSelector = new HueSelector(this);
         this.xhrOpen = false;
-        this.initialize();
-        this.hue = 0;
-        this.level = 50;
-        this.saturation = 100;
-        this.color = 'hsl(0,100%,100%)';
-        this.color = 'ff0000';
-        this.saturation = 100;
-        this.levelControl = DOM.first('#level');
-        this.saturationControl = DOM.first('#saturation');
-        this.levelControlLast = DOM.first('#level');
-        this.saturationControlLast = DOM.first('#saturation');
-        this.levelControl.value = this.level;
-        this.saturationControl.value = this.saturation;
-        DOM.onChange(this.levelControl,this.levelChange.bind(this));
-        DOM.onChange(this.saturationControl,this.saturationChange.bind(this));
-        DOM.onInput(this.levelControl,this.levelMove.bind(this));
-        DOM.onInput(this.saturationControl,this.saturationMove.bind(this));
-        DOM.onChange(this.levelControlLast,this.levelChange.bind(this));
-        DOM.onChange(this.saturationControlLast,this.saturationChange.bind(this));
-        DOM.onInput(this.levelControlLast,this.levelMove.bind(this));
-        DOM.onInput(this.saturationControlLast,this.saturationMove.bind(this));
+
         DOM.onClick('.run-commands',this.runCommands.bind(this));
         this.zoom = 1;
         this.animateSpeedPerSecond = 0;
-        this.hueSelector.updateColor(this.saturation,this.level);
         DOM.onClick('#gradient',this.toggleGradient.bind(this));
+        DOM.onClick('#hue-off',this.toggleHue.bind(this));
+        DOM.onClick('#level-off',this.toggleLevel.bind(this));
+        DOM.onClick('#saturation-off',this.toggleSaturation.bind(this));
+        this.saturationFirst = new SaturationSelector('#saturation-first',colorMgr.first);
+        this.saturationLast = new SaturationSelector('#saturation-last',colorMgr.last);
+        this.levelFirst = new LevelSelector('#level-first',colorMgr.first);
+        this.levelLast = new LevelSelector('#level-last',colorMgr.last);
+        colorMgr.observe(this.onColorChanged.bind(this));
+
+        DOM.onClick('.create-command.hue',this.createHueCommand.bind(this));
+        DOM.onClick('.create-command.level',this.createLevelCommand.bind(this));
+        DOM.onClick('.create-command.saturation',this.createSaturationCommand.bind(this));
+        DOM.onClick('.create-command.add-hsl',this.createHSLCommands.bind(this));
+        this.initialize();
+
     }
 
+    onColorChanged() {
+        this.runCommands();
+    }
+    
     isGradient() {
         const elem = DOM.first("#gradient");
         return elem.checked;
     }
-    toggleGradient(elem,event) {
+    toggleHue(elem,event) {
         if (elem.checked) {
-            DOM.addClass(document.body,'gradient');
+            DOM.addClass(document.body,'no-hue');
+            colorMgr.disableHue();
         } else {
-            DOM.removeClass(document.body,'gradient');
+            colorMgr.enableHue();
+            DOM.removeClass(document.body,'no-hue');
         }
+        colorMgr.changed();
+        return false;
+    }  
+    
+    toggleSaturation(elem,event) {
+        DOM.toggleClass(document.body,'no-saturation');
+        colorMgr.enableSaturation(!elem.checked);
+        return false;
+    }  
+
+    toggleLevel(elem,event) {
+        DOM.toggleClass(document.body,'no-level',elem.checked);
+        colorMgr.enableLevel(!elem.checked);
+        return false;
+    }  
+
+    toggleGradient(elem,event) {
+        DOM.toggleClass(document.body,'gradient',elem.checked);
+        colorMgr.enableGradient(elem.checked);
         return false;
     }
     levelMove(control,event) {
@@ -439,6 +612,41 @@ class LedApp {
         this.updateColor();
     }
 
+    createHueCommand() {
+        const start = colorMgr.getStartHslColor();
+        const end = colorMgr.getEndHslColor();
+        this.addCommand('h',this.ledSelector.getStartLed(),this.ledSelector.getEndLed(),
+                            start.getHueRangeValue(),end.getHueRangeValue(),
+                            this.zoom,this.animateSpeedPerSecond);
+    }
+
+    createLevelCommand() {
+        const start = colorMgr.getStartHslColor();
+        const end = colorMgr.getEndHslColor();
+        this.addCommand('l',this.ledSelector.getStartLed(),this.ledSelector.getEndLed(),
+                            start.getLevel(),end.getLevel(),
+                            this.zoom,this.animateSpeedPerSecond);
+    }
+    createSaturationCommand() {
+        const start = colorMgr.getStartHslColor();
+        const end = colorMgr.getEndHslColor();
+        this.addCommand('s',this.ledSelector.getStartLed(),this.ledSelector.getEndLed(),
+                            start.getSaturation(),end.getSaturation(),
+                            this.zoom,this.animateSpeedPerSecond);
+    }
+
+    createHSLCommands() {
+        if (colorMgr.hueEnabled){
+            this.createHueCommand();
+        }
+        if (colorMgr.levelEnabled){
+            this.createLevelCommand();
+        }    
+        if (colorMgr.saturationEnabled){
+            this.createSaturationCommand();
+        }
+    }
+
     addCommand(cmd,startLed,endLed,startValue,endValue,zoom,animateSpeed){
         if (startLed == null || endLed == null || isNaN(startLed) || isNaN(endLed)) {
             this.logger.error("invalid range "+startLed+" " +endLed);
@@ -452,7 +660,10 @@ class LedApp {
     }
 
     runCommands() {
-        const leds = {};
+        const leds = [];
+        for(var c=0;c<this.config.led_count;c++) {
+            leds[c] = {hue:null, level:null,saturation:null,htmlColor:null};
+        }
         const sat = this.saturation;
         const level = this.level;
         var list = DOM.getValue('#commands');
@@ -467,51 +678,26 @@ class LedApp {
             }
             if (parts.length>1) {
                 this.logger.debug("command: "+parts[0]);
-                var led;
-                for(var i=parts[1];i<=parts[2];i++) {
-                    if (parts[0] == 'h'){
-                        led = leds[i] || {};
-                        led.hue = this.hueSelector.hueRangeValueToHtmlHue(parts[3]);
-                        if (led.saturation == null) {
-                            led.saturation = this.saturation;
-                        }
-                        if (led.level == null) {
-                            led.level = this.level;
-                        }
-                        led.htmlColor = `hsl(${led.hue},${led.saturation}%,${led.level}%)`;
-                        leds[i] = led;
-                    } else if (parts[0] == 's'){
-                        led = leds[i] || {};
-                        if (led.level == null) {
-                            led.level = level;
-                        }
-                        if (led.hue==null){
-                            led.hue = 0;
-                            led.saturation = 0;
-                        }
-
-                        led.saturation = parts[3];
-                        
-                        led.htmlColor = `hsl(${led.hue},${led.saturation}%,${led.level}%)`;
-                        leds[i] = led;
-                    } else if (parts[0] == 'l'){
-                        led = leds[i] || {};
-                        if (led.saturation == null) {
-                            led.saturation = saturation;
-                        }
-                        if (led.hue==null){
-                            led.hue = 0;
-                            led.saturation = 0;
-                        }
-                        led.level = parts[3];
-                        
-                        led.htmlColor = `hsl(${led.hue},${led.saturation}%,${led.level}%)`;
-                        leds[i] = led;
-                    }
-
+                const cmd = parts[0];
+                const startLed = parts[1];
+                const endLed = parts[2];
+                var gradient = null;
+                if (cmd == 'h') {
+                    gradient = new HueGradient(parts[3],parts[4]);
+                } else if (cmd == 'l') {
+                    gradient = new LevelGradient(parts[3],parts[4]);
+                } else if (cmd == 's') {
+                    gradient = new SaturationGradient(parts[3],parts[4]);
                 }
+                if (gradient) {
+                    gradient.apply(leds,startLed,endLed);
+                } else {
+                    this.logger.debug("unknownn command: "+cmd);
+                }
+                
             }
         });
+        colorMgr.updateColors(leds);
         this.ledSelector.setColors(leds);
     }
 
@@ -695,6 +881,25 @@ class Dom {
         });
     }
 
+    toggleClass(elements,className,isSet=null){
+        var elements = this.find(elements);
+
+        elements.forEach((element) =>{
+            var add = isSet;
+            if (isSet === null) {
+                add = !this.hasClass(element,className);
+            }
+            if (add){
+                element.classList.add(className);
+            } else {
+                element.classList.remove(className);
+            }
+        });
+    }
+
+    hasClass(element,className) {
+        return element.classList.contains(className);
+    };
 
     getParentAndSelector(opts) {
         var parent=document;
@@ -992,6 +1197,9 @@ class Dom {
 
     getValue(selector) {
         const elem = this.first(selector);
+        if (elem.type == 'range' || elem.type == 'number') {
+            return Number.parseFloat(elem.value);
+        }
         return elem.value;
     }
 
@@ -1002,6 +1210,8 @@ class Dom {
 }
 
 const DOM = new Dom();
+
+const colorMgr = new ColorManager();
 
 
 export default LedApp;

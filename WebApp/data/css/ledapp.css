@@ -47,15 +47,16 @@ h2 .current {
 }
 
 h2 a {
-    color: blue;
+    color: #777777;
     text-decoration: none;
     font-size: 14px;
-    margin-left: 10px;
+    margin-left: 2rem;
 }
 
 h2 label {
-    color: blue;
+    color: #777777;
     font-size: 14px;
+    margin-left: 2rem;
 }
 h2 span {
     font-size: 14px;
@@ -75,6 +76,7 @@ h2 span {
 
 .hsv .hue .selected {
     top: 0px;
+    left: 0px;
     position: absolute;
     height: 100px;
 }
@@ -105,13 +107,39 @@ h2 span {
     bottom: -60px;
 }
 
-.commands {
+.scenes {
+    display: grid;
+    grid-template-areas: 
+        'text loadable load-button'
+        'text . .'
+        'text name save-button';
+    gap: 1rem;
+    grid-template-rows: auto 1fr min-content;
+    grid-template-columns: 50% 1fr 10rem;
 
 }
 
-.commands textarea {
+.scenes textarea {
+    grid-area: text;
     width: 100%;
     min-height: 8rem;
+}
+
+
+.scenes a {
+    color: white;
+    margin-left: 1rem;
+}
+
+.scenes a.save {
+    grid-area: save-button;
+}
+.scenes a.load {
+    grid-area: load-button;
+}
+
+#scene-name {
+    grid-area: name;
 }
 
 .if-gradient {
@@ -120,4 +148,16 @@ h2 span {
 
 .gradient .if-gradient {
     display: inline-block;
+}
+
+.no-hue .hsv .hue .select {
+    display:none;
+}
+
+.no-saturation .saturation .select {
+    display:none;
+}
+
+.no-level .level .select {
+    display:none;
 }

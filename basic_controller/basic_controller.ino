@@ -1,4 +1,5 @@
-
+#define LED_COUNT 273
+const char* HOSTNAME="LivingRoomLEDs";
 
 #include "./lib/logger.h"
 #include "./basic_controller_app.h"

@@ -56,11 +56,11 @@ class HttpServer {
             });
         }
 
-        void routeBraces(String uri, HttpHandler httpHandler){
+        void routeBraces(HTTPMethod method,String uri, HttpHandler httpHandler){
             m_logger->debug("routing to Uri %s",uri.c_str());
             auto server = m_server;
             auto handler = httpHandler;
-            m_server->on(UriBraces(uri.c_str()),[this,handler,server](){
+            m_server->on(UriBraces(uri.c_str()),method,[this,handler,server](){
                 this->cors(server);
                 m_logger->debug("uri found");
                 handler(server,server);

@@ -6,7 +6,7 @@
 namespace DevRelief {
     const char* ssid = "c22-2.4"; //replace this with your WiFi network name
     const char* password = "Dolphin#22"; //replace this with your WiFi network password
-    const char* HOSTNAME="LivingRoomLEDs";
+    
     class DRWiFi {
     public:
         static DRWiFi* get() {

@@ -14,9 +14,9 @@
     </section>
     <section class='hsv'>
         <div class="hue">
-            <h2>Hue <label><input type='checkbox' id='gradient'/> gradient</label></h2>
+            <h2>Hue <label><input type='checkbox' id='gradient'/> Gradient</label><label><input type='checkbox' id='hue-off'/> Off</label><a href='#' class='create-command hue'>Add Command</a></h2>
             <div class='select' data-value='0'>
-                <img src='./image/spectrum.png'/>
+                <img id='image-spectrum' src='./image/spectrum.png'/>
                 <div id='first-hue' class='selected first'>
                     <div class='position'></div>
                     <div id='first-color' class='color'></div>
@@ -29,19 +29,28 @@
             </div>
         </div>
         <div class='saturation'>
-            <h2>Saturation</h2>
-            <label><span class='if-gradient'>Start</span><input type='range' id='saturation' name='saturation' min="0" max="100"/></label>
-            <label class='if-gradient'><span >End</span><input type='range' id='saturation-last' name='saturation-last' min="0" max="100"/></label>
+            <h2>Saturation <label><input type='checkbox' id='saturation-off'/> Off</label><a href='#' class='create-command saturation'>Add Command</a></h2>
+            <div class='select'>
+                <label><span class='if-gradient'>Start</span><input type='range' id='saturation-first' value='100' name='saturation' min="0" max="100"/></label>
+                <label class='if-gradient'><span >End</span><input type='range' id='saturation-last' value='100' name='saturation-last' min="0" max="100"/></label>
+            </div>
         </div>
         <div class='level'>
-            <h2>Level</h2>
-            <label><span class='if-gradient'>Start</span><input type='range' id='level' name='level' min="0" max="100"/></label>
-            <label class='if-gradient'><span >End</span><input type='range' id='level-last' name='level-last' min="0" max="100"/></label>
+            <h2>Level<label><input type='checkbox' id='level-off'/> Off</label><a href='#' class='create-command level'>Add Command</a></h2>
+            <div class='select'>
+                <label><span class='if-gradient'>Start</span><input type='range' id='level-first'  value='50' name='level' min="0" max="100"/></label>
+                <label class='if-gradient'><span >End</span><input type='range' id='level-last'   value='50' name='level-last' min="0" max="100"/></label>
+            </div>
+
         </div>
     </section>
     <section class='commands'>
-        <h2>Commands <a class='run-commands'>run</a></h2>
-        <textarea id='commands' name='commands'></textarea>
+        <h2>Commands <a class='create-command add-hsl'>Add HSL</a><a class='run-commands'>run</a></h2>
+        <div class='scenes'>
+            <textarea id='scene' name='scene'></textarea>
+            <select id='saved-sceens'></select><a href='#' class='load'>load</a>
+            <input id='scene-name' name='name' value='default'><a href='#' class='save'>save</a>
+        </div>
     </section>
 </body>
 
