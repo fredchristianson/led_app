@@ -2,11 +2,11 @@
 #include <ArduinoJson.h>
 
 
-#include "./lib/application.h"
-#include "./lib/logger.h"
-#include "./lib/http_server.h"
-#include "./lib/file_system.h"
-#include "./lib/led_strip.h"
+#include "./application.h"
+#include "./logger.h"
+#include "./http_server.h"
+#include "./file_system.h"
+#include "./led_strip.h"
 
 extern EspClass ESP;
 
@@ -18,17 +18,23 @@ namespace DevRelief {
       uint16_t brightness;
       uint16_t strip1Length;
       uint16_t strip2Length;
-      CRGB leds[300];
+      CRGB leds[3];
     };
 
+    struct HSVData {
+        CHSV leds[300];
+    };
 
     class BasicControllerApplication : public Application {
     public: 
         BasicControllerApplication() {
             m_pos = 0;
             m_logger = new Logger("BasicControllerApplication",100);
+            m_logger->debug("Running BasicControllerApplication v0.1");
             m_httpServer = new HttpServer();
             m_fileSystem = new DRFileSystem();
+            stripData.strip1Length = 300;
+            stripData.strip2Length = 123;
 
             m_httpServer->route("/",[this](Request* req, Response* resp){
                // //m_logger->debug("handling request / %s", req->uri().c_str());
@@ -44,28 +50,59 @@ namespace DevRelief {
 
 
             m_httpServer->routeBracesGet( "/api/scene/config",[this](Request* req, Response* resp){
-                m_logger->debug("handling API  %s", req->uri().c_str());
-                resp->send(200,"text/html","get /api/scene/config");
+                m_logger->debug("handling GET API  %s", req->uri().c_str());
+                char * result = (char*)fileBuffer.reserve(2000);
+                //String scenes = "\"abc\",\"def\"";
+                int max = 20;
+                String scenes[max];
+                int fileCount = m_fileSystem->listFiles("/",scenes,max);
+                int sceneCount = m_fileSystem->listFiles("/scene",scenes,max);
+                String sceneNames="";
+                for(int i=0;i<sceneCount;i++) {
+                    if (i>0) {
+                        sceneNames += ",";
+                    }
+                    sceneNames += "\""+scenes[i]+"\"";
+                }
+                sprintf(result,"{\"led_count\": %d,\"hostname\": \"%s\",\"ip_addr\": \"%s\", \"scenes\": [%s]}",LED_COUNT,HOSTNAME,WiFi.localIP().toString().c_str(),sceneNames.c_str());
+                resp->send(200,"text/json",result);
                 //this->apiRequest(req->pathArg(0),req,resp);
             });
 
 
             m_httpServer->routeBracesPost( "/api/scene/config",[this](Request* req, Response* resp){
-                m_logger->debug("handling API  %s", req->uri().c_str());
-                resp->send(200,"text/html","post /api/scene/%s",req->pathArg(0).c_str());
+                m_logger->debug("handling POST API  %s", req->uri().c_str());
+                resp->send(200,"text/plain","post /api/scene/config");
                 //this->apiRequest(req->pathArg(0),req,resp);
             });
 
-            m_httpServer->routeBraces(HTTPMethod.HTTP_GET, "/api/scene/{}}",[this](Request* req, Response* resp){
+            m_httpServer->routeBracesGet( "/api/scene/{}",[this](Request* req, Response* resp){
                 m_logger->debug("get scene %s", req->pathArg(0).c_str());
-                resp->send(200,"text/html","get /api/scene/config");
+
+                String msg = "get /api/scene/" + req->pathArg(0);
+                String sceneName = req->pathArg(0);
+                auto body = req->arg("plain");
+                m_logger->debug("commands: " + body);
+                auto found = m_fileSystem->read("/scene/"+sceneName,fileBuffer);
+                if (found) {
+                    resp->send(200,"text/plain",fileBuffer.text());
+                } else {
+                    String err = "cannot find scene "+sceneName;
+                    resp->send(404,"text/plain",err);
+                }
                 //this->apiRequest(req->pathArg(0),req,resp);
             });
 
 
-            m_httpServer->routeBraces(HTTPMethod.HTTP_POST, "/api/scene/{}}",[this](Request* req, Response* resp){
+            m_httpServer->routeBracesPost( "/api/scene/{}",[this](Request* req, Response* resp){
                 m_logger->debug("post scene %s", req->pathArg(0).c_str());
-                resp->send(200,"text/html","post /api/scene/%s",req->pathArg(0).c_str());
+                String msg = "post /api/scene/" + req->pathArg(0);
+                String sceneName = req->pathArg(0);
+                auto body = req->arg("plain");
+                m_logger->debug("commands: " + body);
+                m_fileSystem->write("/scene/"+sceneName,body);
+                this->runScene(body);
+                resp->send(200,"text/plain",msg.c_str());
                 //this->apiRequest(req->pathArg(0),req,resp);
             });
 
@@ -334,6 +371,63 @@ namespace DevRelief {
             DRLedStrip::show();
         }
 
+        void runScene(String commandText) {
+            const char * text = commandText.c_str();
+            size_t start = 0;
+            size_t end = commandText.indexOf('\n');
+            m_strip1->clear();
+            m_strip2->clear();
+            for(int idx=0;idx<300;idx++){
+                hsvData.leds[idx].hue = 0;
+                hsvData.leds[idx].saturation = 0;
+                hsvData.leds[idx].value = 0;
+            }
+            while(start != end) {
+                String cmd = commandText.substring(start,end);
+                
+                m_logger->debug("run command "+cmd);
+                runCommand(cmd,hsvData.leds);
+                start = end + 1;
+                end = commandText.indexOf('\n',start);
+            }
+
+                        int number;
+            for(number=0;number<stripData.strip1Length+stripData.strip2Length;number++) {
+              CHSV& color = hsvData.leds[number];
+              if (number < stripData.strip1Length) {
+                  m_strip1->setHSV(number,color);
+              } else {
+                m_strip2->setHSV(number-stripData.strip1Length,color);
+              }
+            }
+            
+        }
+
+        void runCommand(String command, CHSV* leds){
+            const char * text = command.c_str();
+            char cmd = *text;
+            size_t start = command.indexOf(',')+1;
+            size_t end = command.indexOf(',',start);
+            int vals[10];
+            int vcount = 0;
+            while(start>= 0 && end >= 0) {
+                int val = atoi(command.substring(start,end).c_str());
+                vals[vcount++] = val;
+                start = end+1;
+                end = command.indexOf(',',start);
+            }
+            for(int i=vals[1];i<vals[2];i++) {
+                if (cmd == 'h') {
+                    leds[i].hue = vals[3];
+                } else if (cmd == 's') {
+                    leds[i].saturation = vals[3];
+                } else if (cmd == 'l') {
+                    leds[i].value = vals[3];
+                }
+
+            }
+        }
+
     private: 
         Logger * m_logger;
         DRFileSystem * m_fileSystem;
@@ -342,6 +436,7 @@ namespace DevRelief {
         DRLedStrip * m_strip1;
         DRLedStrip * m_strip2;
         int m_pos;
+        HSVData hsvData;
         StripData stripData;
 
     };

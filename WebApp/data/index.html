@@ -7,6 +7,7 @@
 </script>
 
 <body>
+    <div id='room-name'></div>
     <section class='preview'>
         <h2>Preview  <span class='first'></span><span class='last'></span><span class='current'></span>
         <a class='select-all'>all</a><a class='select-clear'>clear</a></h2>
@@ -48,8 +49,8 @@
         <h2>Commands <a class='create-command add-hsl'>Add HSL</a><a class='run-commands'>run</a></h2>
         <div class='scenes'>
             <textarea id='scene' name='scene'></textarea>
-            <select id='saved-sceens'></select><a href='#' class='load'>load</a>
-            <input id='scene-name' name='name' value='default'><a href='#' class='save'>save</a>
+            <select id='saved-scenes'></select><a href='#' id='load-scene' class='load'>load</a>
+            <input id='scene-name' name='name' value='default'><a href='#' id='save-scene' class='save'>save</a>
         </div>
     </section>
 </body>

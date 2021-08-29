@@ -63,6 +63,12 @@ namespace DevRelief {
             m_colors[index] = color;
         }
 
+
+        void setHSV(int index,CHSV color) {
+           fill_solid(&(m_colors[index]),1,color);
+        }
+
+
         CRGB* getColor() {
             return m_colors;
         }

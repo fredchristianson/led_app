@@ -457,13 +457,19 @@ class BasicControllerApp {
         const xhr = new XMLHttpRequest();
 
         const url = "/api/"+api;
+        xhr.headerData.append('Accept', '*');
+        xhr.headerData.append("Access-Control-Allow", "*");
+        xhr.headerData.append('Content-Type', 'text/plain');
+        xhr.headerData.append('Access-Control-Allow-Origin', '*');
+        xhr.headerData.append("Access-Control-Allow-Methods", "GET,HEAD,OPTIONS,POST,PUT");
+        xhr.headerData.append("Access-Control-Allow-Headers", "*");
         xhr.open("POST",url,true);
         xhr.onreadystatechange =  () => {
             if (xhr.readyState == XMLHttpRequest.DONE) {
                 this.xhrOpen = false;
             }
         };
-        xhr.setRequestHeader("Content-Type","application/json");
+        xhr.setRequestHeader("Content-Type","text/plain");
 
         const data = JSON.stringify(json);
         xhr.send(data);

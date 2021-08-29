@@ -2,7 +2,7 @@
 const char* HOSTNAME="LivingRoomLEDs";
 
 #include "./lib/logger.h"
-#include "./basic_controller_app.h"
+#include "./lib/basic_controller_app.h"
 using namespace DevRelief;
 
 Logger * logger;

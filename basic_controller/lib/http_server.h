@@ -25,6 +25,8 @@ class HttpServer {
             m_wifi = DRWiFi::get();
 
             m_server = new ESP8266WebServer(80);
+
+
             m_logger->info("Listening to port 80 on IP %s",WiFi.localIP().toString().c_str());
             if (MDNS.begin("LEDController")) {
                 m_logger->info("MSND responder started");
@@ -45,7 +47,11 @@ class HttpServer {
         }
 
         void routeNotFound(HttpHandler httpHandler){
-            
+            if (m_server->method() == HTTP_OPTIONS){
+                this->m_logger->debug("send CORS for HTTP_OPTIONS");
+                this->cors(m_server);
+                m_server->send(204);
+            }
             m_logger->debug("routing Not Found");
             auto server = m_server;
             auto handler = httpHandler;
@@ -56,11 +62,33 @@ class HttpServer {
             });
         }
 
-        void routeBraces(HTTPMethod method,String uri, HttpHandler httpHandler){
+        void routeBraces(String uri, HttpHandler httpHandler){
             m_logger->debug("routing to Uri %s",uri.c_str());
             auto server = m_server;
             auto handler = httpHandler;
-            m_server->on(UriBraces(uri.c_str()),method,[this,handler,server](){
+            m_server->on(UriBraces(uri.c_str()),[this,handler,server](){
+                this->cors(server);
+                m_logger->debug("uri found");
+                handler(server,server);
+            });
+        }
+
+        void routeBracesGet(String uri, HttpHandler httpHandler){
+            m_logger->debug("routing GET to Uri %s",uri.c_str());
+            auto server = m_server;
+            auto handler = httpHandler;
+            m_server->on(UriBraces(uri.c_str()),HTTP_GET,[this,handler,server](){
+                this->cors(server);
+                m_logger->debug("uri found");
+                handler(server,server);
+            });
+        }
+
+        void routeBracesPost(String uri, HttpHandler httpHandler){
+            m_logger->debug("routing POST to Uri %s",uri.c_str());
+            auto server = m_server;
+            auto handler = httpHandler;
+            m_server->on(UriBraces(uri.c_str()),HTTP_POST,[this,handler,server](){
                 this->cors(server);
                 m_logger->debug("uri found");
                 handler(server,server);
@@ -95,6 +123,7 @@ class HttpServer {
 
         void cors(ESP8266WebServer * server) {
             server->sendHeader("Access-Control-Allow-Origin","*");
+            server->sendHeader("Access-Control-Allow-Headers","Content-Type");
         }
 
     private:

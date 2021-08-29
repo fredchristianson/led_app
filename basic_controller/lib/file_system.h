@@ -97,12 +97,23 @@ public:
         return LittleFS.open(fullPath,"r");
     }
 
+    int listFiles(String path, String* results, int maxResults) {
+        m_logger->debug("listFiles: "+path);
+        Dir dir = LittleFS.openDir(path);
+        int count = 0;
+        while (dir.next()) {
+            m_logger->debug("found file: "+dir.fileName());
+            results[count++] = dir.fileName();
+        }
+        return count;
+    }
+
     bool read(String path, DRFileBuffer& buffer ) {
         m_logger->debug("read from %s",path.c_str());
         auto fullPath = getFullPath(path);
         File file = open(fullPath);
         if (!file.isFile()) {
-            m_logger->error("file not found %s",fullPath.c_str());
+            m_logger->error("r file not found %s",fullPath.c_str());
             return false;
         }
         size_t size = file.size();
@@ -119,7 +130,7 @@ public:
         auto fullPath = getFullPath(path);
         File file = open(fullPath);
         if (!file.isFile()) {
-            m_logger->error("file not found %s",fullPath.c_str());
+            m_logger->error("rb file not found %s",fullPath.c_str());
             return false;
         }
         size_t size = file.size();
