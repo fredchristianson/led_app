@@ -1,6 +1,6 @@
 
 #include <ArduinoJson.h>
-
+#include <math.h>
 
 #include "./application.h"
 #include "./logger.h"
@@ -21,8 +21,61 @@ namespace DevRelief {
       CRGB leds[3];
     };
 
+    class Command {
+    public:
+        char type;
+        uint8_t startPercent;
+        uint8_t endPercent;
+        uint8_t startValue;
+        uint8_t endValue;
+        double zoom;
+        double animateSpeedPerSecond;
+        Logger* m_logger;
+
+    public:
+        Command(char * def) {
+            m_logger = new Logger("Command",0);
+            parse(def);
+        }
+
+        bool parse(char * def) {
+            m_logger->debug("parse command: ");
+            m_logger->debug(def);
+            const char * delims = " ,\t\n\r;";
+            char * tok = strtok(def,delims);
+            m_logger->debug("command %s",tok);
+
+            this->type = tok[0];
+            tok = strtok(NULL,delims);
+            m_logger->debug("start %s",tok);
+
+            this->startPercent = atoi(tok);
+
+            tok = strtok(NULL,delims);
+            m_logger->debug("end %s",tok);
+            this->endPercent = atoi(tok);
+
+            tok = strtok(NULL,delims);
+            m_logger->debug("start value  %s",tok);
+            this->startValue = atoi(tok);
+
+            tok = strtok(NULL,delims);
+            m_logger->debug("end value  %s",tok);
+            this->endValue = atoi(tok);
+
+            tok = strtok(NULL,delims);
+            m_logger->debug("zoom  %s",tok);
+            this->zoom = atof(tok);
+
+            tok = strtok(NULL,delims);
+            m_logger->debug("speed  %s",tok);
+            this->animateSpeedPerSecond = atof(tok);
+        }
+
+    };
+
     struct HSVData {
-        CHSV leds[300];
+        CHSV leds[300]; // using CHSV but storing HSL value
     };
 
     class BasicControllerApplication : public Application {
@@ -33,7 +86,7 @@ namespace DevRelief {
             m_logger->debug("Running BasicControllerApplication v0.1");
             m_httpServer = new HttpServer();
             m_fileSystem = new DRFileSystem();
-            stripData.strip1Length = 300;
+            stripData.strip1Length = 150;
             stripData.strip2Length = 123;
 
             m_httpServer->route("/",[this](Request* req, Response* resp){
@@ -84,8 +137,11 @@ namespace DevRelief {
                 auto body = req->arg("plain");
                 m_logger->debug("commands: " + body);
                 auto found = m_fileSystem->read("/scene/"+sceneName,fileBuffer);
+                m_fileSystem->write("/lastsceen",sceneName.c_str());
                 if (found) {
-                    resp->send(200,"text/plain",fileBuffer.text());
+                    String sceneContents = fileBuffer.text();
+                    loadScene(sceneName);
+                    resp->send(200,"text/plain",sceneContents.c_str());
                 } else {
                     String err = "cannot find scene "+sceneName;
                     resp->send(404,"text/plain",err);
@@ -101,7 +157,7 @@ namespace DevRelief {
                 auto body = req->arg("plain");
                 m_logger->debug("commands: " + body);
                 m_fileSystem->write("/scene/"+sceneName,body);
-                this->runScene(body);
+                loadScene(sceneName);
                 resp->send(200,"text/plain",msg.c_str());
                 //this->apiRequest(req->pathArg(0),req,resp);
             });
@@ -119,17 +175,25 @@ namespace DevRelief {
                 this->notFound(req,resp);
             });
             m_httpServer->begin();
-            m_strip1 = new DRLedStrip(1,150);
-            m_strip2 = new DRLedStrip(2,150);
-
-            auto found = m_fileSystem->readBinary("/stripData",(byte *)&stripData,sizeof(stripData));
+            m_strip1 = new DRLedStrip(1,STRIP1_LEDS);
+            m_strip2 = new DRLedStrip(2,STRIP2_LEDS);
+            m_ledCount = LED_COUNT;
+            auto found = m_fileSystem->read("/lastsceen",fileBuffer);
             if (found) {
-                m_logger->debug("found data");
-                setLeds();
+                loadScene(fileBuffer.text());
             }
 
         }
 
+        void loadScene(String sceneName) {
+            auto found = m_fileSystem->read("/scene/"+sceneName,fileBuffer);
+            if (found) {
+                m_logger->info("run scene: %s",sceneName.c_str());
+                runScene(fileBuffer.text());
+            } else {
+                m_logger->info("scene not found: %s",sceneName.c_str());
+            }
+        }
         void setSolidColor(DRLedStrip * strip, CRGB color) {
             strip->clear();
             for(int i=0;i<strip->getCount();i++) {
@@ -359,22 +423,14 @@ namespace DevRelief {
 
         void loop() {
             m_httpServer->handleClient();
-/*             m_pos = (m_pos + 1) % 150;
-            m_strip1->clear();
-            m_strip2->clear();
-            m_strip3->clear();
-            for(int i=0;i<20;i++) {
-                m_strip1->setColor((m_pos+i) % 150,CRGB(255,0,0));
-                m_strip2->setColor((m_pos+i) % 150,CRGB(0,255,0));
-                m_strip3->setColor((m_pos+i) % 150,CRGB(0,0,255));
-            } */
+
             DRLedStrip::show();
         }
 
         void runScene(String commandText) {
             const char * text = commandText.c_str();
-            size_t start = 0;
-            size_t end = commandText.indexOf('\n');
+            int start = 0;
+            int end = commandText.indexOf('\n');
             m_strip1->clear();
             m_strip2->clear();
             for(int idx=0;idx<300;idx++){
@@ -382,57 +438,116 @@ namespace DevRelief {
                 hsvData.leds[idx].saturation = 0;
                 hsvData.leds[idx].value = 0;
             }
-            while(start != end) {
+            while(end>=0) {
                 String cmd = commandText.substring(start,end);
                 
                 m_logger->debug("run command "+cmd);
                 runCommand(cmd,hsvData.leds);
                 start = end + 1;
+                //m_logger->debug("start/end  %d/%d",start,end);
                 end = commandText.indexOf('\n',start);
+               // m_logger->debug("next start/end  %d/%d",start,end);
             }
 
-                        int number;
-            for(number=0;number<stripData.strip1Length+stripData.strip2Length;number++) {
+            int number;
+            m_logger->debug("set strip values");
+            for(number=0;number<m_ledCount;number++) {
               CHSV& color = hsvData.leds[number];
-              if (number < stripData.strip1Length) {
-                  m_strip1->setHSV(number,color);
+             // m_logger->debug("HSV %d (%d,%d,%d)",number,color.hue,color.saturation,color.value);
+              if (number < STRIP1_LEDS) {
+                  m_strip1->setColor(number,HSLToRGB(color));
               } else {
-                m_strip2->setHSV(number-stripData.strip1Length,color);
+                m_strip2->setColor(number-STRIP1_LEDS,HSLToRGB(color));
               }
             }
-            
+            DRLedStrip::show();
         }
 
         void runCommand(String command, CHSV* leds){
-            const char * text = command.c_str();
-            char cmd = *text;
-            size_t start = command.indexOf(',')+1;
-            size_t end = command.indexOf(',',start);
-            int vals[10];
-            int vcount = 0;
-            while(start>= 0 && end >= 0) {
-                int val = atoi(command.substring(start,end).c_str());
-                vals[vcount++] = val;
-                start = end+1;
-                end = command.indexOf(',',start);
+            if (command.length() < 10) {
+
+                return;
             }
-            for(int i=vals[1];i<vals[2];i++) {
-                if (cmd == 'h') {
-                    leds[i].hue = vals[3];
-                } else if (cmd == 's') {
-                    leds[i].saturation = vals[3];
-                } else if (cmd == 'l') {
-                    leds[i].value = vals[3];
+            char * text = (char*)fileBuffer.reserve(command.length());
+            strcpy(text,command.c_str());
+            Command cmd(text);
+            int startIdx = round(m_ledCount*cmd.startPercent/100);
+            int endIdx = round(m_ledCount*cmd.endPercent/100);
+            int startValue = cmd.startValue;
+            int endValue = cmd.endValue;
+            int valueDiff = endValue-startValue;
+            int steps = endIdx-startIdx+1;
+            float stepDiff = 1.0*valueDiff/steps;
+            m_logger->debug("set leds %d-%d.  %d-%d %d/%d/%f",startIdx,endIdx,startValue,endValue,valueDiff,steps,stepDiff);
+            for(int i=startIdx;i<=endIdx;i++) {
+                char value = round(cmd.startValue+i*stepDiff);
+                if (cmd.type == 'h') {
+                    leds[i].hue = value;
+                } else if (cmd.type == 's') {
+                    leds[i].saturation = value;
+                } else if (cmd.type == 'l') {
+                    leds[i].value = value;
                 }
 
             }
         }
 
+        // using CHSV, but the v is from an HSL color
+        float HueToRGB(float v1, float v2, float vH) {
+            if (vH < 0)
+                vH += 1;
+
+            if (vH > 1)
+                vH -= 1;
+
+            if ((6 * vH) < 1)
+                return (v1 + (v2 - v1) * 6 * vH);
+
+            if ((2 * vH) < 1)
+                return v2;
+
+            if ((3 * vH) < 2)
+                return (v1 + (v2 - v1) * ((2.0f / 3) - vH) * 6);
+
+            return v1;
+        }
+
+        CRGB HSLToRGB(CHSV hslInHSV) {
+           // m_logger->debug("hsl to rgb (%d,%d,%d)",(int)hslInHSV.h,(int)hslInHSV.s,(int)hslInHSV.v);
+            unsigned char r = 0;
+            unsigned char g = 0;
+            unsigned char b = 0;
+
+            unsigned char h = hslInHSV.hue;
+            float s = 1.0*hslInHSV.s/100.0;
+            float l = 1.0*hslInHSV.v/100.0;
+            if (s == 0)
+            {
+                r = g = b = (unsigned char)(l * 255);
+            }
+            else
+            {
+                float v1, v2;
+                float hue = (float)h / 255;
+
+                v2 = (l < 0.5) ? (l * (1 + s)) : ((l + s) - (l * s));
+                v1 = 2 * l - v2;
+
+                r = (unsigned char)(255 * HueToRGB(v1, v2, hue + (1.0f / 3)));
+                g = (unsigned char)(255 * HueToRGB(v1, v2, hue));
+                b = (unsigned char)(255 * HueToRGB(v1, v2, hue - (1.0f / 3)));
+            }
+
+            CRGB rgb(r, g, b);
+           // m_logger->debug("hsl (%d,%f,%f)->rgb(%d,%d,%d)",(int)h,s,l,rgb.r,rgb.g,rgb.b);
+            return rgb;
+        }
+        
     private: 
         Logger * m_logger;
         DRFileSystem * m_fileSystem;
         HttpServer * m_httpServer;
-        int m_count = 1;
+        int m_ledCount = LED_COUNT;
         DRLedStrip * m_strip1;
         DRLedStrip * m_strip2;
         int m_pos;

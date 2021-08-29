@@ -1,6 +1,7 @@
 import assert from './assert.js';
 
-const API_BASE = 'http://192.168.10.133/api/';
+//const API_BASE = 'http://192.168.10.133/api/';
+const API_BASE = 'http://192.168.10.120/api/';
 
 class Api {
     constructor() {
@@ -361,7 +362,7 @@ class ColorSlider {
             pos = Math.min(pos,this.image.naturalWidth-1);
             this.moveable.style.left = `${pos}px`;
             this.hueRangeOffset = pos;
-            this.hueRangeValue = pos*255/this.image.naturalWidth;
+            this.hueRangeValue = Math.round(pos*255/this.image.naturalWidth);
             this.hslColor.setHueRangeValue(this.hueRangeValue);
             this.logger.debug(`hue: ${pos}, ${this.image.naturalWidth}, ${this.hueRangeValue}`);
         } catch(ex) {
@@ -673,36 +674,7 @@ class LedApp {
         colorMgr.enableGradient(elem.checked);
         return false;
     }
-    levelMove(control,event) {
-        this.logger.debug("level: "+ control.value);
-        this.level = control.value;
-        this.hueSelector.updateColor(this.saturation,this.level);
-        
-    }
-
-    saturationMove(control,event) {
-        this.logger.debug("saturation: "+ control.value);
-        this.saturation = control.value;
-        this.hueSelector.updateColor(this.saturation,this.level);
-    }
-    levelChange(control,event) {
-        this.logger.debug("level: "+ control.value);
-        this.level = control.value;
-        
-        const start = this.ledSelector.getStartLed();
-        const end = this.ledSelector.getEndLed();
-        this.addCommand('l',start,end,this.level,this.level,this.zoom,this.animateSpeedPerSecond);
-        this.hueSelector.updateColor(this.saturation,this.level);
-    }
-
-    saturationChange(control,event) {
-        this.logger.debug("saturation: "+ control.value);
-        this.saturation = control.value;
-        const start = this.ledSelector.getStartLed();
-        const end = this.ledSelector.getEndLed();
-        this.addCommand('s',start,end,this.saturation,this.saturation,this.zoom,this.animateSpeedPerSecond);
-        this.updateColor();
-    }
+  
 
     createHueCommand() {
         const start = colorMgr.getStartHslColor();

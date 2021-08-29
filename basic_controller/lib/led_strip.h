@@ -45,7 +45,7 @@ namespace DevRelief {
         }
         
         void solid(CRGB color, int brightness) {
-            m_logger->debug("set solid color %d %d %d",color.red,color.green,color.blue);
+            //m_logger->debug("set solid color %d %d %d",color.red,color.green,color.blue);
             for(int i=0;i<m_count;i++) {
                 m_colors[i] = color;
             }
@@ -65,7 +65,11 @@ namespace DevRelief {
 
 
         void setHSV(int index,CHSV color) {
-           fill_solid(&(m_colors[index]),1,color);
+            m_colors[index].setHSV(color.hue,color.saturation,color.value);
+            //CRGB rgb;
+           // hsv2rgb_spectrum(color,rgb);
+           // m_logger->debug("hsv (%d,%d,%d)->rgb(%d,%d,%d)",color.h,color.s,color.v,rgb.r,rgb.g,rgb.b);
+           // m_colors[index] = rgb;
         }
 
 

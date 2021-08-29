@@ -117,8 +117,9 @@ public:
             return false;
         }
         size_t size = file.size();
-        auto data = buffer.reserve((long)size);
+        auto data = buffer.reserve((long)size+1);
         size_t readBytes = file.read(data,size);
+        data[size] = 0;
         file.close();
         buffer.setLength(size);
         m_logger->debug("read %d bytes.  buffer has %d bytes",readBytes, buffer.getLength());
