@@ -1,6 +1,7 @@
 
 #include <ArduinoJson.h>
 #include <math.h>
+#include <time.h>
 
 #include "./application.h"
 #include "./logger.h"
@@ -29,47 +30,37 @@ namespace DevRelief {
         uint8_t startValue;
         uint8_t endValue;
         double zoom;
-        double animateSpeedPerSecond;
+        double m_animationPercentPerSecond;
         Logger* m_logger;
 
     public:
         Command(char * def) {
-            m_logger = new Logger("Command",0);
-            parse(def);
+           parse(def);
         }
 
         bool parse(char * def) {
-            m_logger->debug("parse command: ");
-            m_logger->debug(def);
             const char * delims = " ,\t\n\r;";
             char * tok = strtok(def,delims);
-            m_logger->debug("command %s",tok);
-
+            
             this->type = tok[0];
             tok = strtok(NULL,delims);
-            m_logger->debug("start %s",tok);
-
+            
             this->startPercent = atoi(tok);
 
             tok = strtok(NULL,delims);
-            m_logger->debug("end %s",tok);
             this->endPercent = atoi(tok);
 
             tok = strtok(NULL,delims);
-            m_logger->debug("start value  %s",tok);
             this->startValue = atoi(tok);
 
             tok = strtok(NULL,delims);
-            m_logger->debug("end value  %s",tok);
             this->endValue = atoi(tok);
 
             tok = strtok(NULL,delims);
-            m_logger->debug("zoom  %s",tok);
             this->zoom = atof(tok);
 
             tok = strtok(NULL,delims);
-            m_logger->debug("speed  %s",tok);
-            this->animateSpeedPerSecond = atof(tok);
+            this->m_animationPercentPerSecond = atof(tok);
         }
 
     };
@@ -103,7 +94,7 @@ namespace DevRelief {
 
 
             m_httpServer->routeBracesGet( "/api/scene/config",[this](Request* req, Response* resp){
-                m_logger->debug("handling GET API  %s", req->uri().c_str());
+                //m_logger->debug("handling GET API  %s", req->uri().c_str());
                 char * result = (char*)fileBuffer.reserve(2000);
                 //String scenes = "\"abc\",\"def\"";
                 int max = 20;
@@ -189,6 +180,10 @@ namespace DevRelief {
             auto found = m_fileSystem->read("/scene/"+sceneName,fileBuffer);
             if (found) {
                 m_logger->info("run scene: %s",sceneName.c_str());
+                m_currentScene = fileBuffer.text();
+                m_animationStartMillis = millis();
+                m_lastAnimation = 0;
+                m_hasAnimation = false;
                 runScene(fileBuffer.text());
             } else {
                 m_logger->info("scene not found: %s",sceneName.c_str());
@@ -422,8 +417,11 @@ namespace DevRelief {
 
 
         void loop() {
+            m_animationRan = false;
             m_httpServer->handleClient();
-
+            if (!m_animationRan && m_currentScene.length() > 10) {
+                runScene(m_currentScene);
+            }
             DRLedStrip::show();
         }
 
@@ -441,7 +439,7 @@ namespace DevRelief {
             while(end>=0) {
                 String cmd = commandText.substring(start,end);
                 
-                m_logger->debug("run command "+cmd);
+                //m_logger->debug("run command "+cmd);
                 runCommand(cmd,hsvData.leds);
                 start = end + 1;
                 //m_logger->debug("start/end  %d/%d",start,end);
@@ -450,7 +448,7 @@ namespace DevRelief {
             }
 
             int number;
-            m_logger->debug("set strip values");
+            //m_logger->debug("set strip values");
             for(number=0;number<m_ledCount;number++) {
               CHSV& color = hsvData.leds[number];
              // m_logger->debug("HSV %d (%d,%d,%d)",number,color.hue,color.saturation,color.value);
@@ -478,18 +476,32 @@ namespace DevRelief {
             int valueDiff = endValue-startValue;
             int steps = endIdx-startIdx+1;
             float stepDiff = 1.0*valueDiff/steps;
-            m_logger->debug("set leds %d-%d.  %d-%d %d/%d/%f",startIdx,endIdx,startValue,endValue,valueDiff,steps,stepDiff);
+            long sceneMillis = millis();
+            int ledOffset = 0;
+            if (m_lastAnimation != 0 && cmd.m_animationPercentPerSecond != 0) {
+                m_hasAnimation = true;
+                float seconds = 1.0*(sceneMillis - m_animationStartMillis)/1000.0;
+                long pixelOffset = 1.0*m_ledCount*(cmd.m_animationPercentPerSecond*seconds)/100.0;
+                ledOffset = pixelOffset;
+            }
+            //m_logger->debug("set leds %d-%d.  %d-%d %d/%d/%f",startIdx,endIdx,startValue,endValue,valueDiff,steps,stepDiff);
             for(int i=startIdx;i<=endIdx;i++) {
                 char value = round(cmd.startValue+i*stepDiff);
+                int pos = (i+ledOffset)%m_ledCount;
+                while (pos <0) {
+                    pos = m_ledCount + pos;
+                }
                 if (cmd.type == 'h') {
-                    leds[i].hue = value;
+                    leds[pos].hue = value;
                 } else if (cmd.type == 's') {
-                    leds[i].saturation = value;
+                    leds[pos].saturation = value;
                 } else if (cmd.type == 'l') {
-                    leds[i].value = value;
+                    leds[pos].value = value;
                 }
 
             }
+            m_animationRan = true;
+            m_lastAnimation = sceneMillis;
         }
 
         // using CHSV, but the v is from an HSL color
@@ -553,7 +565,11 @@ namespace DevRelief {
         int m_pos;
         HSVData hsvData;
         StripData stripData;
-
+        String m_currentScene;
+        long m_animationStartMillis;
+        long m_lastAnimation;
+        bool m_animationRan;
+        bool m_hasAnimation;
     };
 
 }
