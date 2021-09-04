@@ -71,7 +71,7 @@ class DRFileSystem {
 
 public:
     DRFileSystem() {
-        m_logger = new Logger("DRFileSystem",40);
+        m_logger = new Logger("DRFileSystem",100);
         m_root = "/";
         if (!drFileSystemInitialized) {
             LittleFS.begin();
@@ -106,6 +106,48 @@ public:
             results[count++] = dir.fileName();
         }
         return count;
+    }
+
+    File openFile(String path) {
+        m_logger->debug("open file  %s",path.c_str());
+        auto fullPath = getFullPath(path);
+        m_logger->debug("full path %s",fullPath.c_str());
+        File file = open(fullPath);
+        return file;
+    }
+
+    void closeFile(File & file) {
+        file.close();
+    }
+
+    uint16_t readChunk(String path,size_t pos, size_t maxLength, DRFileBuffer& buffer ) {
+        m_logger->debug("read from %s",path.c_str());
+        auto fullPath = getFullPath(path);
+        m_logger->debug("open %s",fullPath.c_str());
+        File file = open(fullPath);
+        if (!file.isFile()) {
+            m_logger->error("file not found %s",fullPath.c_str());
+            return false;
+        }
+        size_t fileSize = file.size();
+        m_logger->debug("file size %d",fileSize);
+        size_t readSize = fileSize-pos;
+        if (readSize > maxLength) {
+            readSize = maxLength;
+        }
+        auto data = buffer.reserve(readSize+1);
+        file.seek(pos,SeekSet);
+        size_t readBytes = file.read(data,readSize);
+        if (pos+readBytes==fileSize) {
+            readBytes+=1;
+            data[readBytes] = 0;
+            buffer.setLength(readBytes);
+        } else {
+            buffer.setLength(readBytes);
+        }
+        file.close();
+        m_logger->debug("read %d bytes.  buffer has %d bytes",readBytes, buffer.getLength());
+        return readBytes;
     }
 
     bool read(String path, DRFileBuffer& buffer ) {

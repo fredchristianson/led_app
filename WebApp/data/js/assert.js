@@ -94,6 +94,7 @@ export class Assert {
         //log.error(message);
         throw new AssertError(message);
     }
-}
+};
 
-export default new Assert();
+export const assert =  new Assert();
+export default assert;

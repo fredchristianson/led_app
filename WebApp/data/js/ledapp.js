@@ -1,4 +1,4 @@
-import assert from './assert.js';
+//import {assert} from './assert.js';
 
 //const API_BASE = 'http://192.168.10.133/api/';
 const API_BASE = 'http://192.168.10.120/api/';
@@ -311,7 +311,7 @@ class ColorManager extends Observable {
         }
         leds.forEach(led=>{
             if (led.hue != null) {
-                led.htmlColor = `hsl(${led.hue},${led.saturation??100}%,${led.level??50}%)`;
+                led.htmlColor = `hsl(${led.hue},${led.saturation === null ? 100 : led.saturation}%,${led.level===null ? 50 : led.level}%)`;
             } else {
                 led.htmlColor = "hsl(0,0%,0%)";
             }
@@ -608,7 +608,7 @@ class LevelSelector extends InputRangeSelector {
 }
 
 
-class LedApp {
+export class LedApp {
     constructor() {
         this.logger = new Logger("LedApp");
         this.logger.debug("LedApp running");
@@ -919,9 +919,6 @@ class Dom {
         });
     }
 
-    hasClass(element,className) {
-        return element.classList.contains(className);
-    };
 
     getParentAndSelector(opts) {
         var parent=document;
@@ -934,7 +931,7 @@ class Dom {
             parent = this.first(opts[0]);
             selector = opts[1];
         } else {
-            assert.false("invalid options passed.  expect (selector) or (parent,selector)");
+            alert("invalid options passed.  expect (selector) or (parent,selector)");
         }
         if (Array.isArray(parent)) {
             parent = parent.filter(elem=>{
@@ -947,7 +944,7 @@ class Dom {
                 return validParent;
             });
         } else {
-            assert.type(parent,[HTMLElement,HTMLDocument],"parent must be an HTMLElement");
+            //assert.type(parent,[HTMLElement,HTMLDocument],"parent must be an HTMLElement");
         }
         return {parent: parent, selector: selector};
     }
@@ -1040,9 +1037,9 @@ class Dom {
         var moveHandler = handler;
         if (typeof(handler) != 'function') {
             instance = handler;
-            startHandler = instance['touchStart']?.bind(instance);
-            endHandler = instance['touchEnd']?.bind(instance);
-            moveHandler = instance['touchMove']?.bind(instance);
+            startHandler = instance['touchStart'] ? instance['touchStart'].bind(instance) : null;
+            endHandler = instance['touchEnd']?instance['touchEnd'].bind(instance) : null;
+            moveHandler = instance['touchMove']?instance['touchMove'].bind(instance) : null;
         }
 
         this.listen('mousedown',parent,(event)=>{
@@ -1287,11 +1284,10 @@ class Dom {
         });
 
     }
-}
+};
 
 const DOM = new Dom();
 
 const colorMgr = new ColorManager();
-
 
 export default LedApp;

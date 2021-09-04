@@ -79,6 +79,7 @@ namespace DevRelief {
             m_fileSystem = new DRFileSystem();
             stripData.strip1Length = 150;
             stripData.strip2Length = 123;
+            fileBuffer.reserve(25000);
 
             m_httpServer->route("/",[this](Request* req, Response* resp){
                // //m_logger->debug("handling request / %s", req->uri().c_str());
@@ -128,7 +129,7 @@ namespace DevRelief {
                 auto body = req->arg("plain");
                 m_logger->debug("commands: " + body);
                 auto found = m_fileSystem->read("/scene/"+sceneName,fileBuffer);
-                m_fileSystem->write("/lastsceen",sceneName.c_str());
+                m_fileSystem->write("/lastscene",sceneName.c_str());
                 if (found) {
                     String sceneContents = fileBuffer.text();
                     loadScene(sceneName);
@@ -169,7 +170,7 @@ namespace DevRelief {
             m_strip1 = new DRLedStrip(1,STRIP1_LEDS);
             m_strip2 = new DRLedStrip(2,STRIP2_LEDS);
             m_ledCount = LED_COUNT;
-            auto found = m_fileSystem->read("/lastsceen",fileBuffer);
+            auto found = m_fileSystem->read("/lastscene",fileBuffer);
             if (found) {
                 loadScene(fileBuffer.text());
             }
@@ -207,7 +208,7 @@ namespace DevRelief {
             if (path.endsWith(".html")){
                 return "text/html";
             }
-            
+            return "text/plain";
         }
 
         void apiRequest(String api,Request * req,Response * resp) {
@@ -268,39 +269,28 @@ namespace DevRelief {
         }
 
         void getPage(String page,Request * req,Response * resp){
-            //m_logger->debug("get page %s",page.c_str());
+           m_logger->debug("get page %s",page.c_str());
            String path = "/"+page+".html";
-            auto found = m_fileSystem->read(path, fileBuffer);        
-            if (found) {
-                auto mimeType = getMimeType(path);
-                //m_logger->debug("sending %d characters",fileBuffer.getLength());
-                uint8* data = fileBuffer.data();
-
-                resp->send(200,mimeType.c_str(),fileBuffer.data(),fileBuffer.getLength());
-            } else {
-                //m_logger->error("URI not found: %s",req->uri().c_str());
-                char buffer[200];
-                sprintf(buffer,"URI not found: %s",req->uri().c_str());
-                resp->send(200,"text/html",buffer);
-            }
+           streamFile(resp,path);
         }
 
         void notFound(Request *req , Response* resp) {
             String path = req->uri();
-            auto found = m_fileSystem->read(path, fileBuffer);        
-            if (found) {
+            streamFile(resp,path);
+        }
+
+        void streamFile(Response * resp,String & path) {
+            m_logger->debug("stream file %s",path.c_str());
+            File file = m_fileSystem->openFile(path);
+            if (file.isFile()) {
                 auto mimeType = getMimeType(path);
-                //m_logger->debug("sending %d characters",fileBuffer.getLength());
-                uint8* data = fileBuffer.data();
-
-                resp->send(200,mimeType.c_str(),fileBuffer.data(),fileBuffer.getLength());
+                resp->streamFile(file,mimeType);
+                m_fileSystem->closeFile(file);
             } else {
-                //m_logger->error("URI not found: %s",req->uri().c_str());
-                char buffer[200];
-                sprintf(buffer,"not found: %s",req->uri().c_str());
-                resp->send(200,"text/html",buffer);
+                m_logger->debug("file not found");
+                resp->send(404,"text/html","file not found ");
             }
-
+          
         }
 
         bool parseConfig(String & config){
