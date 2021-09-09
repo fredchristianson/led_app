@@ -1,5 +1,4 @@
 
-#include <ArduinoJson.h>
 #include <math.h>
 #include <time.h>
 
@@ -25,47 +24,82 @@ namespace DevRelief {
     class Command {
     public:
         char type;
-        uint8_t startPercent;
-        uint8_t endPercent;
-        uint8_t startValue;
-        uint8_t endValue;
+        int16_t startPercent;
+        int16_t endPercent;
+        int16_t startValue;
+        int16_t endValue;
         double zoom;
         double m_animationPercentPerSecond;
         Logger* m_logger;
 
     public:
         Command(char * def) {
-           parse(def);
+            m_logger = new Logger("Command",60);
+           if (parse(def)) {
+            m_logger->info("success");
+           } else {
+               m_logger->warn("error in command");
+           }
         }
 
+
         bool parse(char * def) {
+            m_logger->debug("parse command");
+            m_logger->debug(def);
             const char * delims = " ,\t\n\r;";
             char * tok = strtok(def,delims);
-            
+            if (tok == NULL) {
+                return false;
+            }
             this->type = tok[0];
             tok = strtok(NULL,delims);
+            if (tok == NULL) {
+                return false;
+            }
+            m_logger->debug("tok %s",tok);
             
             this->startPercent = atoi(tok);
 
             tok = strtok(NULL,delims);
+            if (tok == NULL) {
+                return false;
+            }
+            m_logger->debug("tok %s",tok);
             this->endPercent = atoi(tok);
 
             tok = strtok(NULL,delims);
+            if (tok == NULL) {
+                return false;
+            }
+            m_logger->debug("tok %s",tok);
             this->startValue = atoi(tok);
 
             tok = strtok(NULL,delims);
+            if (tok == NULL) {
+                return false;
+            }
+            m_logger->debug("tok %s",tok);
             this->endValue = atoi(tok);
 
             tok = strtok(NULL,delims);
+            if (tok == NULL) {
+                return false;
+            }
+            m_logger->debug("tok %s",tok);
             this->zoom = atof(tok);
 
             tok = strtok(NULL,delims);
+            if (tok == NULL) {
+                return false;
+            }
+            m_logger->debug("tok %s",tok);
             this->m_animationPercentPerSecond = atof(tok);
+            return true;
         }
 
     };
 
-    struct HSVData {
+    struct HSLData {
         CHSV leds[300]; // using CHSV but storing HSL value
     };
 
@@ -73,12 +107,11 @@ namespace DevRelief {
     public: 
         BasicControllerApplication() {
             m_pos = 0;
-            m_logger = new Logger("BasicControllerApplication",100);
-            m_logger->debug("Running BasicControllerApplication v0.1");
+            m_logger = new Logger("BasicControllerApplication",60);
             m_httpServer = new HttpServer();
             m_fileSystem = new DRFileSystem();
-            stripData.strip1Length = 150;
-            stripData.strip2Length = 123;
+            stripData.strip1Length = STRIP1_LEDS;
+            stripData.strip2Length = 0;
             fileBuffer.reserve(25000);
 
             m_httpServer->route("/",[this](Request* req, Response* resp){
@@ -123,6 +156,8 @@ namespace DevRelief {
 
             m_httpServer->routeBracesGet( "/api/scene/{}",[this](Request* req, Response* resp){
                 m_logger->debug("get scene %s", req->pathArg(0).c_str());
+                Serial.println("***get scene");
+                
 
                 String msg = "get /api/scene/" + req->pathArg(0);
                 String sceneName = req->pathArg(0);
@@ -155,7 +190,7 @@ namespace DevRelief {
             });
 
 
-            m_httpServer->routeBraces("/api/{}",[this](Request* req, Response* resp){
+            m_httpServer->routeBracesGet("/api/{}",[this](Request* req, Response* resp){
                 ////m_logger->debug("handling API  %s", req->uri().c_str());
                 //resp->send(200,"text/html","working");
                 this->apiRequest(req->pathArg(0),req,resp);
@@ -167,14 +202,35 @@ namespace DevRelief {
                 this->notFound(req,resp);
             });
             m_httpServer->begin();
+            //m_logger->restart();
             m_strip1 = new DRLedStrip(1,STRIP1_LEDS);
-            m_strip2 = new DRLedStrip(2,STRIP2_LEDS);
+            m_logger->debug("created strip1");
+            //m_strip2 = new DRLedStrip(2,STRIP2_LEDS);
             m_ledCount = LED_COUNT;
             auto found = m_fileSystem->read("/lastscene",fileBuffer);
             if (found) {
                 loadScene(fileBuffer.text());
             }
 
+            m_logger->debug("Running BasicControllerApplication configured: v0.5");
+
+        }
+
+        
+        void loop() {
+            this->m_animationRan = false;
+            m_httpServer->handleClient();
+            
+            long now = millis();
+            long diff = (now - this->m_lastAnimation);
+            if (!this->m_animationRan && diff > 3000 && this->m_currentScene.length() > 10) {
+                m_logger->debug("loop");
+                this->runScene(this->m_currentScene);
+                m_logger->debug("show");
+                DRLedStrip::show();
+                m_logger->debug("show done");
+            }
+            
         }
 
         void loadScene(String sceneName) {
@@ -186,6 +242,8 @@ namespace DevRelief {
                 m_lastAnimation = 0;
                 m_hasAnimation = false;
                 runScene(fileBuffer.text());
+                
+                DRLedStrip::show();
             } else {
                 m_logger->info("scene not found: %s",sceneName.c_str());
             }
@@ -212,59 +270,28 @@ namespace DevRelief {
         }
 
         void apiRequest(String api,Request * req,Response * resp) {
-            Serial.begin(115200);
 
-           // //m_logger->debug("handle API %s",api.c_str());
+            m_logger->debug("handle API %s",api.c_str());
+            Serial.println("*** handle api ");
+            Serial.println(api.c_str());
             if (api == "restart") {
-                //m_logger->warn("restart API called");
+                m_logger->warn("restart API called");
                 resp->send(200,"text/json","{result:true,message:\"restarting\"}");
                 ESP.restart();
-            } else if (api == "config") {
-                if (req->method() == HTTP_GET){
-                    auto found = m_fileSystem->read("/config.json",fileBuffer);
-                    String config = fileBuffer.text();
-                    if (found){
-                        resp->send(200,"application/json","{\"result\":true,\"data\":"+config+"}");    
-                    } else {
-                        resp->send(200,"application/json","{\"result\":false,\"data\":{}, \"message\": \"no configuration exists.\" }");    
-                    }
-                } else {
-                    m_logger->debug("set config");
-                    String config = req->arg("plain");
-                    m_logger->debug("got config body");
-                    m_logger->debug("body: " + config);
-                    parseConfig(config);
-                    m_logger->debug("parsed config body");
-                    m_fileSystem->write("/config.json",config);
-                    m_logger->debug("wrote config body");
-                    resp->send(200,"application/json","{result:true}");
-                }
-                resp->send(200,"application/json","{result:true,message:\"config saved\"}");
-            } else if (api == "colors") {
-                String config = req->arg("plain");
-                   // //m_logger->debug("body: " + config);
-                    parseConfig(config);
-                resp->send(200,"application/json","{result:true}");
-            }  else if (api == "setcolors") {
-               int start = req->arg("start").toInt();
-                int count = req->arg("count").toInt();
-                int r = req->arg("r").toInt();
-                int g = req->arg("g").toInt();
-                int b = req->arg("b").toInt();
-                int c1 = req->arg("count1").toInt();
-                int c2 = req->arg("count2").toInt();
-                m_logger->debug("set colors %d %d %d %d %d %d %d",start,count,r,g,b,c1,c2);
-                updateConfig(start,count,r,g,b,c1,c2);
-               
-                resp->send(200,"application/json","{result:true}");
-            } else if (api == "echo") {
-                char result[60];
-                sprintf(result,"{result: %d}",millis());
-                
-                resp->send(200,"application/json",result);
-            
+            } else if (api == "serial"){
+                m_logger->debug("restart serial port");
+                Serial.println("***");
+                Serial.println(api.c_str());
+                Serial.begin(115200);
+                Serial.println("serial restarted");
+                m_logger->debug("serial restarted");
+                resp->send(200,"text/json","{result:true,message:\"serial restarted\"}");
+            }  else if (api == "show"){
+                m_logger->info("show leds");
+                FastLED.show();
+                resp->send(200,"text/json","{result:true,message:\"FastLED.show()\"}");
             } else {
-                resp->send(404,"application/json","{result:false}");
+                resp->send(200,"text/json","{result:false,message:\"unknown api \"}");
             }
         }
 
@@ -293,144 +320,29 @@ namespace DevRelief {
           
         }
 
-        bool parseConfig(String & config){
-
-           //m_logger->debug("Process config %d",millis());
-            DynamicJsonDocument doc(14000);
-            deserializeJson(doc,config);
-            auto pins = doc["pins"];
-            auto pin1 = pins[0];
-            auto pin2 = pins[1];
-            auto pin3 = pins[2];
-            uint16_t brightness = doc["brightness"];
-            if (brightness == 0) {
-                m_logger->debug("got 0 brightness. setting to 50");
-                brightness = 50;
-            }
-            //m_logger->debug("got pin 1");
-
-            const JsonArray& leds = doc["leds"];
-            //m_logger->debug("got leds %d",millis());
-            uint16_t number = 0;
-            String pin1Status = pin1["status"];
-            String pin2Status = pin2["status"];
-            String pin3Status = pin3["status"];
-            //m_logger->debug("pin2 status %s %d",pin2Status.c_str(),(pin2Status.equals("off")));
-
-            m_strip1->clear();
-            m_strip2->clear();
-
-            uint16_t pin1Count = (pin1Status == "off") ? 0 : pin1["count"];
-            uint16_t pin2Count = (pin2Status.equals("off")) ? 0 : pin2["count"];
-            uint16_t pin1End = pin1Count;
-            uint16_t pin2End = pin1End + pin2Count;
-
-            m_logger->debug("set leds %d %d %d %d",pin1Count,pin2Count,pin1End,pin2End);
-           // m_strip1->setCount(pin1Count);
-            //m_strip2->setCount(pin2Count);
-            m_logger->debug("set brightness %d",brightness);
-            m_strip1->setBrightness(brightness);
-            m_strip2->setBrightness(brightness);
-
-            for(number=0;number<pin1Count;number++) {
-                int r = leds[number]["r"];
-                int g = leds[number]["g"];
-                int b = leds[number]["b"];
-                m_strip1->setColor(number,CRGB(r,g,b));
-            }
-            for(number=pin1End;number<pin1End+pin2Count;number++) {
-                int r = leds[number]["r"];
-                int g = leds[number]["g"];
-                int b = leds[number]["b"];
-                m_strip2->setColor(number,CRGB(r,g,b));
-            }
-            m_logger->debug("done %d",number);
-            DRLedStrip::show();
-        }
-
-
-      bool updateConfig(int startColor, int colorCount, int r, int g, int b,int count1,int count2){
-            
-        stripData.brightness = 40;
-        stripData.strip1Length = count1;
-        stripData.strip2Length = count2;
-              
-
-            uint16_t pin1Count = count1;
-            uint16_t pin2Count = count2;
-            uint16_t pin1End = pin1Count;
-            uint16_t pin2End = pin1End + pin2Count;
-
-            m_logger->debug("set leds %d %d %d %d",pin1Count,pin2Count,pin1End,pin2End);
-           // m_strip1->setCount(pin1Count);
-            //m_strip2->setCount(pin2Count);
-            m_strip1->setBrightness(40);
-            m_strip2->setBrightness(40);
-
-            int number;
-            for(number=startColor;number<startColor+colorCount;number++) {
-              stripData.leds[number] = CRGB(r,g,b);
-              if (number < pin1End) {
-                  m_strip1->setColor(number,CRGB(r,g,b));
-              } else {
-                m_strip2->setColor(number-pin1End,CRGB(r,g,b));
-              }
-            }
-          
-
-            m_logger->debug("done %d",number);
-            DRLedStrip::show();
-            m_fileSystem->writeBinary("/stripData",(const byte *)&stripData,sizeof(stripData));
-            return true;
-        }
-
-        
-      bool setLeds(){
-        m_logger->debug("set leds %d %d %d",stripData.brightness,stripData.strip1Length,stripData.strip1Length);            
-            m_strip1->setBrightness(stripData.brightness);
-            m_strip2->setBrightness(stripData.brightness);
-
-            int number;
-            for(number=0;number<stripData.strip1Length+stripData.strip2Length;number++) {
-              CRGB& color = stripData.leds[number];
-              if (number < stripData.strip1Length) {
-                  m_strip1->setColor(number,color);
-              } else {
-                m_strip2->setColor(number-stripData.strip1Length,color);
-              }
-            }
-          
-
-            DRLedStrip::show();
-            return true;
-        }
-
-
-        void loop() {
-            m_animationRan = false;
-            m_httpServer->handleClient();
-            if (!m_animationRan && m_currentScene.length() > 10) {
-                runScene(m_currentScene);
-            }
-            DRLedStrip::show();
-        }
-
+       
         void runScene(String commandText) {
+
             const char * text = commandText.c_str();
+            m_logger->debug("execute commands");
+            m_logger->debug(text);
             int start = 0;
             int end = commandText.indexOf('\n');
+            m_setLedCount = m_ledCount;
             m_strip1->clear();
-            m_strip2->clear();
+            //m_strip2->clear();
             for(int idx=0;idx<300;idx++){
-                hsvData.leds[idx].hue = 0;
-                hsvData.leds[idx].saturation = 0;
-                hsvData.leds[idx].value = 0;
+                hslData.leds[idx].hue = 0;
+                hslData.leds[idx].saturation = 0;
+                hslData.leds[idx].value = 0;
             }
             while(end>=0) {
-                String cmd = commandText.substring(start,end);
-                
-                //m_logger->debug("run command "+cmd);
-                runCommand(cmd,hsvData.leds);
+                char cmd[100];
+                memcpy(cmd,text+start,end-start);// = commandText.substring(start,end);
+                cmd[end-start] = 0;
+                m_logger->debug("run command %s",cmd);
+                runCommand(cmd,hslData.leds);
+                m_logger->debug("command done");
                 start = end + 1;
                 //m_logger->debug("start/end  %d/%d",start,end);
                 end = commandText.indexOf('\n',start);
@@ -438,27 +350,30 @@ namespace DevRelief {
             }
 
             int number;
-            //m_logger->debug("set strip values");
-            for(number=0;number<m_ledCount;number++) {
-              CHSV& color = hsvData.leds[number];
+            m_logger->debug("set strip values %d",m_setLedCount);
+            for(number=0;number<m_ledCount && number < this->m_setLedCount;number++) {
+              CHSV& color = hslData.leds[number];
              // m_logger->debug("HSV %d (%d,%d,%d)",number,color.hue,color.saturation,color.value);
               if (number < STRIP1_LEDS) {
-                  m_strip1->setColor(number,HSLToRGB(color));
+                  auto rgb = HSLToRGB(color);
+                  if (number< 10) {
+                      m_logger->debug("R,G,B=(%d,%d,%d)",rgb.r,rgb.g,rgb.b);
+                  }
+                  m_strip1->setColor(number,rgb);
               } else {
-                m_strip2->setColor(number-STRIP1_LEDS,HSLToRGB(color));
+               // m_strip2->setColor(number-STRIP1_LEDS,HSLToRGB(color));
               }
             }
-            DRLedStrip::show();
         }
 
-        void runCommand(String command, CHSV* leds){
-            if (command.length() < 10) {
-
-                return;
-            }
-            char * text = (char*)fileBuffer.reserve(command.length());
-            strcpy(text,command.c_str());
+        void runCommand(char * text, CHSV* leds){
             Command cmd(text);
+            m_logger->debug("parsed command %s",text);
+            if (cmd.type == 'z')if (cmd.type == 'z') {
+                    m_logger->debug("limit led count %d",cmd.startPercent);
+                    this->m_setLedCount = cmd.startPercent;
+                    return;
+            }
             int startIdx = round(m_ledCount*cmd.startPercent/100);
             int endIdx = round(m_ledCount*cmd.endPercent/100);
             int startValue = cmd.startValue;
@@ -474,7 +389,7 @@ namespace DevRelief {
                 long pixelOffset = 1.0*m_ledCount*(cmd.m_animationPercentPerSecond*seconds)/100.0;
                 ledOffset = pixelOffset;
             }
-            //m_logger->debug("set leds %d-%d.  %d-%d %d/%d/%f",startIdx,endIdx,startValue,endValue,valueDiff,steps,stepDiff);
+            m_logger->debug("set leds %d-%d.  %d-%d %d/%d/%f",startIdx,endIdx,startValue,endValue,valueDiff,steps,stepDiff);
             for(int i=startIdx;i<=endIdx;i++) {
                 char value = round(cmd.startValue+i*stepDiff);
                 int pos = (i+ledOffset)%m_ledCount;
@@ -487,6 +402,8 @@ namespace DevRelief {
                     leds[pos].saturation = value;
                 } else if (cmd.type == 'l') {
                     leds[pos].value = value;
+                } else {
+                    m_logger->error("unknown command type %c",cmd.type);
                 }
 
             }
@@ -515,7 +432,7 @@ namespace DevRelief {
         }
 
         CRGB HSLToRGB(CHSV hslInHSV) {
-           // m_logger->debug("hsl to rgb (%d,%d,%d)",(int)hslInHSV.h,(int)hslInHSV.s,(int)hslInHSV.v);
+            //m_logger->debug("hsl to rgb (%d,%d,%d)",(int)hslInHSV.h,(int)hslInHSV.s,(int)hslInHSV.v);
             unsigned char r = 0;
             unsigned char g = 0;
             unsigned char b = 0;
@@ -541,7 +458,7 @@ namespace DevRelief {
             }
 
             CRGB rgb(r, g, b);
-           // m_logger->debug("hsl (%d,%f,%f)->rgb(%d,%d,%d)",(int)h,s,l,rgb.r,rgb.g,rgb.b);
+            //m_logger->debug("hsl (%d,%f,%f)->rgb(%d,%d,%d)",(int)h,s,l,rgb.r,rgb.g,rgb.b);
             return rgb;
         }
         
@@ -551,15 +468,16 @@ namespace DevRelief {
         HttpServer * m_httpServer;
         int m_ledCount = LED_COUNT;
         DRLedStrip * m_strip1;
-        DRLedStrip * m_strip2;
+        //DRLedStrip * m_strip2;
         int m_pos;
-        HSVData hsvData;
+        HSLData hslData;
         StripData stripData;
         String m_currentScene;
         long m_animationStartMillis;
         long m_lastAnimation;
         bool m_animationRan;
         bool m_hasAnimation;
+        long m_setLedCount;
     };
 
 }

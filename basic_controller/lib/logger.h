@@ -7,10 +7,11 @@
 
 bool serialInitilized = false;
 void initializeWriter() {
-    if (!serialInitilized) {
+    if (!Serial) {
         serialInitilized = true;
         Serial.begin(115200);
-        Serial.printf("\nLogger Running\n--------------\n");
+
+        Serial.printf("\nSerial Logger Running\n--------------\n");
     }
 
 }
@@ -27,28 +28,50 @@ public:
         m_level = level;
     }
 
-    void write(int level, String message, va_list args ){
+    void restart() {
+        this->info("restarting serial");
+        Serial.begin(115200);
+        while(!Serial){
+            ;//
+        }
+        this->info("serial restarted");
+    }
+    void write(int level, const char * message, va_list args ){
         if (level > m_level) {
             return;
         }
-        vsnprintf(messageBuffer,sizeof(messageBuffer),message.c_str(),args);
+
+        vsnprintf(messageBuffer,sizeof(messageBuffer),message,args);
         unsigned long now = millis()/1000;
         int hours = now/3600;
         now = now % 3600;
         int minutes = now/60;
         int seconds = now % 60;
-        Serial.printf("%s - %02d:%02d:%02d - %s: ",getLevelName(level).c_str(),hours,minutes,seconds,m_name.c_str());
+        Serial.printf("%s/%d - %02d:%02d:%02d - %s: ",getLevelName(level),m_level,hours,minutes,seconds,m_name.c_str());
         Serial.println(messageBuffer);
     }
 
     void debug(String message,...) {
         va_list args;
         va_start(args,message);
+        write(100,message.c_str(),args);
+    }
+
+    void debug(const char * message,...) {
+        va_list args;
+        va_start(args,message);
         write(100,message,args);
     }
 
 
+
     void info(String message,...) {
+        va_list args;
+        va_start(args,message);
+        write(80,message.c_str(),args);
+    }
+
+    void info(const char * message,...) {
         va_list args;
         va_start(args,message);
         write(80,message,args);
@@ -58,6 +81,12 @@ public:
     void warn(String message,...) {
         va_list args;
         va_start(args,message);
+        write(40,message.c_str(),args);
+    }
+
+    void warn(const char * message,...) {
+        va_list args;
+        va_start(args,message);
         write(40,message,args);
     }
 
@@ -65,10 +94,16 @@ public:
     void error(String message,...) {
         va_list args;
         va_start(args,message);
+        write(20,message.c_str(),args);
+    }
+    
+    void error(const char * message,...) {
+        va_list args;
+        va_start(args,message);
         write(20,message,args);
     }
 
-    String getLevelName(int level) {
+    const char * getLevelName(int level) {
         if (level > 80) {
             return "DEBUG";
         }

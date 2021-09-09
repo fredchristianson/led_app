@@ -1,22 +1,26 @@
 #ifndef DRLED_STRIP_H
 #define DRLED_STRIP_H
 #include <FastLED.h>
+FASTLED_USING_NAMESPACE;
 #include "./logger.h"
 
 namespace DevRelief {
-    #define MAX_LEDS 150
+    #define MAX_LEDS 300
 
     class DRLedStrip {
     public:
         DRLedStrip(int pin, uint16_t count) {
-            m_logger = new Logger("DRLedStrip");
-            m_logger->debug("DRLedStrip created %d %d",pin,count);
+            m_logger = new Logger("DRLedStrip",60);
+            //m_logger->debug("DRLedStrip create");
+            Serial.println("create strip");
             m_pin = pin;
             m_count = count;
             m_colors = new CRGB[MAX_LEDS];
         
             m_controller = getController(pin,m_colors,count);
             FastLED.setBrightness(50);  // all strips have same max brightness at the FastLED global level.
+            m_logger->debug("DRLedStrip created %d %d",pin,count);
+            //Serial.println("strip created");
         }
 
         void setBrightness(int value) {
@@ -26,26 +30,21 @@ namespace DevRelief {
         CLEDController*  getController(int pin,CRGB* colors,int count) {
             switch(pin) {
                 case 1: {
-                    m_logger->debug("Create FastLED on pin 1");
-                    return &FastLED.addLeds<NEOPIXEL,1>(colors,count);
-                }
-                case 2: {
-                    m_logger->debug("Create FastLED on pin 2");
-                    return &FastLED.addLeds<NEOPIXEL,2>(colors,count);
-                }
-                case 3: {
-                    m_logger->debug("Create FastLED on pin 3");
-                    return &FastLED.addLeds<NEOPIXEL,3>(colors,count);
+                    //m_logger->debug("Create FastLED on pin 1 (GPIO 5) with GRB");
+                    //return &FastLED.addLeds<WS2812B,5,GRB>(colors,count);
+                    m_logger->debug("Create FastLED on pin D4 (GPIO 2) with GRB %d,%d",pin,count);
+                    return &FastLED.addLeds<WS2812B,2,GRB>(colors,count);
+                    //return &FastLED.addLeds<NEOPIXEL,1>(colors,count);
                 }
                 default: {
-                    m_logger->error("pin must be 1, 2, or 3.  got %d",pin);
+                    //m_logger->error("pin must be 1, 2, or 3.  got %d",pin);
                     return NULL;
                 }
             }
         }
         
         void solid(CRGB color, int brightness) {
-            //m_logger->debug("set solid color %d %d %d",color.red,color.green,color.blue);
+            ////m_logger->debug("set solid color %d %d %d",color.red,color.green,color.blue);
             for(int i=0;i<m_count;i++) {
                 m_colors[i] = color;
             }
@@ -68,7 +67,7 @@ namespace DevRelief {
             m_colors[index].setHSV(color.hue,color.saturation,color.value);
             //CRGB rgb;
            // hsv2rgb_spectrum(color,rgb);
-           // m_logger->debug("hsv (%d,%d,%d)->rgb(%d,%d,%d)",color.h,color.s,color.v,rgb.r,rgb.g,rgb.b);
+           // //m_logger->debug("hsv (%d,%d,%d)->rgb(%d,%d,%d)",color.h,color.s,color.v,rgb.r,rgb.g,rgb.b);
            // m_colors[index] = rgb;
         }
 

@@ -1,7 +1,9 @@
 //import {assert} from './assert.js';
 
-//const API_BASE = 'http://192.168.10.133/api/';
-const API_BASE = 'http://192.168.10.120/api/';
+const API_BASE_DINING_ROOM = 'http://192.168.10.133/api/';
+const API_BASE_LIVING_ROOM = 'http://192.168.10.120/api/';
+const API_BASE_SAME_HOST = '/api/';
+const API_BASE = API_BASE_SAME_HOST;
 
 class Api {
     constructor() {

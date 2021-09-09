@@ -1,22 +1,25 @@
 #include <Arduino.h>
-#line 1 "d:\\dev\\arduino\\led_app\\basic_controller.ino"
+#line 1 "d:\\dev\\arduino\\led_app\\basic_controller\\basic_controller.ino"
+#define STRIP1_LEDS 300
+#define STRIP2_LEDS 0
+#define LED_COUNT (STRIP1_LEDS+STRIP2_LEDS)
+const char* HOSTNAME="DiningRoomLEDs";
 
-
-#include "src/lib/logger.h"
-#include "src/board/basic_controller_app.h"
+#include "./lib/logger.h"
+#include "./lib/basic_controller_app.h"
 using namespace DevRelief;
 
 Logger * logger;
 Application * app;
 
-#line 10 "d:\\dev\\arduino\\led_app\\basic_controller.ino"
+#line 13 "d:\\dev\\arduino\\led_app\\basic_controller\\basic_controller.ino"
 void setup();
-#line 20 "d:\\dev\\arduino\\led_app\\basic_controller.ino"
+#line 23 "d:\\dev\\arduino\\led_app\\basic_controller\\basic_controller.ino"
 void loop();
-#line 10 "d:\\dev\\arduino\\led_app\\basic_controller.ino"
+#line 13 "d:\\dev\\arduino\\led_app\\basic_controller\\basic_controller.ino"
 void setup() {
   // put your setup code here, to run once:
- logger = new Logger("basic_controller");
+ logger = new Logger("droom");
   logger->info("creating app");
   app = new BasicControllerApplication();
   logger->info("created app");

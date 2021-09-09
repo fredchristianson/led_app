@@ -1,19 +1,24 @@
-#ifndef HTTP_SERVER_H
-#define HTTP_SERVER_H
-#include "./logger.h"
-#include "./wifi.h"
+
+#ifndef DRHTTP_SERVER_H
+#define DRHTTP_SERVER_H
+
+
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include <functional>
+#include <memory>
+#include <functional>
 #include <uri/UriBraces.h>
 #include <uri/UriRegex.h>
+#include "./logger.h"
+#include "./wifi.h"
 
 
 namespace DevRelief {
 typedef ESP8266WebServer Request;
 typedef ESP8266WebServer Response;
-typedef std::function<void(Request*, Response*)> HttpHandler;
-    
+using HttpHandler = std::function<void(Request*, Response*)> ;
+
 class HttpServer {
     public:
 
@@ -21,11 +26,9 @@ class HttpServer {
         HttpServer() {
             m_logger = new Logger("HttpServer");
             m_logger->debug("HttpServer created");
-            m_server = new ESP8266WebServer(80);
             m_wifi = DRWiFi::get();
 
             m_server = new ESP8266WebServer(80);
-
 
             m_logger->info("Listening to port 80 on IP %s",WiFi.localIP().toString().c_str());
             if (MDNS.begin("LEDController")) {
@@ -52,7 +55,7 @@ class HttpServer {
                 this->cors(m_server);
                 m_server->send(204);
             }
-            m_logger->debug("routing Not Found");
+            m_logger->debug("routing Not Found handler");
             auto server = m_server;
             auto handler = httpHandler;
             m_server->onNotFound([this,handler,server](){
@@ -68,7 +71,7 @@ class HttpServer {
             auto handler = httpHandler;
             m_server->on(UriBraces(uri.c_str()),[this,handler,server](){
                 this->cors(server);
-                m_logger->debug("uri found");
+                m_logger->debug("returning uri found");
                 handler(server,server);
             });
         }

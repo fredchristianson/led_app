@@ -13,7 +13,7 @@ public:
         m_data = NULL;
         m_maxLength = 0;
         m_length = 0;
-        m_logger = new Logger("DRFileBuffer",40);
+        m_logger = new Logger("DRFileBuffer",80);
     }
     uint8_t* data() {
         m_logger->debug("return data.  length=%d, maxLength=%d",m_length,m_maxLength);
@@ -29,12 +29,12 @@ public:
 
     uint8_t* reserve(size_t length) {
         if (length > m_maxLength) {
-            m_logger->debug("increase buffer length. old length=%d, new length=%d",m_maxLength,length);
+            m_logger->info("increase buffer length. old length=%d, new length=%d",m_maxLength,length);
             auto newData = new uint8_t[length];
-            m_logger->debug("allocated buffer");
+            m_logger->info("allocated buffer");
             newData[0] = 2;
             m_logger->debug("set first value");
-            m_logger->debug("first byte: %d",newData[0]);
+            m_logger->info("first byte: %d",newData[0]);
             if (m_data != NULL) {
                 if (length > 0) {
                     memcpy(newData,m_data,length);
@@ -44,18 +44,18 @@ public:
             }
             m_data = newData;
             m_maxLength = length;
-            m_logger->debug("first byte of m_data: %d",m_data[0]);
+            m_logger->info("first byte of m_data: %d",m_data[0]);
         }
         return m_data;
     }
 
     void setLength(size_t length) {
         m_length = length;
-        m_logger->debug("set length.  length=%d, maxLength=%d",m_length,m_maxLength);
+        m_logger->info("set length.  length=%d, maxLength=%d",m_length,m_maxLength);
     }
 
     size_t getLength() {
-        m_logger->debug("get length.  length=%d, maxLength=%d",m_length,m_maxLength);
+        m_logger->info("get length.  length=%d, maxLength=%d",m_length,m_maxLength);
         return m_length;
     }
 private:
@@ -71,7 +71,7 @@ class DRFileSystem {
 
 public:
     DRFileSystem() {
-        m_logger = new Logger("DRFileSystem",100);
+        m_logger = new Logger("DRFileSystem",60);
         m_root = "/";
         if (!drFileSystemInitialized) {
             LittleFS.begin();
