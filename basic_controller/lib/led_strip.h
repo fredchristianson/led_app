@@ -55,13 +55,13 @@ namespace DevRelief {
     class DRLedStrip {
     public:
         DRLedStrip(int pin, uint16_t count) {
-            m_logger = new Logger("DRLedStrip",60);
+            m_logger = new Logger("DRLedStrip",80);
             m_logger->debug("DRLedStrip create pin=%d, count=%d",pin,count);
             m_pin = pin;
             m_count = count;
         
             m_controller = getController(pin,count);
-            m_controller->setBrightness(50);  // all strips have same max brightness at the FastLED global level.
+            m_controller->setBrightness(40);  // all strips have same max brightness at the FastLED global level.
         }
 
         void setBrightness(int value) {
@@ -69,7 +69,7 @@ namespace DevRelief {
         }
 
         Adafruit_NeoPixel *  getController(int pin,int count) {
-            m_logger->debug("Create FastLED on pin D4 (GPIO 2) with GRB %d,%d",pin,count);
+            m_logger->info("Create FastLED on pin D4 (GPIO 2) with GRB %d,%d",pin,count);
             auto neopixel = new Adafruit_NeoPixel(count,pin,NEO_GRB+NEO_KHZ800);
             neopixel->begin();
             return neopixel;
@@ -83,9 +83,13 @@ namespace DevRelief {
 
         void setColor(uint16_t index,CRGB color) {
             if (index<4) {
-                m_logger->debug("setColor %d,(%d,%d,%d)",(int)index,(int)color.red,(int)color.green,(int)color.blue);
+                //m_logger->debug("setColor %d,(%d,%d,%d)",(int)index,(int)color.red,(int)color.green,(int)color.blue);
             }
-            m_controller->setPixelColor(index,m_controller->Color(color.red,color.green,color.blue));
+            if (index == 0) {
+                m_controller->setPixelColor(index,m_controller->Color(0,0,0));
+            } else {
+                m_controller->setPixelColor(index,m_controller->Color(color.red,color.green,color.blue));
+            }
 
         }
 
