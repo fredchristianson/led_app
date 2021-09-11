@@ -2,8 +2,13 @@ body {
     font-size: 18px;
     background-color:#444444;
     color: #ffffff;
+    padding: 14px;
 }
 
+#image-spectrum {
+    width: 360px;
+    height: 100px;
+}
 section {
     min-height: 4rem;
     border-bottom: 1px solid white;
@@ -47,10 +52,14 @@ h2 .current {
 }
 
 h2 a {
-    color: #777777;
+    background-color: #7777ff;
+    border: 1px solid #ffffff;
+    color: #ffffff;
     text-decoration: none;
     font-size: 14px;
     margin-left: 2rem;
+    padding: 4px;
+    border-radius: 4px;
 }
 
 h2 label {
@@ -150,6 +159,10 @@ h2 span {
     display: inline-block;
 }
 
+.gradient .if-gradient.block {
+    display: block;
+}
+
 .no-hue .hsv .hue .select {
     display:none;
 }
@@ -160,4 +173,33 @@ h2 span {
 
 .no-level .level .select {
     display:none;
+}
+
+.hue-value, .saturation-value, .lightness-value   {
+    padding: 2px;
+}
+
+.params {
+    margin-left: 4rem;
+    margin-bottom: 1rem;
+}
+
+.params h3 {
+    width: 12rem;
+}
+.params  input {
+    margin-left: 2rem;
+}
+
+.params input[type='radio'] {
+    margin-left: 2rem;
+}
+
+h3 {
+    display: inline-block;
+    margin-bottom: .2rem;
+}
+
+.off {
+    display: none;
 }

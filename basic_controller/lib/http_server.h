@@ -60,7 +60,7 @@ class HttpServer {
             auto handler = httpHandler;
             m_server->onNotFound([this,handler,server](){
                 this->cors(server);
-                m_logger->debug("not found %s",server->uri().c_str());
+               // m_logger->debug("not found %s",server->uri().c_str());
                 handler(server,server);
             });
         }
@@ -82,7 +82,7 @@ class HttpServer {
             auto handler = httpHandler;
             m_server->on(UriBraces(uri.c_str()),HTTP_GET,[this,handler,server](){
                 this->cors(server);
-                m_logger->debug("uri found");
+                //m_logger->debug("uri found");
                 handler(server,server);
             });
         }

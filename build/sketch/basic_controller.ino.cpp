@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #line 1 "d:\\dev\\arduino\\led_app\\basic_controller\\basic_controller.ino"
-#define STRIP1_LEDS 300
+#define STRIP1_LEDS 150
 #define STRIP2_LEDS 0
 #define LED_COUNT (STRIP1_LEDS+STRIP2_LEDS)
 const char* HOSTNAME="DiningRoomLEDs";

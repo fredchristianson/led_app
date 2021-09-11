@@ -31,8 +31,8 @@
   },
   {
     "Sourcefile": "d:\\dev\\arduino\\led_app\\build\\sketch\\basic_controller.ino.cpp",
-    "Include": "FastLED.h",
-    "Includepath": "D:\\dev\\arduino\\libraries\\FastLED\\src"
+    "Include": "Adafruit_NeoPixel.h",
+    "Includepath": "D:\\dev\\arduino\\libraries\\Adafruit_NeoPixel"
   },
   {
     "Sourcefile": "d:\\dev\\arduino\\led_app\\build\\sketch\\basic_controller.ino.cpp",
@@ -170,57 +170,27 @@
     "Includepath": null
   },
   {
-    "Sourcefile": "D:\\dev\\arduino\\libraries\\FastLED\\src\\FastLED.cpp",
+    "Sourcefile": "D:\\dev\\arduino\\libraries\\Adafruit_NeoPixel\\Adafruit_NeoPixel.cpp",
     "Include": "",
     "Includepath": null
   },
   {
-    "Sourcefile": "D:\\dev\\arduino\\libraries\\FastLED\\src\\bitswap.cpp",
+    "Sourcefile": "D:\\dev\\arduino\\libraries\\Adafruit_NeoPixel\\esp.c",
     "Include": "",
     "Includepath": null
   },
   {
-    "Sourcefile": "D:\\dev\\arduino\\libraries\\FastLED\\src\\colorpalettes.cpp",
+    "Sourcefile": "D:\\dev\\arduino\\libraries\\Adafruit_NeoPixel\\esp8266.c",
     "Include": "",
     "Includepath": null
   },
   {
-    "Sourcefile": "D:\\dev\\arduino\\libraries\\FastLED\\src\\colorutils.cpp",
+    "Sourcefile": "D:\\dev\\arduino\\libraries\\Adafruit_NeoPixel\\kendyte_k210.c",
     "Include": "",
     "Includepath": null
   },
   {
-    "Sourcefile": "D:\\dev\\arduino\\libraries\\FastLED\\src\\hsv2rgb.cpp",
-    "Include": "",
-    "Includepath": null
-  },
-  {
-    "Sourcefile": "D:\\dev\\arduino\\libraries\\FastLED\\src\\lib8tion.cpp",
-    "Include": "",
-    "Includepath": null
-  },
-  {
-    "Sourcefile": "D:\\dev\\arduino\\libraries\\FastLED\\src\\noise.cpp",
-    "Include": "",
-    "Includepath": null
-  },
-  {
-    "Sourcefile": "D:\\dev\\arduino\\libraries\\FastLED\\src\\platforms\\esp\\32\\clockless_rmt_esp32.cpp",
-    "Include": "",
-    "Includepath": null
-  },
-  {
-    "Sourcefile": "D:\\dev\\arduino\\libraries\\FastLED\\src\\platforms.cpp",
-    "Include": "",
-    "Includepath": null
-  },
-  {
-    "Sourcefile": "D:\\dev\\arduino\\libraries\\FastLED\\src\\power_mgt.cpp",
-    "Include": "",
-    "Includepath": null
-  },
-  {
-    "Sourcefile": "D:\\dev\\arduino\\libraries\\FastLED\\src\\wiring.cpp",
+    "Sourcefile": "D:\\dev\\arduino\\libraries\\Adafruit_NeoPixel\\rp2040.c",
     "Include": "",
     "Includepath": null
   }

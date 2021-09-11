@@ -1,9 +1,9 @@
 //import {assert} from './assert.js';
 
-const API_BASE_DINING_ROOM = 'http://192.168.10.133/api/';
+const API_BASE_DINING_ROOM = 'http://192.168.10.130/api/';
 const API_BASE_LIVING_ROOM = 'http://192.168.10.120/api/';
 const API_BASE_SAME_HOST = '/api/';
-const API_BASE = API_BASE_SAME_HOST;
+const API_BASE = API_BASE_DINING_ROOM;
 
 class Api {
     constructor() {
@@ -63,7 +63,7 @@ class Api {
 const LOG_LEVEL = {
     Dom: {debug:false},
     LedSelector: { debug: false}, 
-    ColorSlider: {debug: true}
+    ColorSlider: {debug: false}
 
 };
 
@@ -276,7 +276,7 @@ class ColorManager extends Observable {
         if (this.hueMap[rangeValue]) {
             return this.hueMap[rangeValue];
         }
-        const hueRangeOffset = this.image.naturalWidth*rangeValue/255;
+        const hueRangeOffset = this.image.naturalWidth*rangeValue/this.image.offsetWidth;
         const colorData = DOM.getPixel(this.image,hueRangeOffset,50);
         const r = colorData[0];
         const g = colorData[1];
@@ -318,6 +318,24 @@ class ColorManager extends Observable {
                 led.htmlColor = "hsl(0,0%,0%)";
             }
         });
+        var color = start.getHueRangeValue();
+        if (gradient) {
+            color = color + " - "+end.getHueRangeValue();
+        }
+        DOM.setHtml('.hue-value',color);
+
+        var saturation = start.getSaturation();
+        if (gradient) {
+            saturation = saturation + " - "+end.getSaturation();
+        }
+        DOM.setHtml('.saturation-value',saturation);
+
+        
+        var level = start.getLevel();
+        if (gradient) {
+            level = level + " - "+end.getLevel();
+        }
+        DOM.setHtml('.lightness-value',level);
     }
 }
 
@@ -364,9 +382,9 @@ class ColorSlider {
             pos = Math.min(pos,this.image.naturalWidth-1);
             this.moveable.style.left = `${pos}px`;
             this.hueRangeOffset = pos;
-            this.hueRangeValue = Math.round(pos*255/this.image.naturalWidth);
+            this.hueRangeValue = Math.round(pos*this.image.offsetWidth/this.image.naturalWidth);
             this.hslColor.setHueRangeValue(this.hueRangeValue);
-            this.logger.debug(`hue: ${pos}, ${this.image.naturalWidth}, ${this.hueRangeValue}`);
+            //this.logger.debug(`hue: ${pos}, ${this.image.naturalWidth}, ${this.hueRangeValue}`);
         } catch(ex) {
             this.logger.error("move failed ",ex);
         }
@@ -445,6 +463,10 @@ class LedSelector {
         this.selectedStartIndex = 0;
         this.selectedEndIndex = this.ledElements.length-1;
         this.showSelectedLeds();
+    }
+
+    isAllSelected() {
+        return this.selectedStartIndex == 0 && this.selectedEndIndex == this.ledElements.length-1;
     }
 
     selectClear() {
@@ -620,7 +642,6 @@ export class LedApp {
 
         DOM.onClick('.run-commands',this.runCommands.bind(this));
         this.zoom = 1;
-        this.animateSpeedPerSecond = 0;
         DOM.onClick('#gradient',this.toggleGradient.bind(this));
         DOM.onClick('#hue-off',this.toggleHue.bind(this));
         DOM.onClick('#level-off',this.toggleLevel.bind(this));
@@ -635,11 +656,23 @@ export class LedApp {
         DOM.onClick('.create-command.level',this.createLevelCommand.bind(this));
         DOM.onClick('.create-command.saturation',this.createSaturationCommand.bind(this));
         DOM.onClick('.create-command.add-hsl',this.createHSLCommands.bind(this));
+        this.debouceTimeout = null;
         this.initialize();
+    }
 
+    autoGenerateCommands() {
+        DOM.setValue('#scene-name','auto');
+        this.createHSLCommands();
+        this.saveCommands();
     }
 
     onColorChanged() {
+        if (this.ledSelector.isAllSelected() && DOM.isChecked('#auto-create')){
+            if (this.debouceTimeout != null) {
+                clearTimeout(this.debouceTimeout);
+            }
+            this.debouceTimeout = setTimeout(this.autoGenerateCommands.bind(this),500);
+        }
         this.runCommands();
     }
     
@@ -682,26 +715,24 @@ export class LedApp {
         const start = colorMgr.getStartHslColor();
         const end = colorMgr.getEndHslColor();
         this.addCommand('h',this.ledSelector.getStartLedPercent(),this.ledSelector.getEndLedPercent(),
-                            start.getHueRangeValue(),end.getHueRangeValue(),
-                            this.zoom,this.animateSpeedPerSecond);
+                            start.getHueRangeValue(),end.getHueRangeValue());
     }
 
     createLevelCommand() {
         const start = colorMgr.getStartHslColor();
         const end = colorMgr.getEndHslColor();
         this.addCommand('l',this.ledSelector.getStartLedPercent(),this.ledSelector.getEndLedPercent(),
-                            start.getLevel(),end.getLevel(),
-                            this.zoom,this.animateSpeedPerSecond);
+                            start.getLevel(),end.getLevel());
     }
     createSaturationCommand() {
         const start = colorMgr.getStartHslColor();
         const end = colorMgr.getEndHslColor();
         this.addCommand('s',this.ledSelector.getStartLedPercent(),this.ledSelector.getEndLedPercent(),
-                            start.getSaturation(),end.getSaturation(),
-                            this.zoom,this.animateSpeedPerSecond);
+                            start.getSaturation(),end.getSaturation());
     }
 
     createHSLCommands() {
+        DOM.setValue("#scene","");
         if (colorMgr.hueEnabled){
             this.createHueCommand();
         }
@@ -713,13 +744,18 @@ export class LedApp {
         }
     }
 
-    addCommand(cmd,startPercent,endPercent,startValue,endValue,zoom,animateSpeed){
+    addCommand(cmd,startPercent,endPercent,startValue,endValue){
         if (startPercent == null || endPercent == null || isNaN(startPercent) || isNaN(endPercent)) {
             this.logger.error("invalid range "+startPercent+" " +endPercent);
             return;
         }
-        var list = DOM.getValue('#scene');
-        var cmd = `${cmd},${startPercent},${endPercent},${startValue},${endValue},${zoom},${animateSpeed};\n`;
+        var reverse = DOM.first('#gradient-reverse').checked;
+        var gtype = DOM.getValue('input[name="gradient-type"]:checked');
+        var ptype = DOM.getValue('input[name="led-position"]:checked');
+        var animateSpeed = DOM.getValue("#animate-speed");
+        var zoom = 1;
+        var cmd = `${cmd},${startPercent},${endPercent},${startValue},${endValue},${zoom},${animateSpeed},${reverse ? 'R':'F'}${gtype}${ptype};\n`;
+        var list = DOM.getValue("#scene");
         list = list + cmd;
         DOM.setValue('#scene',list);
         this.runCommands();
@@ -743,7 +779,7 @@ export class LedApp {
                 }
             }
             if (parts.length>1) {
-                this.logger.debug("command: "+parts[0]);
+                //this.logger.debug("command: "+parts[0]);
                 const cmd = parts[0];
                 const startPercent = parts[1];
                 const endPercent = parts[2];
@@ -778,7 +814,7 @@ export class LedApp {
         this.hueRangeValue = this.hueSelector.getHueRangeValue();
         const start = this.ledSelector.getStartLed();
         const end = this.ledSelector.getEndLed();
-        this.addCommand('h',start,end,this.hueRangeValue,this.hueRangeValue,this.zoom,this.animateSpeedPerSecond);
+        this.addCommand('h',start,end,this.hueRangeValue,this.hueRangeValue,this.zoom);
         this.updateColor();
     }
 
@@ -799,6 +835,8 @@ export class LedApp {
         DOM.onClick('#load-scene',this.loadCommands.bind(this));
         this.api = new Api();
         await this.readConfig();
+        
+        this.ledSelector.selectAll();
     }
 
     async readConfig(){
@@ -1270,7 +1308,7 @@ class Dom {
                 option.setAttribute('selected','selected');
             }
             select.appendChild(option);
-        })
+        });
     }
     setSelectOptions(selector,options,selectedOption,defaultOption='--select--') {
         const elements = DOM.find(selector);
@@ -1286,7 +1324,12 @@ class Dom {
         });
 
     }
-};
+
+    isChecked(selector) {
+        const element = this.first(selector);
+        return element && element.checked;
+    }
+}
 
 const DOM = new Dom();
 

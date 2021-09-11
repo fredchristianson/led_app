@@ -98,11 +98,11 @@ public:
     }
 
     int listFiles(String path, String* results, int maxResults) {
-        m_logger->debug("listFiles: "+path);
+        m_logger->debug("listFiles: %s",path.c_str());
         Dir dir = LittleFS.openDir(path);
         int count = 0;
         while (dir.next()) {
-            m_logger->debug("found file: "+dir.fileName());
+            m_logger->debug("found file: %s",dir.fileName());
             results[count++] = dir.fileName();
         }
         return count;
