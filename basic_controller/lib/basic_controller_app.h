@@ -26,10 +26,13 @@ namespace DevRelief {
     class Command {
     public:
         char type;
+        char subType;
         int16_t startPercent;
         int16_t endPercent;
         int16_t startValue;
         int16_t endValue;
+        int16_t pattern[300];
+        int16_t patternSize;
         double zoom;
         double m_animationStepsPerSecond;
         Logger* m_logger;
@@ -44,6 +47,7 @@ namespace DevRelief {
             m_reverseAnimation = true;
             m_gradientTypeTime = false;
             m_ledPositionTypeIndex = false;
+            m_animationStepsPerSecond = 0;
            if (parse(def)) {
             //m_logger->info("success");
            } else {
@@ -64,6 +68,42 @@ namespace DevRelief {
             tok = strtok(NULL,delims);
             if (tok == NULL) {
                 return false;
+            }
+            if (this->type == 'p') {
+                this->subType = tok[0];
+                this->patternSize = 0;
+                m_logger->debug("pattern %c",this->subType);
+                tok = strtok(NULL,delims);
+                while(tok != NULL) {
+                    m_logger->debug("  val: %s",tok);
+                    if (tok[0] == 'A') {
+                        this->m_animationStepsPerSecond = atof(tok+1);
+                        m_logger->debug("  animate: %f",this->m_animationStepsPerSecond);
+                    } else {
+                        int repeat=1;
+                        int val = 0;
+                        char*start = tok;
+                        char * end = tok;
+                        int rpos = 0;
+                        while(*end != ':' && *end != 0) {
+                            end++;
+                        }
+                        if (*end == ':'){
+                            repeat = atoi(start);
+                            val = atoi(end+1);
+                            m_logger->debug("repeat %d times %s(%d)",repeat,end,val);
+                        } else {
+                            val = atoi(start);
+                        }
+                        for(int r=0;r<repeat;r++) {
+                            this->pattern[this->patternSize] = val;
+                            this->patternSize += 1;
+                        }
+                    }
+                    tok = strtok(NULL,delims);
+                }
+                m_logger->debug("pattern size: %d",this->patternSize);
+                return true;
             }
             m_logger->debug("tok %s",tok);
             
@@ -351,12 +391,12 @@ namespace DevRelief {
         void runScene(String commandText) {
 
             const char * text = commandText.c_str();
-            m_logger->debug("execute commands");
-            m_logger->debug(text);
+            m_logger->warn("execute commands");
+            m_logger->warn(text);
             int start = 0;
             int end = commandText.indexOf('\n');
             m_setLedCount = m_ledCount;
-            m_strip1->clear();
+            m_strip1->clear(); 
             //m_strip2->clear();
             for(int idx=0;idx<300;idx++){
                 hslData.leds[idx].hue = 0;
@@ -393,14 +433,47 @@ namespace DevRelief {
             }
         }
 
+        /* commands:
+        * z - led count (z,50)
+        * h - hue (h,start_led,end_led,start_hue,end_hue,zoom,speed,FLAGS)
+        * s - saturation (h,start_led,end_led,start_saturation,end_saturation,zoom,speed,FLAGS)
+        * l - level (h,start_led,end_led,start_level,end_level,zoom,speed,FLAGS)
+        * p - pattern (p,type,v1,v2,v3,v4...)
+        *           type = h-hue,  s-saturation, l-level
+        *           r:v means repeat 'v' 'r' times
+        *           Av means animate at speed v pixels per second
+        * Flags -
+        *    R - reverse animation (forward then back)
+        *    T - gradient TIME (vs pixel pos)
+        *    X - position type pixel (vs percent)
+        * 
+        */
+
         void runCommand(char * text, CHSL* leds){
 
             Command cmd(text);
             m_logger->debug("parsed command %s",text);
-            if (cmd.type == 'z')if (cmd.type == 'z') {
+            if (cmd.type == 'z') {
                     m_logger->debug("limit led count %d",cmd.startPercent);
                     this->m_setLedCount = cmd.startPercent;
                     return;
+            }
+            if (cmd.type == 'p') {
+                long sceneMillis = millis();
+                float seconds =  1.0*(sceneMillis - this->m_animationStartMillis)/1000.0;
+                int step = seconds*cmd.m_animationStepsPerSecond;
+                
+                for(int pos=0;pos<=m_setLedCount;pos++) {
+                    int pidx = (pos+cmd.patternSize-step) % cmd.patternSize;
+                    if (cmd.subType == 'h') {
+                        leds[pos].hue = cmd.pattern[pidx];
+                    } else if (cmd.subType == 's') {
+                        leds[pos].saturation = cmd.pattern[pidx];
+                    } else if (cmd.subType == 'l') {
+                        leds[pos].lightness = cmd.pattern[pidx];
+                    }
+                }
+                return;
             }
 
             long sceneMillis = millis();
@@ -431,8 +504,8 @@ namespace DevRelief {
                 reverse = false;
             }
 
-            int startIdx = round(m_ledCount*cmd.startPercent/100);
-            int endIdx = round(m_ledCount*cmd.endPercent/100);
+            int startIdx = round(m_setLedCount*cmd.startPercent/100);
+            int endIdx = round(m_setLedCount*cmd.endPercent/100);
             int startValue = cmd.startValue;
             int endValue = cmd.endValue;
             int valueDiff = endValue-startValue;
@@ -442,7 +515,7 @@ namespace DevRelief {
                 stepDiff = stepDiff * 2;  // get all values in 1/2 the leds
             }
             int ledOffset = (endIdx-startIdx) * animationPercent;
-            m_logger->info("set leds %d-%d o=%d, pct=%f  %d-%d %d/%d/%f",startIdx,endIdx,ledOffset, animationPercent, startValue,endValue,valueDiff,steps,stepDiff);
+            m_logger->debug("set leds %d-%d o=%d, pct=%f  %d-%d %d/%d/%f",startIdx,endIdx,ledOffset, animationPercent, startValue,endValue,valueDiff,steps,stepDiff);
             
             for(int i=startIdx;i<=endIdx;i++) {
                 int value = round(cmd.startValue+i*stepDiff);
@@ -457,9 +530,9 @@ namespace DevRelief {
                     }
                 }
 
-                int pos = (i+ledOffset)%m_ledCount;
+                int pos = (i+ledOffset)%m_setLedCount;
                 while (pos <0) {
-                    pos = m_ledCount + pos;
+                    pos = m_setLedCount + pos;
                 }
                 if (cmd.type == 'h') {
                     leds[pos].hue = value;
@@ -480,8 +553,8 @@ namespace DevRelief {
             } else {
                 reverse = false;
             }
-            int startIdx = round(m_ledCount*cmd.startPercent/100);
-            int endIdx = round(m_ledCount*cmd.endPercent/100);
+            int startIdx = round(m_setLedCount*cmd.startPercent/100);
+            int endIdx = round(m_setLedCount*cmd.endPercent/100);
             int startValue = cmd.startValue;
             int endValue = cmd.endValue;
             int valueDiff = endValue-startValue;
@@ -491,7 +564,7 @@ namespace DevRelief {
             for(int i=startIdx;i<=endIdx;i++) {
                 int pos = i;
                 while (pos <0) {
-                    pos = m_ledCount + pos;
+                    pos = m_setLedCount + pos;
                 }
                 if (cmd.type == 'h') {
                     leds[pos].hue = value;

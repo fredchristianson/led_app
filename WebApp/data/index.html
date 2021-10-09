@@ -7,7 +7,13 @@
 </script>
 
 <body>
-    <div id='room-name'></div>
+    <div id='room-name'>
+        <select name='room' id='room-select'>
+            <option value='127.0.0.1'>Localhost</option>
+            <option value='192.168.10.130' selected>Dinning Room</option>
+            <option value='192.168.10.120'>Living Room</option>
+        </select>
+    </div>
     <section class='preview'>
         <h2>Preview  <span class='first'></span><span class='last'></span><span class='current'></span>
         <a class='select-all'>all</a><a class='select-clear'>clear</a></h2>
@@ -48,7 +54,7 @@
     <section class='commands'>
         <h2>Commands 
             <a class='create-command add-hsl'>Create</a><a class='run-commands'>Run</a>
-            <label  style='margin-right: 1rem;'><input type='checkbox' id='auto-create' checked='checked'/> Auto-create</label>         
+            <label  style='margin-right: 1rem;'><input type='checkbox' id='auto-create'/> Auto-create</label>         
         </h2>
         <div class='params'>
             <div class='if-gradient block'><h3>Gradient Type:</h3>
@@ -60,7 +66,7 @@
                 <label class='if-gradient'><input type='radio' id='led-percent' name='led-position' value='P' checked='checked'/>%</label> 
                 <label class='if-gradient'><input type='radio' id='led-index' name='led-position' value='X'/>Index</label> 
             </div>
-            <label class='if-gradient block'><h3>Speed:</h3> <input type='number' style='width: 4rem' id='animate-speed' name='animate-speed'  value='10'/>steps/second</label> 
+            <label class='if-gradient block'><h3>Speed:</h3> <input type='number' style='width: 4rem' id='animate-speed' name='animate-speed'  value='0'/>steps/second</label> 
             
         </div>            
         <div class='scenes'>

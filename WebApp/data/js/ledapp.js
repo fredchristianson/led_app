@@ -1,16 +1,27 @@
 //import {assert} from './assert.js';
 
+/*
 const API_BASE_DINING_ROOM = 'http://192.168.10.130/api/';
 const API_BASE_LIVING_ROOM = 'http://192.168.10.120/api/';
 const API_BASE_SAME_HOST = '/api/';
 const API_BASE = API_BASE_DINING_ROOM;
+*/
 
 class Api {
     constructor() {
-        this.baseUrl = API_BASE;
+        //this.baseUrl = API_BASE;
+    }
+
+    setHostname(hostname) {
+        if (hostname == null) {
+            this.baseUrl = '/api';
+        } else {
+            this.baseUrl = `http://${hostname}/api/`;
+        }
     }
 
     async get(path) {
+        
         return new Promise((resolve,reject)=>{
             const xhr = new XMLHttpRequest();
             //xhr.responseType = 'json';
@@ -634,6 +645,7 @@ class LevelSelector extends InputRangeSelector {
 
 export class LedApp {
     constructor() {
+        this.initialized = false;
         this.logger = new Logger("LedApp");
         this.logger.debug("LedApp running");
         this.ledSelector = new LedSelector(this);
@@ -658,6 +670,7 @@ export class LedApp {
         DOM.onClick('.create-command.add-hsl',this.createHSLCommands.bind(this));
         this.debouceTimeout = null;
         this.initialize();
+
     }
 
     autoGenerateCommands() {
@@ -742,9 +755,10 @@ export class LedApp {
         if (colorMgr.saturationEnabled){
             this.createSaturationCommand();
         }
+        this.saveCommands();
     }
 
-    addCommand(cmd,startPercent,endPercent,startValue,endValue){
+    addCommand(cmdVal,startPercent,endPercent,startValue,endValue){
         if (startPercent == null || endPercent == null || isNaN(startPercent) || isNaN(endPercent)) {
             this.logger.error("invalid range "+startPercent+" " +endPercent);
             return;
@@ -754,7 +768,7 @@ export class LedApp {
         var ptype = DOM.getValue('input[name="led-position"]:checked');
         var animateSpeed = DOM.getValue("#animate-speed");
         var zoom = 1;
-        var cmd = `${cmd},${startPercent},${endPercent},${startValue},${endValue},${zoom},${animateSpeed},${reverse ? 'R':'F'}${gtype}${ptype};\n`;
+        var cmd = `${cmdVal},${startPercent},${endPercent},${startValue},${endValue},${zoom},${animateSpeed},${reverse ? 'R':'F'}${gtype}${ptype};\n`;
         var list = DOM.getValue("#scene");
         list = list + cmd;
         DOM.setValue('#scene',list);
@@ -831,12 +845,25 @@ export class LedApp {
     }
 
     async initialize() {
+        var hostname = storage.get('room');
+
+       // DOM.setValue('#room-select',this.config?.ip_addr);
+       DOM.setValue('#room-select',hostname);
+
         DOM.onClick('#save-scene',this.saveCommands.bind(this));
         DOM.onClick('#load-scene',this.loadCommands.bind(this));
         this.api = new Api();
+        this.api.setHostname(hostname);
+        DOM.onChange('#room-select',async (e)=>{
+            storage.set('room',e.value);
+            this.api.setHostname(e.value);
+            await this.readConfig();
+
+        });
         await this.readConfig();
         
         this.ledSelector.selectAll();
+        this.initialized = true;
     }
 
     async readConfig(){
@@ -844,7 +871,7 @@ export class LedApp {
         if (response) {
             this.config = response;
             this.ledSelector.setCount(this.config.led_count);
-            DOM.setHtml('#room-name',this.config.hostname + " - " + this.config.ip_addr);
+            //DOM.setHtml('#room-name',this.config.hostname + " - " + this.config.ip_addr);
             DOM.setSelectOptions('#saved-scenes',this.config.scenes,null); //,DOM.getValue('#scene-name'));
             this.ledSelector.selectClear();
             this.runCommands();
@@ -869,6 +896,9 @@ export class LedApp {
     }
 
     async saveCommands() {
+        if (!this.initialized) {
+            return;
+        }
         const name = DOM.getValue('#scene-name');
         const commands = DOM.getValue('#scene');
         DOM.setValue('#saved-scenes',name);
@@ -1330,6 +1360,21 @@ class Dom {
         return element && element.checked;
     }
 }
+
+class Storage {
+    constructor() {
+        this.store = window.localStorage;
+    }
+    get(name) {
+        return this.store.getItem(name);
+    }
+
+    set(name,value) {
+        this.store.setItem(name,value);
+    }
+}
+
+const storage = new Storage();
 
 const DOM = new Dom();
 

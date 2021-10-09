@@ -50,17 +50,18 @@ class HttpServer {
         }
 
         void routeNotFound(HttpHandler httpHandler){
-            if (m_server->method() == HTTP_OPTIONS){
-                this->m_logger->debug("send CORS for HTTP_OPTIONS");
-                this->cors(m_server);
-                m_server->send(204);
-            }
             m_logger->debug("routing Not Found handler");
             auto server = m_server;
             auto handler = httpHandler;
             m_server->onNotFound([this,handler,server](){
+                m_logger->debug("handle not found %s",server->uri().c_str());
+                if (m_server->method() == HTTP_OPTIONS){
+                    this->m_logger->debug("send CORS for HTTP_OPTIONS");
+                    this->cors(m_server);
+                    m_server->send(204);
+                    return;
+                }
                 this->cors(server);
-               // m_logger->debug("not found %s",server->uri().c_str());
                 handler(server,server);
             });
         }
@@ -125,6 +126,7 @@ class HttpServer {
         }
 
         void cors(ESP8266WebServer * server) {
+            m_logger->warn("cors");
             server->sendHeader("Access-Control-Allow-Origin","*");
             server->sendHeader("Access-Control-Allow-Headers","Content-Type");
         }

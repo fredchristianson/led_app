@@ -16,7 +16,8 @@ void initializeWriter() {
 
 }
 
-char messageBuffer[1024];
+#define MAX_MESSAGE_SIZE 1024
+char messageBuffer[MAX_MESSAGE_SIZE+1];
 String padding("                                   ");
 
 class Logger {
@@ -41,7 +42,7 @@ public:
             return;
         }
 
-        vsnprintf(messageBuffer,sizeof(messageBuffer),message,args);
+        vsnprintf(messageBuffer,MAX_MESSAGE_SIZE,message,args);
         unsigned long now = millis()/1000;
         int hours = now/3600;
         now = now % 3600;
@@ -51,11 +52,11 @@ public:
         Serial.println(messageBuffer);
     }
 
-    void debug(String message,...) {
-        va_list args;
-        va_start(args,message);
-        write(100,message.c_str(),args);
-    }
+    // void debug(String message,...) {
+    //     va_list args;
+    //     va_start(args,message);
+    //     write(100,message.c_str(),args);
+    // }
 
     void debug(const char * message,...) {
         va_list args;
@@ -65,11 +66,11 @@ public:
 
 
 
-    void info(String message,...) {
-        va_list args;
-        va_start(args,message);
-        write(80,message.c_str(),args);
-    }
+    // void info(String message,...) {
+    //     va_list args;
+    //     va_start(args,message);
+    //     write(80,message.c_str(),args);
+    // }
 
     void info(const char * message,...) {
         va_list args;
@@ -78,11 +79,11 @@ public:
     }
 
 
-    void warn(String message,...) {
-        va_list args;
-        va_start(args,message);
-        write(40,message.c_str(),args);
-    }
+    // void warn(String message,...) {
+    //     va_list args;
+    //     va_start(args,message);
+    //     write(40,message.c_str(),args);
+    // }
 
     void warn(const char * message,...) {
         va_list args;
@@ -91,11 +92,11 @@ public:
     }
 
 
-    void error(String message,...) {
-        va_list args;
-        va_start(args,message);
-        write(20,message.c_str(),args);
-    }
+    // void error(String message,...) {
+    //     va_list args;
+    //     va_start(args,message);
+    //     write(20,message.c_str(),args);
+    // }
     
     void error(const char * message,...) {
         va_list args;

@@ -39,16 +39,16 @@ namespace DevRelief {
                 lightness = 0;
             }
             
-            CHSL(uint8_t hue,uint8_t saturation,uint8_t lightness) {
+            CHSL(uint16_t hue,uint16_t saturation,uint16_t lightness) {
                 this->hue = hue;
                 this->saturation = saturation;
                 this->lightness = lightness;
             }
 
         public:
-            uint8_t hue;
-            uint8_t saturation;
-            uint8_t lightness;
+            uint16_t hue;  // 0-360
+            uint16_t saturation; // 0-100
+            uint16_t lightness;  // 0-100
             
     };
 
