@@ -2,7 +2,7 @@
 
 
 
-const char* HOSTNAME="DiningRoomLEDs";
+const char* HOSTNAME="LivingRoomLEDs";
 
 # 7 "d:\\dev\\arduino\\led_app\\basic_controller\\basic_controller.ino" 2
 # 8 "d:\\dev\\arduino\\led_app\\basic_controller\\basic_controller.ino" 2

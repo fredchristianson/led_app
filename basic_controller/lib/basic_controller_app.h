@@ -14,12 +14,6 @@ extern EspClass ESP;
 namespace DevRelief {
 
     DRFileBuffer fileBuffer;
-    struct StripData {
-      uint16_t brightness;
-      uint16_t strip1Length;
-      uint16_t strip2Length;
-      CRGB leds[3];
-    };
 
     Logger commandLogger("Command",60);
 
@@ -174,8 +168,6 @@ namespace DevRelief {
             m_logger = new Logger("BasicControllerApplication",80);
             m_httpServer = new HttpServer();
             m_fileSystem = new DRFileSystem();
-            stripData.strip1Length = STRIP1_LEDS;
-            stripData.strip2Length = 0;
             fileBuffer.reserve(25000);
 
             m_httpServer->route("/",[this](Request* req, Response* resp){
@@ -266,9 +258,8 @@ namespace DevRelief {
             });
             m_httpServer->begin();
             //////m_logger->restart();
-            m_strip1 = new DRLedStrip(2,STRIP1_LEDS);
-            ////m_logger->debug("created strip1");
-            //m_strip2 = new DRLedStrip(2,STRIP2_LEDS);
+            m_strip = new DRLedStrip();
+
             m_ledCount = LED_COUNT;
             auto found = m_fileSystem->read("/lastscene",fileBuffer);
             if (found) {
@@ -295,7 +286,7 @@ namespace DevRelief {
                 //m_logger->debug("loop");
                 this->runScene(this->m_currentScene);
                 //m_logger->debug("show");
-                m_strip1->show();
+                m_strip->show();
                 //m_logger->debug("show done");
             }
             
@@ -312,7 +303,7 @@ namespace DevRelief {
                 m_animationReverse = false;
                 runScene(fileBuffer.text());
                 
-                m_strip1->show();
+                m_strip->show();
             } else {
                 ////m_logger->info("scene not found: %s",sceneName.c_str());
             }
@@ -357,7 +348,7 @@ namespace DevRelief {
                 resp->send(200,"text/json","{result:true,message:\"serial restarted\"}");
             }  else if (api == "show"){
                 ////m_logger->info("show leds");
-                m_strip1->show();
+                m_strip->show();
                 resp->send(200,"text/json","{result:true,message:\"FastLED.show()\"}");
             } else {
                 resp->send(200,"text/json","{result:false,message:\"unknown api \"}");
@@ -398,8 +389,8 @@ namespace DevRelief {
             int start = 0;
             int end = commandText.indexOf('\n');
             m_setLedCount = m_ledCount;
-            m_strip1->clear(); 
-            //m_strip2->clear();
+            m_strip->clear(); 
+            
             for(int idx=0;idx<300;idx++){
                 hslData.leds[idx].hue = 0;
                 hslData.leds[idx].saturation = 0;
@@ -422,16 +413,9 @@ namespace DevRelief {
             //m_logger->debug("set strip values %d",m_setLedCount);
             for(number=0;number<m_ledCount && number < this->m_setLedCount;number++) {
               CHSL& color = hslData.leds[number];
-             // ////m_logger->debug("HSV %d (%d,%d,%d)",number,color.hue,color.saturation,color.value);
-              if (number < STRIP1_LEDS) {
-                  auto rgb = HSLToRGB(color);
-                  if (number< 10) {
-                      ////m_logger->debug("R,G,B=(%d,%d,%d)",rgb.red,rgb.green,rgb.blue);
-                  }
-                  m_strip1->setColor(number,rgb);
-              } else {
-               // m_strip2->setColor(number-STRIP1_LEDS,HSLToRGB(color));
-              }
+              // ////m_logger->debug("HSV %d (%d,%d,%d)",number,color.hue,color.saturation,color.value);
+              auto rgb = HSLToRGB(color);
+              m_strip->setColor(number,rgb);
             }
         }
 
@@ -679,11 +663,10 @@ namespace DevRelief {
         DRFileSystem * m_fileSystem;
         HttpServer * m_httpServer;
         int m_ledCount = LED_COUNT;
-        DRLedStrip * m_strip1;
-        //DRLedStrip * m_strip2;
+        DRLedStrip * m_strip;
         int m_pos;
         HSLData hslData;
-        StripData stripData;
+
         String m_currentScene;
         long m_animationStartMillis;
         long m_lastAnimation;

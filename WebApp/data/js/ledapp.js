@@ -14,7 +14,7 @@ class Api {
 
     setHostname(hostname) {
         if (hostname == null) {
-            this.baseUrl = '/api';
+            this.baseUrl = '/api/';
         } else {
             this.baseUrl = `http://${hostname}/api/`;
         }
@@ -860,7 +860,11 @@ export class LedApp {
             await this.readConfig();
 
         });
-        await this.readConfig();
+        try {
+            await this.readConfig();    
+        } catch(e){
+            // ignore errors 
+        }
         
         this.ledSelector.selectAll();
         this.initialized = true;

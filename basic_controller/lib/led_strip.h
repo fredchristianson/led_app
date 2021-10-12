@@ -1,9 +1,15 @@
 #ifndef DRLED_STRIP_H
 #define DRLED_STRIP_H
 #include <Adafruit_NeoPixel.h>
-#define NUMPIXELS 150
-#define PIN 2
+#define STRIP1_NUMPIXELS STRIP1_LEDS
+#define STRIP1_PIN 4
+#define STRIP2_NUMPIXELS STRIP2_LEDS
+#define STRIP2_PIN 5
+
 //Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+
+
+
 
 #include "./logger.h"
 
@@ -54,18 +60,27 @@ namespace DevRelief {
 
     class DRLedStrip {
     public:
-        DRLedStrip(int pin, uint16_t count) {
+        DRLedStrip() {
             m_logger = new Logger("DRLedStrip",80);
-            m_logger->debug("DRLedStrip create pin=%d, count=%d",pin,count);
-            m_pin = pin;
-            m_count = count;
+            m_logger->debug("DRLedStrip create");
+
         
-            m_controller = getController(pin,count);
-            m_controller->setBrightness(40);  // all strips have same max brightness at the FastLED global level.
+            m_controller1 = getController(STRIP1_PIN,STRIP1_NUMPIXELS);
+            m_controller1->setBrightness(40);  // all strips have same max brightness at the FastLED global level.
+
+            if (STRIP2_PIN >= 0) {
+                m_controller2 = getController(STRIP2_PIN,STRIP2_NUMPIXELS);
+                m_controller2->setBrightness(40);  // all strips have same max brightness at the FastLED global level.
+            } else {
+                m_controller2 = NULL;
+            }
         }
 
         void setBrightness(int value) {
-            m_controller->setBrightness(value);
+            m_controller1->setBrightness(value);
+            if (m_controller2 != NULL) {
+                m_controller2->setBrightness(value);
+            }
         }
 
         Adafruit_NeoPixel *  getController(int pin,int count) {
@@ -78,7 +93,10 @@ namespace DevRelief {
 
         void clear() {
             m_logger->debug("clear strip");
-            m_controller->clear();
+            m_controller1->clear();
+            if (m_controller2 != NULL) {
+                m_controller2->clear();
+            }
         }
 
         void setColor(uint16_t index,CRGB color) {
@@ -86,42 +104,45 @@ namespace DevRelief {
                 //m_logger->debug("setColor %d,(%d,%d,%d)",(int)index,(int)color.red,(int)color.green,(int)color.blue);
             }
             if (index == 0) {
-                m_controller->setPixelColor(index,m_controller->Color(0,0,0));
+                m_controller1->setPixelColor(index,m_controller1->Color(0,0,0));
             } else {
-                m_controller->setPixelColor(index,m_controller->Color(color.red,color.green,color.blue));
+                if (index < STRIP1_NUMPIXELS) {
+                    m_controller1->setPixelColor(index,m_controller1->Color(color.red,color.green,color.blue));
+                } else if (m_controller2 != NULL) {
+                    m_controller2->setPixelColor(index-STRIP1_NUMPIXELS,m_controller2->Color(color.red,color.green,color.blue));
+                } else {
+                    m_logger->error("index too high with no strip 2");
+                }
             }
 
         }
 
-/*
-        void setHSV(int index,CHSL color) {
-            m_colors[index].setHSL(color.hue,color.saturation,color.value);
-            //CRGB rgb;
-           // hsv2rgb_spectrum(color,rgb);
-           // //m_logger->debug("hsv (%d,%d,%d)->rgb(%d,%d,%d)",color.h,color.s,color.v,rgb.r,rgb.g,rgb.b);
-           // m_colors[index] = rgb;
-        }
-*/
 
 
         uint16_t getCount() {
-            return m_count;
+            return STRIP1_NUMPIXELS + STRIP2_NUMPIXELS;
         }
 
         void setCount(int count) {
-            m_count = count;
+            m_logger->error("setCount not implemented");
         }
 
         void show() {
            // m_logger->debug("show strip");
-            m_controller->show();
+            if (m_controller2 != NULL) {
+                m_controller2->show();
+            } else {
+                m_logger->error("no strip 2");
+            }
+            m_controller1->show();
+
         }
 
     private:
         Logger * m_logger;    
-        int m_pin;
-        uint16_t m_count;
-        Adafruit_NeoPixel * m_controller;
+
+        Adafruit_NeoPixel * m_controller1;
+        Adafruit_NeoPixel * m_controller2;
     };
 
 }
