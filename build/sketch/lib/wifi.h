@@ -18,7 +18,7 @@ namespace DevRelief {
         }
     protected:
         DRWiFi() {
-            m_logger = new Logger("wifi");
+            m_logger = new Logger("wifi",80);
             m_logger->debug("wifi created");
         }
 
@@ -32,7 +32,7 @@ namespace DevRelief {
                 delay(500);
             }
             WiFi.hostname(HOSTNAME);
-            m_logger->info("WiFi connected");
+            m_logger->info("WiFi connected %s",WiFi.localIP().toString().c_str());
         }
 
         bool isConnected() {

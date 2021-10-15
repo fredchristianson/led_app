@@ -5,7 +5,10 @@
 #include <LittleFS.h>
 #include "./logger.h"
 
+#define MAX_PATH 100
+
 namespace DevRelief {
+
 
 class DRFileBuffer {
 public:
@@ -21,16 +24,18 @@ public:
         return m_data;
     }
 
-    String text() {
-        String text;
-        text.concat((char*)m_data,m_length);
-        return text;
+    const char * text() {
+        if (m_length== NULL) {
+            return NULL;
+        }
+        m_data[m_length] = 0;
+        return (const char *) m_data;
     }
 
     uint8_t* reserve(size_t length) {
         if (length > m_maxLength) {
             m_logger->info("increase buffer length. old length=%d, new length=%d",m_maxLength,length);
-            auto newData = new uint8_t[length];
+            auto newData = new uint8_t[length+1];
             m_logger->info("allocated buffer");
             newData[0] = 2;
             m_logger->debug("set first value");
@@ -72,7 +77,8 @@ class DRFileSystem {
 public:
     DRFileSystem() {
         m_logger = new Logger("DRFileSystem",60);
-        m_root = "/";
+        strcpy(m_path,"/");
+        
         if (!drFileSystemInitialized) {
             LittleFS.begin();
             drFileSystemInitialized = true;
@@ -80,25 +86,29 @@ public:
         m_logger->debug("DRFileSystem open");
     }
 
-    String getFullPath(String path){
-        if (path.startsWith("/")) {
+    const char * getFullPath(const char * path){
+        if (path == NULL || path[0] == 0) {
+            return m_root;
+        }
+        if (path[0] == '/') {
             return path;
         }
-        return m_root + path;
+        strcpy(m_path,m_root);
+        strcat(m_path,path);
     };
 
-    bool exists(String path) {
+    bool exists(const char * path) {
         auto fullPath = getFullPath(path);
         return LittleFS.exists(fullPath);
     }
 
-    File open(String path) {
+    File open(const char *  path) {
         auto fullPath = getFullPath(path);
         return LittleFS.open(fullPath,"r");
     }
 
-    int listFiles(String path, String* results, int maxResults) {
-        m_logger->debug("listFiles: %s",path.c_str());
+    int listFiles(const char *  path, String* results, int maxResults) {
+        m_logger->debug("listFiles: %s",path);
         Dir dir = LittleFS.openDir(path);
         int count = 0;
         while (dir.next()) {
@@ -108,10 +118,10 @@ public:
         return count;
     }
 
-    File openFile(String path) {
-        m_logger->debug("open file  %s",path.c_str());
+    File openFile(const char * path) {
+        m_logger->debug("open file  %s",path);
         auto fullPath = getFullPath(path);
-        m_logger->debug("full path %s",fullPath.c_str());
+        m_logger->debug("full path %s",fullPath);
         File file = open(fullPath);
         return file;
     }
@@ -120,13 +130,13 @@ public:
         file.close();
     }
 
-    uint16_t readChunk(String path,size_t pos, size_t maxLength, DRFileBuffer& buffer ) {
-        m_logger->debug("read from %s",path.c_str());
+    uint16_t readChunk(const char *  path,size_t pos, size_t maxLength, DRFileBuffer& buffer ) {
+        m_logger->debug("read from %s",path);
         auto fullPath = getFullPath(path);
-        m_logger->debug("open %s",fullPath.c_str());
+        m_logger->debug("open %s",fullPath);
         File file = open(fullPath);
         if (!file.isFile()) {
-            m_logger->error("file not found %s",fullPath.c_str());
+            m_logger->error("file not found %s",fullPath);
             return false;
         }
         size_t fileSize = file.size();
@@ -150,12 +160,12 @@ public:
         return readBytes;
     }
 
-    bool read(String path, DRFileBuffer& buffer ) {
-        m_logger->debug("read from %s",path.c_str());
+    bool read(const char * path, DRFileBuffer& buffer ) {
+        m_logger->debug("read from %s",path);
         auto fullPath = getFullPath(path);
         File file = open(fullPath);
         if (!file.isFile()) {
-            m_logger->error("r file not found %s",fullPath.c_str());
+            m_logger->error("r file not found %s",fullPath);
             return false;
         }
         size_t size = file.size();
@@ -168,12 +178,12 @@ public:
         return true;
     }
     
-    bool readBinary(String path, byte * data,size_t length ) {
-        m_logger->debug("read from %s",path.c_str());
+    bool readBinary(const char * path, byte * data,size_t length ) {
+        m_logger->debug("read from %s",path);
         auto fullPath = getFullPath(path);
         File file = open(fullPath);
         if (!file.isFile()) {
-            m_logger->error("rb file not found %s",fullPath.c_str());
+            m_logger->error("rb file not found %s",fullPath);
             return false;
         }
         size_t size = file.size();
@@ -187,15 +197,15 @@ public:
         return true;
     }
 
-    bool write(String path, const String& data) {
+    bool write(const char *  path, const char * data) {
         auto fullPath = getFullPath(path);
         File file = LittleFS.open(fullPath,"w");
-        file.write(data.c_str(),data.length());
+        file.write(data,strlen(data));
         file.close();
         return true;
     }
     
-    bool writeBinary(String path, const byte * data,size_t length) {
+    bool writeBinary(const char * path, const byte * data,size_t length) {
         auto fullPath = getFullPath(path);
         File file = LittleFS.open(fullPath,"w");
         file.write(data,length);
@@ -204,7 +214,8 @@ public:
     }
 
 private:
-    String m_root;    
+    char m_root[MAX_PATH];    
+    char m_path[MAX_PATH];    
     Logger* m_logger;
 };
 }

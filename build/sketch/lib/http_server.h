@@ -24,16 +24,18 @@ class HttpServer {
 
 
         HttpServer() {
-            m_logger = new Logger("HttpServer");
+            m_logger = new Logger("HttpServer",60);
             m_logger->debug("HttpServer created");
             m_wifi = DRWiFi::get();
 
             m_server = new ESP8266WebServer(80);
 
             m_logger->info("Listening to port 80 on IP %s",WiFi.localIP().toString().c_str());
+            /*
             if (MDNS.begin("LEDController")) {
                 m_logger->info("MSND responder started");
             }
+            */
            
         }
 
@@ -54,7 +56,6 @@ class HttpServer {
             auto server = m_server;
             auto handler = httpHandler;
             m_server->onNotFound([this,handler,server](){
-                m_logger->debug("handle not found %s",server->uri().c_str());
                 if (m_server->method() == HTTP_OPTIONS){
                     this->m_logger->debug("send CORS for HTTP_OPTIONS");
                     this->cors(m_server);
@@ -66,52 +67,52 @@ class HttpServer {
             });
         }
 
-        void routeBraces(String uri, HttpHandler httpHandler){
-            m_logger->debug("routing to Uri %s",uri.c_str());
+        void routeBraces(const char * uri, HttpHandler httpHandler){
+            m_logger->debug("routing to Uri %s",uri);
             auto server = m_server;
             auto handler = httpHandler;
-            m_server->on(UriBraces(uri.c_str()),[this,handler,server](){
+            m_server->on(UriBraces(uri),[this,handler,server](){
                 this->cors(server);
                 m_logger->debug("returning uri found");
                 handler(server,server);
             });
         }
 
-        void routeBracesGet(String uri, HttpHandler httpHandler){
-            m_logger->debug("routing GET to Uri %s",uri.c_str());
+        void routeBracesGet(const char * uri, HttpHandler httpHandler){
+            m_logger->debug("routing GET to Uri %s",uri);
             auto server = m_server;
             auto handler = httpHandler;
-            m_server->on(UriBraces(uri.c_str()),HTTP_GET,[this,handler,server](){
+            m_server->on(UriBraces(uri),HTTP_GET,[this,handler,server](){
                 this->cors(server);
                 //m_logger->debug("uri found");
                 handler(server,server);
             });
         }
 
-        void routeBracesPost(String uri, HttpHandler httpHandler){
-            m_logger->debug("routing POST to Uri %s",uri.c_str());
+        void routeBracesPost(const char * uri, HttpHandler httpHandler){
+            m_logger->debug("routing POST to Uri %s",uri);
             auto server = m_server;
             auto handler = httpHandler;
-            m_server->on(UriBraces(uri.c_str()),HTTP_POST,[this,handler,server](){
+            m_server->on(UriBraces(uri),HTTP_POST,[this,handler,server](){
                 this->cors(server);
                 m_logger->debug("uri found");
                 handler(server,server);
             });
         }
 
-        void route(String uri, HttpHandler httpHandler){
-            m_logger->debug("routing %s",uri.c_str());
+        void route(const char * uri, HttpHandler httpHandler){
+            m_logger->debug("routing %s",uri);
             auto server = m_server;
             auto handler = httpHandler;
             m_server->on(uri,[this,handler,server,uri](){
                 this->cors(server);
-                m_logger->debug("path found %s",uri.c_str());
+                m_logger->debug("path found %s",uri);
 
                 handler(server,server);
             });
         }
-        void route(String &uri, HTTPMethod method, HttpHandler httpHandler){
-            m_logger->debug("routing %s",uri.c_str());
+        void route(const char * uri, HTTPMethod method, HttpHandler httpHandler){
+            m_logger->debug("routing %s",uri);
              auto server = m_server;
             auto handler = httpHandler;
             m_server->on(uri,method, [this,handler,server](){
@@ -120,13 +121,13 @@ class HttpServer {
             });
         }
 
-        void send(String type, String value) {
+        void send(const char * type, const char * value) {
 
             m_server->send(200,type,value);
         }
 
         void cors(ESP8266WebServer * server) {
-            m_logger->warn("cors");
+            m_logger->debug("cors");
             server->sendHeader("Access-Control-Allow-Origin","*");
             server->sendHeader("Access-Control-Allow-Headers","Content-Type");
         }

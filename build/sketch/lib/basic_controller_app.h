@@ -12,6 +12,17 @@ extern EspClass ESP;
 
 
 namespace DevRelief {
+    char tempPath[200];
+    const char * concatTemp(const char *a,const char *b=NULL,const char *c=NULL) {
+        strcpy(tempPath,a);
+        if (b) {
+            strcat(tempPath,b);
+        }
+        if (c) {
+            strcat(tempPath,c);
+        }
+        return tempPath;
+    }
 
     DRFileBuffer fileBuffer;
 
@@ -163,6 +174,8 @@ namespace DevRelief {
 
     class BasicControllerApplication : public Application {
     public: 
+   
+   
         BasicControllerApplication() {
             m_pos = 0;
             m_logger = new Logger("BasicControllerApplication",80);
@@ -179,7 +192,7 @@ namespace DevRelief {
             m_httpServer->routeBraces("/{}.html",[this](Request* req, Response* resp){
                // //////m_logger->debug("handling page / %s", req->uri().c_str());
                 //resp->send(200,"text/html","working");
-                this->getPage(req->pathArg(0),req,resp);
+                this->getPage(req->pathArg(0).c_str(),req,resp);
             });
 
 
@@ -215,18 +228,18 @@ namespace DevRelief {
                 Serial.println("***get scene");
                 
 
-                String msg = "get /api/scene/" + req->pathArg(0);
-                String sceneName = req->pathArg(0);
+                const char * sceneName = req->pathArg(0).c_str();
                 auto body = req->arg("plain");
                 ////m_logger->debug("commands: " + body);
-                auto found = m_fileSystem->read("/scene/"+sceneName,fileBuffer);
-                m_fileSystem->write("/lastscene",sceneName.c_str());
+                auto found = m_fileSystem->read(concatTemp("/scene/",sceneName),fileBuffer);
+                m_logger->info("write /lastscene %s",sceneName);
+                m_fileSystem->write("/lastscene",sceneName);
                 if (found) {
-                    String sceneContents = fileBuffer.text();
+                    const char * sceneContents = fileBuffer.text();
                     loadScene(sceneName);
-                    resp->send(200,"text/plain",sceneContents.c_str());
+                    resp->send(200,"text/plain",sceneContents);
                 } else {
-                    String err = "cannot find scene "+sceneName;
+                    const char* err = concatTemp("cannot find scene ",sceneName);
                     resp->send(404,"text/plain",err);
                 }
                 //this->apiRequest(req->pathArg(0),req,resp);
@@ -235,13 +248,12 @@ namespace DevRelief {
 
             m_httpServer->routeBracesPost( "/api/scene/{}",[this](Request* req, Response* resp){
                 //m_logger->debug("post scene %s", req->pathArg(0).c_str());
-                String msg = "post /api/scene/" + req->pathArg(0);
-                String sceneName = req->pathArg(0);
-                auto body = req->arg("plain");
+                const char * sceneName = req->pathArg(0).c_str();
+                const char * body = req->arg("plain").c_str();
                 //m_logger->debug("commands: %s", body.c_str());
-                m_fileSystem->write("/scene/"+sceneName,body);
+                m_fileSystem->write(concatTemp("/scene/",sceneName),body);
                 loadScene(sceneName);
-                resp->send(200,"text/plain",msg.c_str());
+                resp->send(200,"text/plain",body);
             });
 
 
@@ -263,12 +275,13 @@ namespace DevRelief {
             m_ledCount = LED_COUNT;
             auto found = m_fileSystem->read("/lastscene",fileBuffer);
             if (found) {
+                m_logger->info("load last scenne %s",fileBuffer.text());
                 loadScene(fileBuffer.text());
             } else {
-                //m_logger->debug("no default scene found");
+                m_logger->debug("no default scene found");
             }
 
-            //m_logger->debug("Running BasicControllerApplication configured: v0.6");
+            m_logger->debug("Running BasicControllerApplication configured: v0.7");
 
         }
 
@@ -292,8 +305,8 @@ namespace DevRelief {
             
         }
 
-        void loadScene(String sceneName) {
-            auto found = m_fileSystem->read("/scene/"+sceneName,fileBuffer);
+        void loadScene(const char * sceneName) {
+            auto found = m_fileSystem->read(concatTemp("/scene/",+sceneName),fileBuffer);
             if (found) {
                 //m_logger->info("run scene: %s",sceneName.c_str());
                 m_currentScene = fileBuffer.text();
@@ -355,18 +368,17 @@ namespace DevRelief {
             }
         }
 
-        void getPage(String page,Request * req,Response * resp){
+        void getPage(const char * page,Request * req,Response * resp){
            ////m_logger->debug("get page %s",page.c_str());
-           String path = "/"+page+".html";
-           streamFile(resp,path);
+           streamFile(resp,concatTemp("/",page,".html"));
         }
 
         void notFound(Request *req , Response* resp) {
-            String path = req->uri();
+            const char * path = req->uri().c_str();
             streamFile(resp,path);
         }
 
-        void streamFile(Response * resp,String & path) {
+        void streamFile(Response * resp,const char * path) {
             ////m_logger->debug("stream file %s",path.c_str());
             File file = m_fileSystem->openFile(path);
             if (file.isFile()) {
@@ -443,6 +455,10 @@ namespace DevRelief {
                     //m_logger->debug("limit led count %d",cmd.startPercent);
                     this->m_setLedCount = cmd.startPercent;
                     return;
+            }
+            if (cmd.type == 'b') {
+                this->m_strip->setBrightness(cmd.startPercent);
+                return;
             }
             if (cmd.type == 'p') {
                 long sceneMillis = millis();
