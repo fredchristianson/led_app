@@ -24,7 +24,7 @@ class HttpServer {
 
 
         HttpServer() {
-            m_logger = new Logger("HttpServer",60);
+            m_logger = new Logger("HttpServer",80);
             m_logger->debug("HttpServer created");
             m_wifi = DRWiFi::get();
 

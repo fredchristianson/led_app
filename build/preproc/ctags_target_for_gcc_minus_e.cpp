@@ -4,7 +4,7 @@
 
 
 
-const char* HOSTNAME="kitchen_cupboard";
+
 
 # 9 "d:\\dev\\arduino\\led_app\\basic_controller\\basic_controller.ino" 2
 # 10 "d:\\dev\\arduino\\led_app\\basic_controller\\basic_controller.ino" 2
@@ -15,7 +15,7 @@ Application * app;
 
 void setup() {
   // put your setup code here, to run once:
- logger = new Logger(HOSTNAME);
+ logger = new Logger("LEDAPP");
   logger->info("creating app");
   app = new BasicControllerApplication();
   logger->info("created app");

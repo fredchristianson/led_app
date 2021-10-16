@@ -5,7 +5,7 @@
 #define STRIP3_LEDS 75
 #define STRIP4_LEDS 75
 #define LED_COUNT (STRIP1_LEDS+STRIP2_LEDS+STRIP3_LEDS+STRIP4_LEDS)
-const char* HOSTNAME="kitchen_cupboard";
+
 
 #include "./lib/logger.h"
 #include "./lib/basic_controller_app.h"
@@ -21,7 +21,7 @@ void loop();
 #line 15 "d:\\dev\\arduino\\led_app\\basic_controller\\basic_controller.ino"
 void setup() {
   // put your setup code here, to run once:
- logger = new Logger(HOSTNAME);
+ logger = new Logger("LEDAPP");
   logger->info("creating app");
   app = new BasicControllerApplication();
   logger->info("created app");

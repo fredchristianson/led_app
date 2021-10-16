@@ -2,6 +2,7 @@
 #define DRWIFIF_H
 #include "./logger.h"
 #include <ESP8266WiFi.h>
+#include "./config.h";
 
 namespace DevRelief {
     const char* ssid = "c22-2.4"; //replace this with your WiFi network name
@@ -24,14 +25,13 @@ namespace DevRelief {
 
         void initialize() {
             m_logger->info("WiFi initializing");
-            WiFi.hostname(HOSTNAME);
             WiFi.begin(ssid, password);
             
             while(WiFi.status() != WL_CONNECTED) {
                 m_logger->info("waiting for wifi connection");
                 delay(500);
             }
-            WiFi.hostname(HOSTNAME);
+            WiFi.hostname(CONFIG_HOSTNAME);
             m_logger->info("WiFi connected %s",WiFi.localIP().toString().c_str());
         }
 

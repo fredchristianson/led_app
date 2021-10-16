@@ -29,6 +29,7 @@ public:
         m_level = level;
     }
 
+    bool isDebug() { return m_level==100;}
     void restart() {
         this->info("restarting serial");
         Serial.begin(115200);
