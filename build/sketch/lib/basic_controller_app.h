@@ -29,7 +29,14 @@ namespace DevRelief {
             m_currentScript = NULL;
             m_httpServer = new HttpServer();
             m_fileSystem = new DRFileSystem();
-            fileBuffer.reserve(25000);
+
+            char * result = (char*)fileBuffer.reserve(2000);
+            auto found = m_fileSystem->read("/config",fileBuffer);
+            if (found) {
+                m_config.read(fileBuffer.text());
+            } else {
+                m_config.read(DEFAULT_CONFIG);
+            }
 
             m_httpServer->route("/",[this](Request* req, Response* resp){
                 this->getPage("index",req,resp);
@@ -43,12 +50,20 @@ namespace DevRelief {
             m_httpServer->routeBracesGet( "/api/config",[this](Request* req, Response* resp){
                
                 char * result = (char*)fileBuffer.reserve(2000);
-                auto found = m_fileSystem->read("/config",fileBuffer);
+                Generator gen(&fileBuffer);
+                m_logger->debug("update wifi");
+                m_config.setAddr(WiFi.localIP().toString().c_str());
+                m_logger->debug("updated wifi %.15s",m_config.addr);
+                m_config.write(gen);
+                m_logger->debug("generated config %.500s",fileBuffer.text());
+                resp->send(200,"text/json",fileBuffer.text());
+                /*auto found = m_fileSystem->read("/config",fileBuffer);
                 if (found) {
                     resp->send(200,"text/json",fileBuffer.text());
                 } else {
                     resp->send(200,"text/json",DEFAULT_CONFIG);
                 }
+                */
                 /*
                 int max = 20;
                 String scenes[max];
@@ -126,7 +141,7 @@ namespace DevRelief {
 
             m_httpServer->begin();
             
-            auto found = false;// m_fileSystem->read("/lastscene",fileBuffer);
+            found = false;// m_fileSystem->read("/lastscene",fileBuffer);
             if (found) {
                 m_logger->info("load last scenne %s",fileBuffer.text());
                 loadScene(fileBuffer.text());

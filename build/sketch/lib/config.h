@@ -44,6 +44,33 @@ namespace DevRelief {
                 return true;
             }
 
+            void write(Generator& gen) {
+                gen.startObject();
+                gen.writeNameValue("name",name);
+                gen.writeNameValue("addr",addr);
+                gen.writeNameValue("stripCount",stripCount);
+                gen.writeNameValue("brightness",brightness);
+
+                gen.writeName("strips");
+                gen.startProperty();
+                gen.startArray();
+                for(int i=0;i<stripCount;i++) {
+                    gen.startProperty();
+                    gen.startObject();
+                    gen.writeNameValue("pin",stripPins[i]);
+                    gen.writeNameValue("pin",stripLeds[i]);
+                    gen.endObject();
+                    gen.endProperty();
+                }
+                gen.endArray();
+                gen.endProperty();
+                gen.endObject();
+            }
+
+            void setAddr(const char * ip){
+                strcpy(addr,ip);
+            }
+
             char     name[100];
             char     addr[32];
             size_t stripCount;
