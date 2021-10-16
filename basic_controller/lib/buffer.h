@@ -15,7 +15,7 @@ public:
         m_maxLength = 0;
         m_length = length;
         reserve(m_length);
-        m_logger = new Logger("DRBuffer",100);
+        m_logger = new Logger("DRBuffer",80);
     }
     uint8_t* data() {
         m_logger->debug("return data.  length=%d, maxLength=%d",m_length,m_maxLength);

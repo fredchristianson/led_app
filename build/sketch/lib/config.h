@@ -24,6 +24,7 @@ namespace DevRelief {
                     stripLeds[0] = 0;
                 }
                 brightness = 40;
+                sceneCount = 0;
             }
 
             bool read(ObjectParser parser){
@@ -64,11 +65,45 @@ namespace DevRelief {
                 }
                 gen.endArray();
                 gen.endProperty();
+
+                
+                gen.writeName("scenes");
+                gen.startProperty();
+                gen.startArray();
+                auto scene = sceneNames.text();
+                for(int i=0;i< sceneCount;i++) {
+                    gen.writeArrayValue(scene);
+                    scene += strlen(scene)+1;
+                }
+                gen.endArray();
+                gen.endProperty();
+
+
                 gen.endObject();
             }
 
             void setAddr(const char * ip){
                 strcpy(addr,ip);
+            }
+
+            void setScenes(String* scenes, int count) {
+                int pos = 0;
+                uint8_t* data = sceneNames.reserve(count*20); // estimate 20 chars per name.  may be extended
+                sceneCount = count;
+                for(int i=0;i<count;i++) {
+                    auto name = scenes[i].c_str();
+                    m_logger->debug("add scene: %s",name);
+                    auto len = strlen(name);
+                    data = sceneNames.reserve(pos+len+1);
+                    memcpy(data+pos,name,len);
+                    pos += len;
+                    data[pos] = 0;
+                    pos += 1;
+                    sceneNames.setLength(pos);
+                }
+                data[pos] = 0;
+               // m_logger->debug("scene names: %s",data);
+               // m_logger->debug("scene names: %s",sceneNames.text());
             }
 
             char     name[100];
@@ -77,6 +112,8 @@ namespace DevRelief {
             int  stripPins[4];
             int  stripLeds[4];
             int  brightness;
+            int sceneCount;
+            DRBuffer sceneNames;
             Logger * m_logger;
     };
 }

@@ -5,7 +5,7 @@
 #include "./buffer.h";
 
 namespace DevRelief {
-Logger* genLogger = new Logger("Gen",100);
+Logger* genLogger = new Logger("Gen",80);
 Logger* parserLogger = new Logger("Parse",60);
 
 class ParseGen {
@@ -78,12 +78,21 @@ public:
         write(name);
         write("\": ");
     }
+
+    void writeArrayValue(const char * val) {
+        write("\"",true);
+        write(val);
+        write("\", ");
+    }
+
     void writeNameValue(const char * name,const char* string) {
         writeName(name);
+        write("\"");
         write(string);
-        write(",\n");
+        write("\",\n");
         m_logger->debug("add name/str: %s:%s : %.500s",name,string,m_buf->text());
     }
+
 
 
     void writeNameValue(const char * name,int val) {

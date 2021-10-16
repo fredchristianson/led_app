@@ -51,11 +51,19 @@ namespace DevRelief {
                
                 char * result = (char*)fileBuffer.reserve(2000);
                 Generator gen(&fileBuffer);
-                m_logger->debug("update wifi");
                 m_config.setAddr(WiFi.localIP().toString().c_str());
-                m_logger->debug("updated wifi %.15s",m_config.addr);
+                
+                int max = 20;
+                String scenes[max];
+                int sceneCount = m_fileSystem->listFiles("/scene",scenes,max);
+                //m_config.setScenes(scenes,sceneCount);
+                scenes[0] = "first";
+                scenes[1] = "second";
+                scenes[2] = "a longer scene name";
+                scenes[3] = "another scene";
+                scenes[4] = "last";
+                m_config.setScenes(scenes,5);
                 m_config.write(gen);
-                m_logger->debug("generated config %.500s",fileBuffer.text());
                 resp->send(200,"text/json",fileBuffer.text());
                 /*auto found = m_fileSystem->read("/config",fileBuffer);
                 if (found) {
