@@ -15,7 +15,17 @@ public:
         m_maxLength = 0;
         m_length = length;
         reserve(m_length);
-        m_logger = new Logger("DRBuffer",80);
+        m_logger = new Logger("DRBuffer",60);
+    }
+
+    ~DRBuffer() {
+        m_logger->error("delete DRBuffer");
+        if (m_data) {
+            m_logger->error("delete DRBuffer data");
+            if (m_data != NULL){
+                free(m_data);
+            }
+        }
     }
     uint8_t* data() {
         m_logger->debug("return data.  length=%d, maxLength=%d",m_length,m_maxLength);
@@ -35,7 +45,7 @@ public:
                 length = 128; // don't allocate small chunks
             }
             m_logger->info("increase buffer length. old length=%d, new length=%d",m_maxLength,length);
-            auto newData = new uint8_t[length+1];
+            uint8_t* newData = (uint8_t*)malloc(length+1);
             m_logger->info("allocated buffer");
             newData[0] = 2;
             m_logger->debug("set first value");
@@ -44,7 +54,7 @@ public:
                 if (length > 0) {
                     memcpy(newData,m_data,length);
                 }
-                delete m_data;
+                free(m_data);
 
             }
             m_data = newData;

@@ -9,7 +9,7 @@ namespace DevRelief {
     const char * DEFAULT_CONFIG = R"config({ 
         "name": "Test Controller",
         "addr": "unset",
-        "scenes": [],
+        "scripts": [],
         "strips": [],
         "brightness": 40
     })config";
@@ -24,7 +24,7 @@ namespace DevRelief {
                     stripLeds[0] = 0;
                 }
                 brightness = 40;
-                sceneCount = 0;
+                scriptCount = 0;
             }
 
             bool read(ObjectParser parser){
@@ -38,6 +38,7 @@ namespace DevRelief {
                 while(stripArray.nextObject(&obj)){
                     obj.readIntValue("pin",&stripPins[stripCount]);
                     obj.readIntValue("leds",&stripLeds[stripCount]);
+                    obj.readBoolValue("reverse",&stripReverse[stripCount],false);
                     stripCount++;
                 }
                 parser.readIntValue("brightness",&brightness);
@@ -49,7 +50,7 @@ namespace DevRelief {
                 gen.startObject();
                 gen.writeNameValue("name",name);
                 gen.writeNameValue("addr",addr);
-                gen.writeNameValue("stripCount",stripCount);
+                gen.writeNameValue("stripCount",(int)stripCount);
                 gen.writeNameValue("brightness",brightness);
 
                 gen.writeName("strips");
@@ -59,7 +60,8 @@ namespace DevRelief {
                     gen.startProperty();
                     gen.startObject();
                     gen.writeNameValue("pin",stripPins[i]);
-                    gen.writeNameValue("pin",stripLeds[i]);
+                    gen.writeNameValue("leds",stripLeds[i]);
+                    gen.writeNameValue("reverse",stripReverse[i]);
                     gen.endObject();
                     gen.endProperty();
                 }
@@ -67,13 +69,13 @@ namespace DevRelief {
                 gen.endProperty();
 
                 
-                gen.writeName("scenes");
+                gen.writeName("scripts");
                 gen.startProperty();
                 gen.startArray();
-                auto scene = sceneNames.text();
-                for(int i=0;i< sceneCount;i++) {
-                    gen.writeArrayValue(scene);
-                    scene += strlen(scene)+1;
+                auto script = scriptNames.text();
+                for(int i=0;i< scriptCount;i++) {
+                    gen.writeArrayValue(script);
+                    script += strlen(script)+1;
                 }
                 gen.endArray();
                 gen.endProperty();
@@ -86,34 +88,39 @@ namespace DevRelief {
                 strcpy(addr,ip);
             }
 
-            void setScenes(String* scenes, int count) {
+            void setScripts(String* scripts, int count) {
                 int pos = 0;
-                uint8_t* data = sceneNames.reserve(count*20); // estimate 20 chars per name.  may be extended
-                sceneCount = count;
+                uint8_t* data = scriptNames.reserve(count*20); // estimate 20 chars per name.  may be extended
+                scriptCount = count;
                 for(int i=0;i<count;i++) {
-                    auto name = scenes[i].c_str();
-                    m_logger->debug("add scene: %s",name);
+                    auto name = scripts[i].c_str();
+                    m_logger->debug("add script: %s",name);
                     auto len = strlen(name);
-                    data = sceneNames.reserve(pos+len+1);
+                    data = scriptNames.reserve(pos+len+1);
                     memcpy(data+pos,name,len);
                     pos += len;
                     data[pos] = 0;
                     pos += 1;
-                    sceneNames.setLength(pos);
+                    scriptNames.setLength(pos);
                 }
                 data[pos] = 0;
-               // m_logger->debug("scene names: %s",data);
-               // m_logger->debug("scene names: %s",sceneNames.text());
+               // m_logger->debug("script names: %s",data);
+               // m_logger->debug("script names: %s",scriptNames.text());
             }
 
+            size_t getStripCount() { return stripCount;}
+            int getPin(size_t idx) { return stripPins[idx];}
+            int getLedCount(size_t idx) { return stripLeds[idx];}
+            bool isReversed(size_t idx) { return stripReverse[idx];}
             char     name[100];
             char     addr[32];
             size_t stripCount;
             int  stripPins[4];
             int  stripLeds[4];
+            bool stripReverse[4];
             int  brightness;
-            int sceneCount;
-            DRBuffer sceneNames;
+            int scriptCount;
+            DRBuffer scriptNames;
             Logger * m_logger;
     };
 }

@@ -16,167 +16,386 @@
 
 
 #include "./logger.h"
+#include "./color.h"
 
 namespace DevRelief {
-    #define MAX_LEDS 300
 
-    class CRGB {
-        public: 
-            CRGB() {
-                red = 0;
-                green = 0;
-                blue = 0;
-            }
-            
-            CRGB(uint8_t r,uint8_t g,uint8_t b) {
-                red = r;
-                green = g;
-                blue = b;
-            }
+Logger* ledLogger = new Logger("LED",100);
 
-        public:
-            uint8_t red;
-            uint8_t green;
-            uint8_t blue;
-            
-    };
 
-    class CHSL {
-        public: 
-            CHSL() {
-                hue = 0;
-                saturation = 0;
-                lightness = 0;
-            }
-            
-            CHSL(uint16_t hue,uint16_t saturation,uint16_t lightness) {
-                this->hue = hue;
-                this->saturation = saturation;
-                this->lightness = lightness;
-            }
-
-        public:
-            uint16_t hue;  // 0-360
-            uint16_t saturation; // 0-100
-            uint16_t lightness;  // 0-100
-            
-    };
-
-    class DRLedStrip {
+class DRLedStrip {
     public:
         DRLedStrip() {
-            m_logger = new Logger("DRLedStrip",80);
-            m_logger->debug("DRLedStrip create");
+            m_logger = ledLogger;
+        }
+
+        virtual ~DRLedStrip() {
+
+        }
+
+        virtual void clear() =0;
+        virtual void setBrightness(uint16_t brightness)=0;
+        virtual void setColor(uint16_t index,const CRGB& color)=0;
+        virtual size_t getCount()=0;
+        virtual void show()=0;
+
+        virtual void setColor(uint16_t index, CHSL& color) {
+            return setColor(index,color.toRGB());
+        }
+
+    protected:
+        Logger* m_logger;
+};
+
+class AdafruitLedStrip : public DRLedStrip {
+    public: 
+        AdafruitLedStrip(int pin, uint16_t ledCount){
+            m_logger = new Logger("AdafruitLED",80);
+            m_logger->debug("create AdafruitLedStrip %d %d",pin,ledCount);
+            m_controller = new Adafruit_NeoPixel(ledCount,pin,NEO_GRB+NEO_KHZ800);
+            m_controller->setBrightness(40);
+            m_controller->begin();
+        }
+
+        ~AdafruitLedStrip() {
+            m_logger->debug("delete AdafruitLedStrip");
+            delete m_controller;
+        }
+
+        virtual void clear() {
+            m_logger->debug("clear AdafruitLedStrip");
+            if (m_controller == NULL) {
+                m_logger->error("NULL controller");
+                return;
+            }
+            m_controller->clear();
+        };
+        virtual void setBrightness(uint16_t brightness) {
+            m_controller->setBrightness(brightness);
+        }
+
+        virtual void setColor(uint16_t index, const CRGB& color){
+            m_controller->setPixelColor(index,m_controller->Color(color.red,color.green,color.blue));
+        }
+
+        virtual size_t getCount() { return m_controller->numPixels();}
+        virtual void show() {
+            m_logger->debug("show strip %d, %d",m_controller->getPin(),m_controller->numPixels());
+            //m_controller->setBrightness(40);
+            //m_controller->setPixelColor(1,m_controller->Color(200,100,50));
+            m_controller->show();
+        }
+    private:
+        Adafruit_NeoPixel * m_controller;
+};
+
+class PhyisicalLedStrip : public AdafruitLedStrip {
+    public:
+        PhyisicalLedStrip(int pin, uint16_t ledCount): AdafruitLedStrip(pin,ledCount) {
+
+        }
+};
+
+class CompoundLedStrip : public DRLedStrip {
+    public:
+        CompoundLedStrip() {
+            strips[0] = NULL;
+            strips[1] = NULL;
+            strips[2] = NULL;
+            strips[3] = NULL;
+            count = 0;
+            m_logger = new Logger("CompoundStrip",80);
+            m_logger->debug("create CompoundLedStrip");
+        }
+
+        ~CompoundLedStrip() {
+            m_logger->debug("delete CompoundLedStrip");
+            for(int i=0;i<count;i++) {
+                m_logger->debug("\tdelete component LedStrip %d",i);
+                delete strips[i];
+            }
+        }
+        void add(DRLedStrip * strip) {
+            if (count < 4) {
+                strips[count++] = strip;
+            } else {
+                m_logger->error("too many strips added to CompoundLedStrip");
+            }
+        }
 
         
-            m_controller1 = getController(STRIP1_PIN,STRIP1_NUMPIXELS);
-            m_controller1->setBrightness(40);  // all strips have same max brightness at the FastLED global level.
-
-            if (STRIP2_PIN >= 0) {
-                m_controller2 = getController(STRIP2_PIN,STRIP2_NUMPIXELS);
-                m_controller2->setBrightness(40);  // all strips have same max brightness at the FastLED global level.
-            } else {
-                m_controller2 = NULL;
-            }
-            if (STRIP3_PIN >= 0) {
-                m_controller3 = getController(STRIP3_PIN,STRIP3_NUMPIXELS);
-                m_controller3->setBrightness(40);  // all strips have same max brightness at the FastLED global level.
-            } else {
-                m_controller3 = NULL;
-            }
-            if (STRIP4_PIN >= 0) {
-                m_controller4 = getController(STRIP4_PIN,STRIP4_NUMPIXELS);
-                m_controller4->setBrightness(40);  // all strips have same max brightness at the FastLED global level.
-            } else {
-                m_controller4 = NULL;
-            }            
-        }
-
-        void setBrightness(int value) {
-            m_controller1->setBrightness(value);
-            if (m_controller2 != NULL) {
-                m_controller2->setBrightness(value);
-            }
-        }
-
-        Adafruit_NeoPixel *  getController(int pin,int count) {
-            m_logger->info("Create strip on pin %d  with %d LEDS of type  GRB",pin,count);
-            auto neopixel = new Adafruit_NeoPixel(count,pin,NEO_GRB+NEO_KHZ800);
-            neopixel->begin();
-            return neopixel;
-        }
-        
-        void clearController(Adafruit_NeoPixel * controller){
-            if (controller != NULL) {
-                controller->clear();
-            }
-        }
-
         void clear() {
-            m_logger->debug("clear strip");
-            clearController(m_controller1);
-            clearController(m_controller2);
-            clearController(m_controller3);
-            clearController(m_controller4);
-        }
-
-        void setColor(uint16_t index,CRGB color) {
-            if (index<4) {
-                //m_logger->debug("setColor %d,(%d,%d,%d)",(int)index,(int)color.red,(int)color.green,(int)color.blue);
-            }
-            if (index == 0) {
-                m_controller1->setPixelColor(index,m_controller1->Color(0,0,0));
-            } else {
-                if (index < STRIP1_NUMPIXELS) {
-                    m_controller1->setPixelColor(index,m_controller1->Color(color.red,color.green,color.blue));
-                } else if (index < (STRIP1_NUMPIXELS + STRIP2_NUMPIXELS) && m_controller2 != NULL) {
-                    m_controller2->setPixelColor(index-STRIP1_NUMPIXELS,m_controller2->Color(color.red,color.green,color.blue));
-                }  else if (index < (STRIP1_NUMPIXELS + STRIP2_NUMPIXELS+ STRIP3_NUMPIXELS) && m_controller3 != NULL) {
-                    m_controller3->setPixelColor(index-STRIP1_NUMPIXELS-STRIP2_NUMPIXELS,m_controller3->Color(color.red,color.green,color.blue));
-                }  else if (index < (STRIP1_NUMPIXELS + STRIP2_NUMPIXELS+ STRIP3_NUMPIXELS+STRIP4_NUMPIXELS) && m_controller4 != NULL) {
-                    m_controller4->setPixelColor(index-STRIP1_NUMPIXELS-STRIP2_NUMPIXELS-STRIP3_NUMPIXELS,m_controller3->Color(color.red,color.green,color.blue));
+            m_logger->debug("clear() %d components",count);
+            for(int i=0;i<count;i++) {
+                if (strips[i] == NULL) {
+                    m_logger->error("NULL component script %d",i);
                 } else {
-                    m_logger->error("index too high with no strip 2");
+                    m_logger->debug("clear strip %d",i);
+                    strips[i]->clear();
                 }
             }
+        };
+        virtual void setBrightness(uint16_t brightness) {
+            for(int i=0;i<count;i++) {
+                strips[i]->setBrightness(brightness);
+            }
+        };
 
+        virtual void setColor(uint16_t index,const CRGB& color)  {
+            int strip = 0;
+
+            while(strip < count && index >= strips[strip]->getCount()) {
+                strip++;
+                index -= strips[strip]->getCount();
+            }
+           // if (index == 0) {
+              //  m_logger->debug("set color %d %d %d %d: %d,%d,%d",index,count,strips[strip]->getCount(),strip,color.red,color.green,color.blue);
+            //}
+            if (index<strips[strip]->getCount()){
+                strips[strip]->setColor(index,color);
+            }
+        };
+        virtual size_t getCount() {
+            m_logger->debug("getcount()");
+            size_t ledcount = 0;
+            for(int i=0;i<count;i++) {
+                if (strips[i] == NULL) {
+                    m_logger->error("strip %d is NULL",i);
+                } else {
+                    m_logger->debug("get count strip %d",i);
+                    ledcount += strips[i]->getCount();
+                }
+            }
+            return ledcount;
         }
 
-
-
-        uint16_t getCount() {
-            return STRIP1_NUMPIXELS + STRIP2_NUMPIXELS + STRIP4_NUMPIXELS + STRIP4_NUMPIXELS;
-        }
-
-        void setCount(int count) {
-            m_logger->error("setCount not implemented");
-        }
-
-        void show() {
-           // m_logger->debug("show strip");
-           showController(m_controller1);
-           showController(m_controller2);
-           showController(m_controller3);
-           showController(m_controller4);
-        }
-
-        void showController(Adafruit_NeoPixel*controller) {
-            if (controller != NULL) {
-                controller->show();
-            } 
-
+        virtual void show() {
+            for(int i=0;i<count;i++) {
+                strips[i]->show();
+            }
         }
 
     private:
-        Logger * m_logger;    
+        DRLedStrip* strips[4]; // max of 4 strips;
+        size_t      count;
+};
 
-        Adafruit_NeoPixel * m_controller1;
-        Adafruit_NeoPixel * m_controller2;
-        Adafruit_NeoPixel * m_controller3;
-        Adafruit_NeoPixel * m_controller4;        
-    };
+class AlteredStrip : public DRLedStrip {
+    public:
+        AlteredStrip(DRLedStrip * base) {
+            m_base = base;
+        }   
+
+        ~AlteredStrip() {
+            delete m_base;
+        }
+
+        
+        virtual void clear() {
+            m_base->clear();
+        };
+        virtual void setBrightness(uint16_t brightness) {
+            m_base->setBrightness(brightness);
+        }
+
+        virtual void setColor(uint16_t index, const CRGB& color){
+            m_base->setColor(translateIndex(index),translateColor(color));
+        }
+
+        virtual size_t getCount() { return translateCount(m_base->getCount());}
+        virtual void show() {m_base->show();}
+
+    protected:
+        uint16_t translateIndex(uint16_t index) { return index;}
+        uint16_t translateCount(uint16_t count) { return count;}
+        CRGB translateColor(const CRGB& color) { return color;}
+    
+        DRLedStrip * m_base;
+};
+
+class ReverseStrip: public AlteredStrip {
+    public:
+        ReverseStrip(DRLedStrip* base): AlteredStrip(base) {
+            m_logger->debug("create ReverseStrip");
+        }
+
+        ~ReverseStrip() {
+            m_logger->debug("delete ReverseStrip");
+        }
+
+    protected:
+        uint16_t translateIndex(uint16_t index) { return getCount()-index-1;}
+};
+
+class RotatedStrip: public AlteredStrip {
+    public:
+        RotatedStrip(DRLedStrip* base): AlteredStrip(base) { m_rotationCount = 0;}
+
+    protected:
+        uint16_t translateIndex(int16_t index) { 
+            size_t count =  getCount();
+            return (index + count + m_rotationCount) % count;
+        }
+
+    private: 
+        int16_t m_rotationCount;
+};
+
+enum HSLOperation {  
+    REPLACE=0,
+    ADD=1,
+    SUBTRACT=2,
+    AVERAGE=3,
+    MIN=4,
+    MAX=5
+};
+
+class HSLStrip: public AlteredStrip {
+    public:
+        HSLStrip(DRLedStrip* base): AlteredStrip(base) { 
+            m_count = 0;
+            m_hue = NULL;
+            m_saturation = NULL;
+            m_lightness = NULL;
+            m_logger = new Logger("HSLStrip",100);
+        }
+
+        ~HSLStrip() {
+            realloc(0);
+        }
+
+        void setHue(int index, int16_t hue, HSLOperation op) {
+            if (index<0 || index>=m_count) {
+                m_logger->error("HSL Hue index out of range %d (0-%d)",index,m_count);
+                return;
+            } 
+            if (index == 0) {
+                m_logger->debug("hue %d %d",index,hue);
+            }
+            m_hue[index] = hue;
+            return;
+            m_hue[index] = clamp(0,359,performOperation(op,m_hue[index],hue));
+            if (index == 0) {
+                m_logger->debug("setHue %d %d %d",index,hue,op);
+            }
+        }
+
+        void setSaturation(int index, int16_t saturation, HSLOperation op) {
+            if (index<0 || index>=m_count) {
+                m_logger->error("HSL saturation index out of range %d (0-%d)",index,m_count);
+                return;
+            } 
+            m_saturation[index] = clamp(0,100,performOperation(op,m_saturation[index],saturation));
+        }
+
+        void setLightness(int index, int16_t lightness, HSLOperation op) {
+            if (index<0 || index>=m_count) {
+                m_logger->error("HSL lightness index out of range %d (0-%d)",index,m_count);
+                return;
+            } 
+            m_lightness[index] = clamp(0,100,performOperation(op,m_lightness[index],lightness));
+        }
+
+        void clear() {
+            if (m_base == NULL) {
+                m_logger->warn("HSLStrip does not have a base");
+                return;
+            }
+            m_logger->debug("Clear HSLStrip");
+            int count = m_base->getCount();
+            m_logger->debug("HSLStrip realloc for %d leds",count);
+            realloc(count);
+            m_logger->debug("clear HSL values");
+            memset(m_hue,-1,sizeof(int16_t)*count);
+            memset(m_saturation,-1,sizeof(int8_t)*count);
+            memset(m_lightness,-1,sizeof(int8_t)*count);
+            m_base->clear();
+        }
+
+        void show() {
+            m_logger->debug("show() %d",m_count);
+            for(int idx=0;idx<m_count;idx++) {
+                CHSL hsl(clamp(0,360,m_hue[idx]),defaultValue(0,100,m_saturation[idx],100),defaultValue(0,100,m_lightness[idx],0));
+                if (idx == 0) {
+                    const CRGB rgb = hsl.toRGB();
+                    m_logger->debug("hsl(%d,%d,%d)->RGB(%d,%d,%d)",hsl.hue,hsl.saturation,hsl.lightness,rgb.red,rgb.green,rgb.blue);
+                }
+                m_base->setColor(idx,hsl);
+            }
+            m_base->show();
+        }
+
+    protected:
+        void realloc(int count) {
+            if ((count == 0 || count > m_count) && m_hue != NULL) {
+                m_logger->debug("HSLStrip free %d %d",count,m_count);
+                free(m_hue);
+                free(m_saturation);
+                free(m_lightness);
+                m_hue = NULL;
+                m_saturation = NULL;
+                m_lightness = NULL;
+            }
+            if (count > 0 && m_hue == NULL) {
+                m_logger->debug("HSLStrip malloc %d ",count);
+                m_hue = (int16_t*) malloc(sizeof(int16_t)*count);
+                m_saturation = (int8_t*) malloc(sizeof(int8_t)*count);
+                m_lightness = (int8_t*) malloc(sizeof(int8_t)*count);
+                m_count = count;
+            } else {
+                m_logger->debug("no need to malloc members %d",count);
+            }
+        }
+
+        int16_t defaultValue(int min, int max, int val, int def) {
+            if (val < min) {
+                return def;
+            } else if (val > max){
+                return def;
+            }
+            return val;
+        }
+        int16_t clamp(int min, int max, int val) {
+            if (val < min) {
+                return min;
+            } else if (val > max){
+                return max;
+            }
+            return val;
+        }
+        int16_t performOperation(HSLOperation op, int16_t currentValue, int16_t operand)
+        {
+            if (currentValue < 0) {
+                return operand;
+            }
+            switch (op)
+            {
+            case REPLACE:
+                return operand;
+            case ADD:
+                return currentValue + operand;
+            case SUBTRACT:
+                return currentValue - operand;
+            case AVERAGE:
+                return (currentValue + operand)/2;
+            case MIN:
+                return currentValue < operand ? currentValue : operand;
+            case MAX:
+                return currentValue > operand ? currentValue : operand;
+            default:
+                m_logger->error("unknown HSL operation %d",op);
+            }
+            return operand;
+        }
+
+    private:
+        uint16_t m_count;
+        int16_t * m_hue;
+        int8_t  * m_saturation;
+        int8_t  * m_lightness;
+        HSLOperation m_op;
+};
 
 }
-
 
 #endif 

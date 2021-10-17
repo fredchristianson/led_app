@@ -101,7 +101,13 @@ public:
         writeName(name);
         write(strval);
         write(",\n");
-        m_logger->debug("add name/int: %.500s",m_buf->text());
+    }
+
+    
+    void writeNameValue(const char * name,bool val) {
+        writeName(name);
+        write(val ? "true":"false");
+        write(",\n");
     }
 
     void write(const char * data,bool indent=false) {
@@ -135,7 +141,18 @@ public:
         m_end = data ? strlen(data) : 0;
         m_pos = 0;
 
-    }     
+    }    
+
+    virtual bool readAll(DRBuffer& buf){
+        if (m_start<0) {
+            return false;
+        }
+        char * data = (char*)buf.reserve(m_end-m_start+1);
+        memcpy(data,m_data,m_end-m_start);
+        data[m_end-m_start] = 0;
+        buf.setLength(m_end-m_start+1);
+        return true;
+    } 
     
     virtual bool readIntValue(const char *name,int * value){
         m_logger->debug("read int %s",name);
@@ -148,7 +165,22 @@ public:
         }
         return false;
     }
-    virtual bool readStringValue(const char *name,char * value) {
+
+        
+    virtual bool readBoolValue(const char *name,bool * value, bool defaultValue=false){
+        m_logger->debug("read bool %s",name);
+        int16_t found = skipName(name);
+        if (found >= 0) {
+            int16_t pos = skipChars(": \t\n\r",found);
+            (*value) = strncmp(m_data+pos,"true",4)==0;
+            m_logger->debug("\tgot int: %d from %.15s",*value,m_data+pos);
+            return true;
+        }
+        *value = defaultValue;
+        return false;
+    }
+
+    virtual bool readStringValue(const char *name,char * value, int maxLen=-1) {
         int16_t found = skipName(name);
         if (found >= 0) {
             int16_t start = skipTo('"',found);
@@ -156,7 +188,11 @@ public:
             if (start > 0 && start < end && start < m_end && end < m_end) {
                 start++;
                 if (end < m_end) {
-                    memcpy(value,m_data+start,start-end);
+                    int len = start-end;
+                    if (maxLen>0 && len>=maxLen-1) {
+                        len = maxLen-1;
+                    }
+                    memcpy(value,m_data+start,len);
                     *(value+end-start)= 0;
                     m_logger->debug("read string: %s",value);
                     return true;

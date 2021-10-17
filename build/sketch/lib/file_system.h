@@ -17,6 +17,9 @@ public:
     const char * concatTemp(const char *a,const char *b=NULL,const char *c=NULL) {
         strcpy(tempPath,a);
         if (b) {
+            if (!endsWith(tempPath,"/") && b[0]!= '/') {
+                strcat(tempPath,"/");
+            }
             strcat(tempPath,b);
         }
         if (c) {
@@ -24,6 +27,18 @@ public:
         }
         return tempPath;
     };
+
+    bool endsWith(const char * path,const char * end) {
+        if (path == NULL || end == NULL) {
+            return false;
+        }
+        size_t plen = strlen(path);
+        size_t elen = strlen(end);
+        if (elen > plen) {
+            return false;
+        }
+        return strcmp(path+plen-elen,end)==0;
+    }
 };
 
 class DRFileBuffer :  public DRBuffer {

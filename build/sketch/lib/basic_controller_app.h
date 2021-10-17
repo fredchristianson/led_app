@@ -26,7 +26,6 @@ namespace DevRelief {
    
         BasicControllerApplication() {
             m_logger = new Logger("BasicControllerApplication",100);
-            m_currentScript = NULL;
             m_httpServer = new HttpServer();
             m_fileSystem = new DRFileSystem();
 
@@ -37,6 +36,7 @@ namespace DevRelief {
             } else {
                 m_config.read(DEFAULT_CONFIG);
             }
+            m_executor.setConfig(m_config);
 
             m_httpServer->route("/",[this](Request* req, Response* resp){
                 this->getPage("index",req,resp);
@@ -48,46 +48,22 @@ namespace DevRelief {
 
 
             m_httpServer->routeBracesGet( "/api/config",[this](Request* req, Response* resp){
-               
+                m_logger->debug("get /api/config");
                 char * result = (char*)fileBuffer.reserve(2000);
                 Generator gen(&fileBuffer);
                 m_config.setAddr(WiFi.localIP().toString().c_str());
+                m_logger->debug("IP addr is set");
                 
                 int max = 20;
-                String scenes[max];
-                int sceneCount = m_fileSystem->listFiles("/scene",scenes,max);
-                //m_config.setScenes(scenes,sceneCount);
-                scenes[0] = "first";
-                scenes[1] = "second";
-                scenes[2] = "a longer scene name";
-                scenes[3] = "another scene";
-                scenes[4] = "last";
-                m_config.setScenes(scenes,5);
+                String scripts[max];
+                int scriptCount = m_fileSystem->listFiles("/script",scripts,max);
+                m_logger->debug("got script list");
+                m_config.setScripts(scripts,scriptCount);
+                m_logger->debug("set script list");
                 m_config.write(gen);
+                m_logger->debug("wrote config");
                 resp->send(200,"text/json",fileBuffer.text());
-                /*auto found = m_fileSystem->read("/config",fileBuffer);
-                if (found) {
-                    resp->send(200,"text/json",fileBuffer.text());
-                } else {
-                    resp->send(200,"text/json",DEFAULT_CONFIG);
-                }
-                */
-                /*
-                int max = 20;
-                String scenes[max];
-                int fileCount = m_fileSystem->listFiles("/",scenes,max);
-                int sceneCount = m_fileSystem->listFiles("/scene",scenes,max);
-                String sceneNames="";
-                for(int i=0;i<sceneCount;i++) {
-                    if (i>0) {
-                        sceneNames += ",";
-                    }
-                    sceneNames += "\""+scenes[i]+"\"";
-                }
-                sprintf(result,"{\"led_count\": %d,\"hostname\": \"%s\",\"ip_addr\": \"%s\", \"scenes\": [%s]}",LED_COUNT,HOSTNAME,WiFi.localIP().toString().c_str(),sceneNames.c_str());
-                resp->send(200,"text/json",result);
-                //this->apiRequest(req->pathArg(0),req,resp);
-                    */
+ 
             });
 
 
@@ -96,14 +72,20 @@ namespace DevRelief {
                 auto body = req->arg("plain").c_str();
                 ObjectParser parser(body);
                 m_config.read(parser);
+                m_executor.setConfig(m_config);
                 m_logger->debug("read config name %.15s",m_config.name);
                 m_fileSystem->write("/config",body);
-                resp->send(200,"text/plain","posted /api/scene/config");
+                resp->send(200,"text/plain","posted /api/config");
                 //this->apiRequest(req->pathArg(0),req,resp);
             });
 
-            m_httpServer->routeBracesGet( "/api/scene/{}",[this](Request* req, Response* resp){
-/*            
+            m_httpServer->routeBracesGet( "/api/script/{}",[this](Request* req, Response* resp){
+                if (m_fileSystem->read(path.concatTemp("/script/",req->pathArg(0).c_str()),fileBuffer)){
+                    resp->send(200,"text/plain",fileBuffer.text());
+                } else {
+                    resp->send(404,"text/plain","script not found");
+                }
+    /*            } 
 
                 const char * sceneName = req->pathArg(0).c_str();
                 auto body = req->arg("plain");
@@ -120,18 +102,22 @@ namespace DevRelief {
                     resp->send(404,"text/plain",err);
                 }
                 */
-                this->apiRequest(req->pathArg(0).c_str(),req,resp);
+                //this->apiRequest(req->pathArg(0).c_str(),req,resp);
             });
 
 
-            m_httpServer->routeBracesPost( "/api/scene/{}",[this](Request* req, Response* resp){
+            m_httpServer->routeBracesPost( "/api/script/{}",[this](Request* req, Response* resp){
                 //m_logger->debug("post scene %s", req->pathArg(0).c_str());
-                const char * sceneName = req->pathArg(0).c_str();
+                const char * script = req->pathArg(0).c_str();
                 const char * body = req->arg("plain").c_str();
                 //m_logger->debug("commands: %s", body.c_str());
-                m_fileSystem->write(path.concatTemp("/scene/",sceneName),body);
-                loadScene(sceneName);
-                resp->send(200,"text/plain",body);
+                m_fileSystem->write(path.concatTemp("/script/",script),body);
+                ObjectParser parser(body);
+                m_currentScript.read(parser);
+                m_executor.setScript(&m_currentScript);
+                m_logger->debug("read script name %.15s",m_currentScript.name);
+                resp->send(200,"text/plain",path.concatTemp("posted /api/script/",script));
+
             });
 
 
@@ -157,17 +143,14 @@ namespace DevRelief {
                 m_logger->debug("no default scene found");
             }
 
-            m_logger->debug("Running BasicControllerApplication configured: v0.7");
+            m_logger->debug("Running BasicControllerApplication configured: v1.0.0");
 
         }
 
         
         void loop() {
             m_httpServer->handleClient();
-
-            if (this->m_currentScript == NULL) {
-                return;
-            }
+            m_executor.step();
             
         }
 
@@ -291,8 +274,9 @@ namespace DevRelief {
         DRFileSystem * m_fileSystem;
         DRPath path;
         HttpServer * m_httpServer;
-        Script * m_currentScript;
-       Config m_config;
+        Script m_currentScript;
+        Config m_config;
+        ScriptExecutor m_executor;
     };
 
 }
