@@ -19,9 +19,8 @@ public:
     }
 
     ~DRBuffer() {
-        m_logger->error("delete DRBuffer");
         if (m_data) {
-            m_logger->error("delete DRBuffer data");
+            m_logger->info("delete DRBuffer data");
             if (m_data != NULL){
                 free(m_data);
             }

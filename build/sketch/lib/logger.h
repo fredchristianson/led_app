@@ -4,6 +4,7 @@
 #include <cstdarg>
 #include <stdio.h>
 #include <time.h>
+extern EspClass ESP;
 
 bool serialInitilized = false;
 void initializeWriter() {
@@ -29,6 +30,7 @@ public:
         m_level = level;
     }
 
+    void setLevel(int l) { m_level = l;}
     bool isDebug() { return m_level==100;}
     void restart() {
         this->info("restarting serial");
@@ -105,6 +107,12 @@ public:
         write(20,message,args);
     }
 
+    void write(const char * message,...) {
+        va_list args;
+        va_start(args,message);
+        write(0,message,args);
+    }
+
     const char * getLevelName(int level) {
         if (level > 80) {
             return "DEBUG";
@@ -116,6 +124,11 @@ public:
         }
         return "ERROR";
         
+    }
+
+    void showMemory() {
+        write("Memory: stack=%d,  heap=%d",ESP.getFreeContStack(),ESP.getFreeHeap());
+
     }
 
 private:

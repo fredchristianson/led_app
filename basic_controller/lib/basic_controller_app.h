@@ -15,10 +15,8 @@ extern EspClass ESP;
 
 
 namespace DevRelief {
- 
+    char loadScriptOnLoop[20];
     DRFileBuffer fileBuffer;
-
-
 
     class BasicControllerApplication : public Application {
     public: 
@@ -26,6 +24,8 @@ namespace DevRelief {
    
         BasicControllerApplication() {
             m_logger = new Logger("BasicControllerApplication",100);
+            loadScriptOnLoop[0] =0;
+            m_logger->showMemory();
             m_httpServer = new HttpServer();
             m_fileSystem = new DRFileSystem();
 
@@ -95,9 +95,10 @@ namespace DevRelief {
                 const char * body = req->arg("plain").c_str();
                 //m_logger->debug("commands: %s", body.c_str());
                 m_fileSystem->write(path.concatTemp("/script/",script),body);
-                ObjectParser parser(body);
-                m_currentScript.read(parser);
-                m_executor.setScript(&m_currentScript);
+                strcpy(loadScriptOnLoop,script);
+                //ObjectParser parser(body);
+                //m_currentScript.read(parser);
+                //m_executor.setScript(&m_currentScript);
                 m_logger->debug("read script name %.15s",m_currentScript.name);
                 resp->send(200,"text/plain",path.concatTemp("posted /api/script/",script));
 
@@ -105,9 +106,9 @@ namespace DevRelief {
 
             m_httpServer->routeBracesGet( "/api/run/{}",[this](Request* req, Response* resp){
                 if (m_fileSystem->read(path.concatTemp("/script/",req->pathArg(0).c_str()),fileBuffer)){
-                    ObjectParser parser(fileBuffer.text());
-                    m_currentScript.read(parser);
-                    m_executor.setScript(&m_currentScript);
+                    strcpy(loadScriptOnLoop,req->pathArg(0).c_str());
+
+
                     resp->send(200,"text/plain",fileBuffer.text());
                 } else {
                     resp->send(404,"text/plain","script not found");
@@ -144,8 +145,18 @@ namespace DevRelief {
 
         
         void loop() {
-            m_httpServer->handleClient();
-            m_executor.step();
+            if (loadScriptOnLoop[0] != 0) {
+                m_logger->info("Loading script %s",loadScriptOnLoop);
+                if (m_fileSystem->read(path.concatTemp("/script/",loadScriptOnLoop),fileBuffer)){
+                   ObjectParser parser(fileBuffer.text());
+                    m_currentScript.read(parser);
+                    m_executor.setScript(&m_currentScript);
+                }
+                loadScriptOnLoop[0] = 0;
+            } else {
+                m_httpServer->handleClient();
+                m_executor.step();
+            }
             
         }
 

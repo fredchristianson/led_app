@@ -7,6 +7,52 @@
 namespace DevRelief {
 Logger* genLogger = new Logger("Gen",80);
 Logger* parserLogger = new Logger("Parse",60);
+char skipBuf[100];
+char intValBuff[32];
+
+enum ValueType {
+    UNKNOWN=999,
+    INTEGER=0,
+    FLOAT=1,
+    STRING=2,
+    BOOLEAN=3,
+    VARIABLE=4
+};
+#define PARSER_VALUE_MAX_LEN 20
+class ParserValue {
+    public:
+        ParserValue() {
+            type = UNKNOWN;
+
+        }
+
+        bool isInt() {
+            return type == INTEGER;
+        }
+
+        bool isFloat() {
+            return type == FLOAT;
+        }
+
+        bool isString() {
+            return type == STRING;
+        }
+        bool isBoolean() {
+            return type == BOOLEAN;
+        }
+        bool isVariable() {
+            return type == VARIABLE;
+        }
+
+        ValueType type;
+        union{
+            int intValue;
+            double floatValue;
+            bool boolValue;
+            char stringValue[PARSER_VALUE_MAX_LEN];
+            char nameValue[PARSER_VALUE_MAX_LEN];
+        };
+};
 
 class ParseGen {
 
@@ -96,10 +142,9 @@ public:
 
 
     void writeNameValue(const char * name,int val) {
-        char strval[32];
-        sprintf(strval,"%d",val);
+        sprintf(intValBuff,"%d",val);
         writeName(name);
-        write(strval);
+        write(intValBuff);
         write(",\n");
     }
 
@@ -138,25 +183,20 @@ public:
 
         m_data = data;
         m_start = 0;
-        m_end = data ? strlen(data) : 0;
+        m_end = data ? strlen(data)-1 : 0;
         m_pos = 0;
 
     }    
 
     virtual bool readAll(DRBuffer& buf){
-        Logger logger("read all");
         if (m_start<0) {
             return false;
         }
         int len = m_end-m_start+1;
-        logger.debug("readAll len=%d",len);
-        char * data = (char*)buf.reserve(m_end-m_start+1);
-        memcpy(data,m_data+m_start,m_end-m_start);
-        data[m_end-m_start] = 0;
-        logger.debug("data %s",data);
-        logger.debug("orig data %.*s",len,m_data);
-
-        buf.setLength(m_end-m_start+1);
+        char * data = (char*)buf.reserve(m_end-m_start+2);
+        memcpy(data,m_data+m_start,m_end-m_start+1);
+        data[m_end-m_start+1] = 0;
+        buf.setLength(m_end-m_start+2);
         return true;
     } 
     
@@ -173,6 +213,76 @@ public:
     }
 
         
+    virtual bool readValue(const char *name,ParserValue& val){
+        m_logger->setLevel(80);
+        m_logger->info("read ParserValue %s",name);
+        val.type = UNKNOWN;
+        int16_t found = skipName(name);
+
+        if (found >= 0) {
+            int16_t pos = skipChars(": \t\n\r",found);
+            if (pos > m_end) {
+                return false;
+            }
+            char ch = m_data[pos];
+            if (ch == '"'){
+                int16_t end = skipTo('"',pos+1);
+                if (end == -1) {
+                    return false;
+                }
+                pos += 1; // skip quote
+                int len = end-pos;
+                if (strncmp(m_data+pos,"var(",4)==0){
+                    val.type = VARIABLE;
+                    len -= 5;
+                    if (len>PARSER_VALUE_MAX_LEN) {
+                        m_logger->error("ParserValue variable name too long");
+                        len = PARSER_VALUE_MAX_LEN;
+                    }
+                    memcpy(val.nameValue,m_data+pos+4,len);
+                    val.nameValue[len]=0;
+                    m_logger->info("got VARIABLE type %d %d %.50s",pos,end,val.nameValue);
+                }else {
+                    val.type = STRING;
+                    if (len>PARSER_VALUE_MAX_LEN) {
+                        m_logger->error("ParserValue string too long");
+                        len = PARSER_VALUE_MAX_LEN;
+                    }
+                    memcpy(val.stringValue,m_data+pos,len);
+                    val.stringValue[len]=0;
+                    m_logger->info("got VARIABLE type %d %d %.50s",pos,end,val.stringValue);
+                }
+                return true;
+            }
+            if (ch>='0' && ch <='9'){
+                val.type = INTEGER;
+                for(int p=pos;p<10 && m_data[p]>='0' && m_data[p]<='9';p++) {
+                    if (m_data[p] == '.'){
+                        val.type = FLOAT;
+                    }
+                }
+                val.floatValue = atof(m_data+pos);
+                val.intValue = round(val.floatValue);
+                if (val.intValue != val.floatValue) {
+                    val.type = FLOAT;
+                }
+                m_logger->info("got NUMBER type %d %d %.50s",val.intValue,pos,m_data+pos);
+                return true;
+            }
+            if (strncmp(m_data+pos,"true",4)==0){
+                val.type = BOOLEAN;
+                val.boolValue = true;
+                return true;
+            }
+            if (strncmp(m_data+pos,"false",5)==0){
+                val.type = BOOLEAN;
+                val.boolValue = false;
+                return true;
+            }
+        }
+        return false;
+    }
+
     virtual bool readBoolValue(const char *name,bool * value, bool defaultValue=false){
         m_logger->debug("read bool %s",name);
         int16_t found = skipName(name);
@@ -191,10 +301,10 @@ public:
         if (found >= 0) {
             int16_t start = skipTo('"',found);
             int16_t end = skipTo('"',start+1);
-            if (start > 0 && start < end && start < m_end && end < m_end) {
+            if (start > 0 && start < end && start <= m_end && end <= m_end) {
                 start++;
-                if (end < m_end) {
-                    int len = start-end;
+                if (end <= m_end) {
+                    int len = end-start;
                     if (maxLen>0 && len>=maxLen-1) {
                         len = maxLen-1;
                     }
@@ -236,7 +346,7 @@ public:
 
     int16_t skipChars(const char * chars, int16_t start=0){
         int16_t pos = start;
-        while(pos >= 0 && pos < m_end && strchr(chars,m_data[pos]) != NULL) {
+        while(pos >= 0 && pos <= m_end && strchr(chars,m_data[pos]) != NULL) {
             pos += 1;
         }
         return pos;
@@ -252,11 +362,11 @@ public:
 
     int16_t skipTo(char ch,int16_t start=0){
         m_logger->debug("skipTo %c.  %d-%d.  %.20s",ch,start,m_end,m_data+start);
-        if (start <0 || start >= m_end) {
+        if (start <0 || start > m_end) {
             return -1;
         }
         int16_t pos = start;
-        while(pos >=0 && pos < m_end && m_data[pos] != ch){
+        while(pos >=0 && pos <= m_end && m_data[pos] != ch){
             m_logger->debug(" %c at %.5s",ch, m_data+pos);
             if (m_data[pos] != ch){
                 if (m_data[pos] == '\\'){
@@ -286,21 +396,20 @@ public:
     }
 
     int16_t skipName(const char * name,int16_t start=0){
-        char find[100];
-        snprintf(find,100,"\"%s\"",name);
-        int16_t pos = search(find,start);
+        snprintf(skipBuf,100,"\"%s\"",name);
+        int16_t pos = search(skipBuf,start);
         if (pos > 0) {
-            pos += strlen(find);
+            pos += strlen(skipBuf);
         }
         return pos;
     }
 
     int16_t search(const char * what,int16_t from) {
         int16_t len = strlen(what);
-        while(from < m_end && memcmp(what,m_data+from,len)!= 0) {
+        while(from <= m_end && memcmp(what,m_data+from,len)!= 0) {
             from += 1;
         }
-        if (from < m_end) {
+        if (from <= m_end) {
             return from;
         }
         return -1;
@@ -326,8 +435,8 @@ public:
     }
 
     void trimStart(const char *  ignore) {
-        while(m_start >= 0 && m_start < m_end && strchr(ignore,m_data[m_start]) != NULL){
-            m_logger->error("strim %d '%c'",m_start,m_data[m_start]);
+        while(m_start >= 0 && m_start <= m_end && strchr(ignore,m_data[m_start]) != NULL){
+            m_logger->debug("strim %d '%c'",m_start,m_data[m_start]);
             m_start += 1;
         }
         if (m_pos < m_start) {
@@ -337,11 +446,11 @@ public:
 
 
     void trimEnd(const char *  ignore) {
-        while(m_end > 0 && m_start < m_end && strchr(ignore,m_data[m_end-1]) != NULL){
-            m_logger->error("etrim %d '%c'",m_end,m_data[m_end]);
+        while(m_end > 0 && m_start <= m_end && strchr(ignore,m_data[m_end-1]) != NULL){
+            m_logger->debug("etrim %d '%c'",m_end,m_data[m_end]);
             m_end -= 1;
         }
-        m_logger->error("etrim stopp '%c'",m_data[m_end-1]);
+        m_logger->debug("etrim stopp '%c'",m_data[m_end-1]);
         if (m_pos > m_end) {
             m_pos = m_end;
         }
@@ -375,12 +484,12 @@ public:
 class ArrayParser : public Parser{
 public:
     ArrayParser(const char * data=NULL) : Parser(data) {
-        m_logger = new Logger("ArrayParser",80);
+        m_logger = new Logger("ArrayParser",40);
     }   
 
     bool nextElement(Parser* parser) {
         m_logger->info("next element %.20s",m_data+m_pos);
-        if (m_pos == -1 || m_pos == m_end) {
+        if (m_pos == -1 || m_pos >= m_end) {
             m_logger->info("\tno next element");
             return false;
         }
@@ -389,7 +498,7 @@ public:
         int16_t bracket = skipTo(']',m_pos);
             m_logger->info("%d %d",comma, bracket);
         if (comma >=0 && comma < bracket) {
-            m_logger->info("found comma %d %.20s",comma,m_data+comma-10);
+            m_logger->info("found comma %d ~~~%.40s~~~",comma,m_data+comma-1);
             m_pos = comma-1;
         } else if (bracket > 0) {
             m_logger->info("found bracket %d",comma);
@@ -401,7 +510,7 @@ public:
         m_logger->info("got element %d-%d ~~~%.*s~~~",start,m_pos,m_pos-start,m_data);
         if (m_pos > 0 && m_pos >start && m_pos < m_end) {
             parser->setData(m_data,start,m_pos);
-            m_pos += 1;
+            m_pos += 2;
             return true;
         } else {
             parser->setData(m_data,start,m_pos);
@@ -411,32 +520,17 @@ public:
 
 
     bool nextObject(Parser* parser) {
-        m_logger->info("next object %.20s",m_data+m_pos);
+        m_logger->info("next object %.120s",m_data+m_pos);
         if (nextElement(parser)) {
             m_logger->info("before trim: %d %d %d",parser->getStart(),parser->getEnd(),parser->getPos());
            parser->trim("{} \t\n\r,[]");
            m_logger->info("after trim: %d %d %d",parser->getStart(),parser->getEnd(),parser->getPos());
             return true;
         }
-        m_logger->debug("\t not found");
+        m_logger->info("\t not found");
         
         return false;
-        /*
-        if (m_pos == -1 || m_pos == m_end) {
-            return false;
-        }
-        m_pos = skipTo('{',m_pos);
-        int16_t start = m_pos;
 
-        m_pos = skipTo('}',m_pos+1);
-        if (m_pos > 0 && m_pos >start && m_pos < m_end) {
-            parser->setData(m_data,start,m_pos);
-            m_pos += 1;
-            return true;
-        } else {
-            parser->setData(m_data,start,m_pos);
-        }
-        */
     }
 
     int16_t readInts(int * values,int16_t max=INT_MAX) {

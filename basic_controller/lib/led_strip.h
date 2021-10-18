@@ -257,11 +257,11 @@ class HSLStrip: public AlteredStrip {
             m_hue = NULL;
             m_saturation = NULL;
             m_lightness = NULL;
-            m_logger = new Logger("HSLStrip",100);
+            m_logger = new Logger("HSLStrip",80);
         }
 
         ~HSLStrip() {
-            realloc(0);
+            reallocHSLData(0);
         }
 
         void setHue(int index, int16_t hue, HSLOperation op) {
@@ -304,7 +304,7 @@ class HSLStrip: public AlteredStrip {
             m_logger->debug("Clear HSLStrip");
             int count = m_base->getCount();
             m_logger->debug("HSLStrip realloc for %d leds",count);
-            realloc(count);
+            reallocHSLData(count);
             m_logger->debug("clear HSL values");
             memset(m_hue,-1,sizeof(int16_t)*count);
             memset(m_saturation,-1,sizeof(int8_t)*count);
@@ -326,7 +326,7 @@ class HSLStrip: public AlteredStrip {
         }
 
     protected:
-        void realloc(int count) {
+        void reallocHSLData(int count) {
             if ((count == 0 || count > m_count) && m_hue != NULL) {
                 m_logger->debug("HSLStrip free %d %d",count,m_count);
                 free(m_hue);
