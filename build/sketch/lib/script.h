@@ -104,22 +104,32 @@ namespace DevRelief {
         Command* next;
     };
 
-    class StripCommand : public Command {
+    class VariableCommand : public Command {
     public:
-        static StripCommand * create(ObjectParser& parser) {
-            StripCommand * cmd = new StripCommand();
+        static VariableCommand * create(ObjectParser& parser) {
+            VariableCommand * cmd = new VariableCommand(parser);
             return cmd;
         }
 
-        StripCommand() : Command("strip") {
-
+        VariableCommand(ObjectParser& parser) : Command("variable") {
+            parser.readAll(data);
+            m_logger->debug("read from parser: start=%d end=%d. %s",parser.getStart(),parser.getEnd(),parser.getData());
+            m_logger->debug("read variables: %s",data.text());
+            variableParser.setData((const char *)data.reserve(1),0,data.getLength());
+            int test;
+            if (variableParser.readIntValue("start",&test)) {
+                m_logger->debug("read 'start': %d",test);
+            } else {
+                m_logger->warn("'start' not found");
+            }
         }
 
     protected:
         virtual void doCommand(HSLStrip* strip) {}
 
     private:
-
+        DRBuffer data;
+        ObjectParser variableParser;
     };
 
     
@@ -149,7 +159,7 @@ namespace DevRelief {
                 strcpy(hslOpText,"replace");
             }
             hslOp = getHslOp(hslOpText);
-            m_logger->debug("HSL Operation %d",hslOp);
+            m_logger->debug("HSL Operation %d. pos:%d.  count %d.  value %d-%d",hslOp,m_start,m_count,m_valueStart,m_valueEnd);
         }
 
     protected:
@@ -172,7 +182,9 @@ namespace DevRelief {
         virtual void doCommand(HSLStrip* strip) {
             for(int idx=0;idx<=m_count;idx++){
                 int val = m_valueStart;
-                setHSLComponent(strip,idx,val);
+                int pos = m_start + idx;
+                m_logger->debug("set HSL %d %d",pos,val);
+                setHSLComponent(strip,pos,val);
             }
         }
 
@@ -269,15 +281,19 @@ namespace DevRelief {
                 }
 
                 parser.getArray("commands",commandArray);
-                
+                m_logger->debug("commands: %d %d %d %.50s --- %.50s",commandArray.getStart(),commandArray.getEnd(),commandArray.getPos(),commandArray.getData()+commandArray.getStart(),commandArray.getData()+commandArray.getEnd()-25);
+                    
                 char tmp[50];
                 while(commandArray.nextObject(&obj)){
-                    //obj.readAll(tmp);
-                    //m_logger->debug("command: %s",tmp.text());
+                    m_logger->debug("object: %d %d %d ~~~%.*s~~~",obj.getStart(),obj.getEnd(),obj.getPos(),obj.getEnd()-obj.getStart(),obj.getData()+obj.getStart());
+
+                    DRBuffer tbuf;
+                    obj.readAll(tbuf);
+                    m_logger->debug("command: %s",tbuf.text());
                     obj.readStringValue("type",tmp);
                     Command * cmd = NULL;
-                    if (strcmp(tmp,"strip")==0) {
-                        cmd = StripCommand::create(obj);
+                    if (strcmp(tmp,"variable")==0) {
+                        cmd = VariableCommand::create(obj);
                     } else if (strcmp(tmp,"hsl")==0) {
                         cmd = createHSLCommand(obj);
                     } else {

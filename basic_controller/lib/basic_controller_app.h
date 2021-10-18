@@ -85,24 +85,7 @@ namespace DevRelief {
                 } else {
                     resp->send(404,"text/plain","script not found");
                 }
-    /*            } 
 
-                const char * sceneName = req->pathArg(0).c_str();
-                auto body = req->arg("plain");
-                ////m_logger->debug("commands: " + body);
-                auto found = m_fileSystem->read(concatTemp("/scene/",sceneName),fileBuffer);
-                m_logger->info("write /lastscene %s",sceneName);
-                m_fileSystem->write("/lastscene",sceneName);
-                if (found) {
-                    const char * sceneContents = fileBuffer.text();
-                    loadScene(sceneName);
-                    resp->send(200,"text/plain",sceneContents);
-                } else {
-                    const char* err = concatTemp("cannot find scene ",sceneName);
-                    resp->send(404,"text/plain",err);
-                }
-                */
-                //this->apiRequest(req->pathArg(0).c_str(),req,resp);
             });
 
 
@@ -117,6 +100,18 @@ namespace DevRelief {
                 m_executor.setScript(&m_currentScript);
                 m_logger->debug("read script name %.15s",m_currentScript.name);
                 resp->send(200,"text/plain",path.concatTemp("posted /api/script/",script));
+
+            });
+
+            m_httpServer->routeBracesGet( "/api/run/{}",[this](Request* req, Response* resp){
+                if (m_fileSystem->read(path.concatTemp("/script/",req->pathArg(0).c_str()),fileBuffer)){
+                    ObjectParser parser(fileBuffer.text());
+                    m_currentScript.read(parser);
+                    m_executor.setScript(&m_currentScript);
+                    resp->send(200,"text/plain",fileBuffer.text());
+                } else {
+                    resp->send(404,"text/plain","script not found");
+                }
 
             });
 

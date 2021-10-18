@@ -144,12 +144,18 @@ public:
     }    
 
     virtual bool readAll(DRBuffer& buf){
+        Logger logger("read all");
         if (m_start<0) {
             return false;
         }
+        int len = m_end-m_start+1;
+        logger.debug("readAll len=%d",len);
         char * data = (char*)buf.reserve(m_end-m_start+1);
-        memcpy(data,m_data,m_end-m_start);
+        memcpy(data,m_data+m_start,m_end-m_start);
         data[m_end-m_start] = 0;
+        logger.debug("data %s",data);
+        logger.debug("orig data %.*s",len,m_data);
+
         buf.setLength(m_end-m_start+1);
         return true;
     } 
@@ -321,6 +327,7 @@ public:
 
     void trimStart(const char *  ignore) {
         while(m_start >= 0 && m_start < m_end && strchr(ignore,m_data[m_start]) != NULL){
+            m_logger->error("strim %d '%c'",m_start,m_data[m_start]);
             m_start += 1;
         }
         if (m_pos < m_start) {
@@ -331,7 +338,11 @@ public:
 
     void trimEnd(const char *  ignore) {
         while(m_end > 0 && m_start < m_end && strchr(ignore,m_data[m_end]) != NULL){
+            m_logger->error("etrim %d '%c'",m_end,m_data[m_end]);
             m_end -= 1;
+        }
+        if (strchr(ignore,m_data[m_end]) != NULL) {
+            m_end+= 1;
         }
         if (m_pos > m_end) {
             m_pos = m_end;
@@ -341,6 +352,11 @@ public:
     virtual void setPos(int16_t pos) {
         m_pos = pos;
     }
+
+    const char * getData() { return m_data;}
+    int16_t getStart() { return m_start;}
+    int16_t getEnd() { return m_end;}
+    int16_t getPos() { return m_pos;}
 
 protected:
     const char * m_data;
@@ -361,28 +377,31 @@ public:
 class ArrayParser : public Parser{
 public:
     ArrayParser(const char * data=NULL) : Parser(data) {
-
+        m_logger = new Logger("ArrayParser",80);
     }   
 
     bool nextElement(Parser* parser) {
-        m_logger->debug("next element %.20s",m_data+m_pos);
+        m_logger->info("next element %.20s",m_data+m_pos);
         if (m_pos == -1 || m_pos == m_end) {
-            m_logger->debug("\tno next element");
+            m_logger->info("\tno next element");
             return false;
         }
-        int16_t start = m_pos;
+        int16_t start = skipWhite(m_pos);
         int16_t comma = skipTo(',',m_pos);
         int16_t bracket = skipTo(']',m_pos);
+            m_logger->info("%d %d",comma, bracket);
         if (comma >=0 && comma < bracket) {
-            m_pos = comma;
+            m_logger->info("found comma %d %.20s",comma,m_data+comma-10);
+            m_pos = comma-1;
         } else if (bracket > 0) {
-            m_pos = bracket;
+            m_logger->info("found bracket %d",comma);
+            m_pos = bracket-1;
         } else {
             parser->setData(m_data,start,start);
             return false;
         }
-        m_logger->debug("got element %d-%d",start,m_pos);
-        if (m_pos > 0 && m_pos >start && m_pos <= m_end) {
+        m_logger->info("got element %d-%d ~~~%.*s~~~",start,m_pos,m_pos-start,m_data);
+        if (m_pos > 0 && m_pos >start && m_pos < m_end) {
             parser->setData(m_data,start,m_pos);
             m_pos += 1;
             return true;
@@ -394,9 +413,11 @@ public:
 
 
     bool nextObject(Parser* parser) {
-        m_logger->debug("next object %.20s",m_data+m_pos);
+        m_logger->info("next object %.20s",m_data+m_pos);
         if (nextElement(parser)) {
-           parser->trim("{} \t\n\r,");
+            m_logger->info("before trim: %d %d %d",parser->getStart(),parser->getEnd(),parser->getPos());
+           parser->trim("{} \t\n\r,[]");
+           m_logger->info("after trim: %d %d %d",parser->getStart(),parser->getEnd(),parser->getPos());
             return true;
         }
         m_logger->debug("\t not found");
