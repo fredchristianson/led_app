@@ -27,6 +27,7 @@ class DRLedStrip {
     public:
         DRLedStrip() {
             m_logger = ledLogger;
+            validCheck=0x123fe;
         }
 
         virtual ~DRLedStrip() {
@@ -42,6 +43,8 @@ class DRLedStrip {
         virtual void setColor(uint16_t index, CHSL& color) {
             return setColor(index,color.toRGB());
         }
+
+        long validCheck;
 
     protected:
         Logger* m_logger;
@@ -105,7 +108,7 @@ class CompoundLedStrip : public DRLedStrip {
             strips[3] = NULL;
             count = 0;
             m_logger = new Logger("CompoundStrip",80);
-            m_logger->debug("create CompoundLedStrip");
+            m_logger->info("create CompoundLedStrip");
         }
 
         ~CompoundLedStrip() {
@@ -130,7 +133,7 @@ class CompoundLedStrip : public DRLedStrip {
                 if (strips[i] == NULL) {
                     m_logger->error("NULL component script %d",i);
                 } else {
-                    m_logger->debug("clear strip %d",i);
+                    //m_logger->debug("clear strip %d",i);
                     strips[i]->clear();
                 }
             }
@@ -143,33 +146,49 @@ class CompoundLedStrip : public DRLedStrip {
 
         virtual void setColor(uint16_t index,const CRGB& color)  {
             int strip = 0;
-
-            while(strip < count && index >= strips[strip]->getCount()) {
-                strip++;
+            uint16_t oindex = index;
+            while(strip < count && strip < 4 && strips[strip] != NULL && index >= strips[strip]->getCount()) {
                 index -= strips[strip]->getCount();
+                strip++;
             }
-           // if (index == 0) {
-              //  m_logger->debug("set color %d %d %d %d: %d,%d,%d",index,count,strips[strip]->getCount(),strip,color.red,color.green,color.blue);
-            //}
+            if (strip >= count || strip >= 4) {
+                m_logger->error("strip too big %d %d",strip,oindex);
+                return;
+            }
+
+            if (strips[strip] == NULL) {
+                m_logger->error("missing strip %d %d",oindex,strip);
+                return;
+            }
+            if (strips[strip]->validCheck != 0x123fe) {
+                m_logger->error(" strip not valid  %d %d",oindex,strip);
+                return;
+            }
+            // if (index == 0) {
+            //     m_logger->error("set color %d %d %d %d: %d,%d,%d",index,count,strips[strip]->getCount(),strip,color.red,color.green,color.blue);
+            // }
             if (index<strips[strip]->getCount()){
                 strips[strip]->setColor(index,color);
+            } else {
+                m_logger->error("bad index %d %d %d",index,strip,(strips[strip] == NULL ? -1 : strips[strip]->getCount()));
             }
         };
         virtual size_t getCount() {
-            m_logger->debug("getcount()");
             size_t ledcount = 0;
             for(int i=0;i<count;i++) {
                 if (strips[i] == NULL) {
                     m_logger->error("strip %d is NULL",i);
                 } else {
-                    m_logger->debug("get count strip %d",i);
+                   // m_logger->debug("get count strip %d",i);
                     ledcount += strips[i]->getCount();
                 }
             }
+            m_logger->debug("getcount()=%d",ledcount);
             return ledcount;
         }
 
         virtual void show() {
+            m_logger->debug("show() %d",count);
             for(int i=0;i<count;i++) {
                 strips[i]->show();
             }
@@ -206,9 +225,9 @@ class AlteredStrip : public DRLedStrip {
         virtual void show() {m_base->show();}
 
     protected:
-        uint16_t translateIndex(uint16_t index) { return index;}
-        uint16_t translateCount(uint16_t count) { return count;}
-        CRGB translateColor(const CRGB& color) { return color;}
+        virtual uint16_t translateIndex(uint16_t index) { return index;}
+        virtual uint16_t translateCount(uint16_t count) { return count;}
+        virtual CRGB translateColor(const CRGB& color) { return color;}
     
         DRLedStrip * m_base;
 };
@@ -224,7 +243,9 @@ class ReverseStrip: public AlteredStrip {
         }
 
     protected:
-        uint16_t translateIndex(uint16_t index) { return getCount()-index-1;}
+        uint16_t translateIndex(uint16_t index) { 
+            return getCount()-index-1;
+        }
 };
 
 class RotatedStrip: public AlteredStrip {

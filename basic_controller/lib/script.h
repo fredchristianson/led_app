@@ -5,6 +5,7 @@
 #include "./parse_gen.h";
 #include "./logger.h";
 #include "./led_strip.h";
+#include "./config.h";
 
 namespace DevRelief {
     char tmpBuffer[100];
@@ -140,7 +141,6 @@ namespace DevRelief {
         }
 
         VariableCommand(ObjectParser& parser) : Command("variable") {
-            m_logger = new Logger("VariableCommand",100);
             parser.readAll(data);
             variableParser.setData((const char *)data.reserve(1),0,data.getLength());
             
@@ -256,8 +256,6 @@ namespace DevRelief {
                 int val = value+idx*step;
                 //m_logger->debug("set HSL %d %d",pos,val);
                 int animPos = pos;
-                int move = ((state->getAnimationMsecs()/100));
-                animPos = (animPos+move)%ledCount;
                 setHSLComponent(strip,animPos,val);
             }
         }
@@ -389,9 +387,11 @@ namespace DevRelief {
                     } else {
                         m_logger->error("unknown command type: %s",tmpBuffer);
                     }
-                    m_logger->info("add command %s",cmd->getType());
-                    addCommand(cmd);
-                    m_logger->info("\tadded command");
+                    if (cmd != NULL) {
+                        m_logger->info("add command %s",cmd->getType());
+                        addCommand(cmd);
+                        m_logger->info("\tadded command");
+                    }
                 }
                 parser.readIntValue("brightness",&brightness);
                 m_logger->debug("script read success %s",name);
@@ -481,19 +481,19 @@ namespace DevRelief {
                     return; // only step every 5 seconds for now;
                 }
                 */
+                long now = millis();
                 if (m_ledStrip == NULL) {
-                    m_logger->error("no HSLStrip to run script");
+                    m_logger->errorNoRepeat("no HSLStrip to run script");
                     return;
                 }
                // m_logger->debug("step time %d %d %d",now,m_lastStepTime,(now-m_lastStepTime));
-                long now = millis();
                 m_ledStrip->clear();
                 ExecutionState state(m_config,m_script,NULL);
                 state.setTime(m_startTime,now);
                 m_script->run(m_ledStrip,&state);
                 m_ledStrip->show();
                 m_logger->debug("shown");
-                m_lastStepTime = micros();
+                m_lastStepTime = millis();
             }
 
         private:
@@ -506,8 +506,10 @@ namespace DevRelief {
                     int pin = m_config->getPin(index);
                     DRLedStrip * real = new PhyisicalLedStrip(abs(pin),m_config->getLedCount(index));
                     if (!m_config->isReversed(index)) {
+                        m_logger->info("create forward strip %d",index);
                         compound->add(real);
                     } else {
+                        m_logger->info("create reverse strip %d",index);
                         auto* reverse = new ReverseStrip(real);
                         compound->add(reverse);
                     }

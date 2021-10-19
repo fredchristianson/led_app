@@ -215,7 +215,7 @@ public:
         
     virtual bool readValue(const char *name,ParserValue& val){
         m_logger->setLevel(80);
-        m_logger->info("read ParserValue %s",name);
+        m_logger->debug("read ParserValue %s",name);
         val.type = UNKNOWN;
         int16_t found = skipName(name);
 
@@ -241,7 +241,7 @@ public:
                     }
                     memcpy(val.nameValue,m_data+pos+4,len);
                     val.nameValue[len]=0;
-                    m_logger->info("got VARIABLE type %d %d %.50s",pos,end,val.nameValue);
+                    m_logger->debug("got VARIABLE type %d %d %.50s",pos,end,val.nameValue);
                 }else {
                     val.type = STRING;
                     if (len>PARSER_VALUE_MAX_LEN) {
@@ -250,7 +250,7 @@ public:
                     }
                     memcpy(val.stringValue,m_data+pos,len);
                     val.stringValue[len]=0;
-                    m_logger->info("got VARIABLE type %d %d %.50s",pos,end,val.stringValue);
+                    m_logger->debug("got VARIABLE type %d %d %.50s",pos,end,val.stringValue);
                 }
                 return true;
             }
@@ -266,7 +266,7 @@ public:
                 if (val.intValue != val.floatValue) {
                     val.type = FLOAT;
                 }
-                m_logger->info("got NUMBER type %d %d %.50s",val.intValue,pos,m_data+pos);
+                m_logger->debug("got NUMBER type %d %d %.50s",val.intValue,pos,m_data+pos);
                 return true;
             }
             if (strncmp(m_data+pos,"true",4)==0){
@@ -297,6 +297,7 @@ public:
     }
 
     virtual bool readStringValue(const char *name,char * value, int maxLen=-1) {
+        value[0] = 0;
         int16_t found = skipName(name);
         if (found >= 0) {
             int16_t start = skipTo('"',found);
@@ -417,6 +418,10 @@ public:
 
     bool isValidPos(int16_t start, int16_t end) {
         return start>=0 && start <= end && end <= m_end;
+    }
+
+    void setData(const char * data) {
+        setData(data,0,strlen(data));
     }
 
     void setData(const char * data, int16_t start, int16_t end) {

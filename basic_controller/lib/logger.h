@@ -17,9 +17,18 @@ void initializeWriter() {
 
 }
 
+enum LogLevel {
+    DEBUG_LEVEL=100,
+    INFO_LEVEL=80,
+    WARN_LEVEL=60,
+    ERROR_LEVEL=40
+};
+
 #define MAX_MESSAGE_SIZE 1024
 char messageBuffer[MAX_MESSAGE_SIZE+1];
 String padding("                                   ");
+char lastErrorMessage[100];
+long lastErrorTime=0;
 
 class Logger {
 public:
@@ -105,6 +114,31 @@ public:
         va_list args;
         va_start(args,message);
         write(20,message,args);
+    }
+
+    void errorNoRepeat(const char * message,...) {
+        if (strncmp(message,lastErrorMessage,100)==0){
+            return; //don't repeat the error message
+        }
+        if (millis()>lastErrorTime+500) {
+            return; //don't show any errors too fast - even different message;
+        }
+        strncpy(lastErrorMessage,message,100);
+        lastErrorTime = millis();
+        va_list args;
+        va_start(args,message);
+        write(20,message,args);
+    }
+
+    void periodic(int level,long frequencyMS, long&lastTimer,const char * message,...){
+        if (millis() >lastTimer + frequencyMS)
+        {
+            lastTimer = millis();
+            va_list args;
+            va_start(args, message);
+            write(level, message, args);
+            
+        }
     }
 
     void write(const char * message,...) {

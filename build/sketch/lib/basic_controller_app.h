@@ -15,8 +15,12 @@ extern EspClass ESP;
 
 
 namespace DevRelief {
-    char loadScriptOnLoop[20];
+    const char * VERSION ="1.0.1";
+    DRFileBuffer statusBuffer;
+    char loadScriptOnLoop[50];
     DRFileBuffer fileBuffer;
+    ObjectParser scriptParser;
+    long lastLoopMessageTime;
 
     class BasicControllerApplication : public Application {
     public: 
@@ -24,11 +28,24 @@ namespace DevRelief {
    
         BasicControllerApplication() {
             m_logger = new Logger("BasicControllerApplication",100);
+            m_initialized = false;
             loadScriptOnLoop[0] =0;
             m_logger->showMemory();
             m_httpServer = new HttpServer();
             m_fileSystem = new DRFileSystem();
 
+            bool failed = true;
+            if (m_fileSystem->read("/sysstatus",statusBuffer)) {
+                if (strcmp(statusBuffer.text(),"running")==0) {
+                    m_logger->error("restart after runtime failure: %s",statusBuffer.text());
+                    failed = false;
+                } else {
+                    m_logger->error("restart after boot failure: %s",statusBuffer.text());
+                }
+            } else {
+                m_logger->error("status file not found");
+            }
+            m_fileSystem->write("/sysstatus","starting");
             char * result = (char*)fileBuffer.reserve(2000);
             auto found = m_fileSystem->read("/config",fileBuffer);
             if (found) {
@@ -37,6 +54,16 @@ namespace DevRelief {
                 m_config.read(DEFAULT_CONFIG);
             }
             m_executor.setConfig(m_config);
+            if (!failed) {
+                if (m_config.startupScript[0] != 0) {
+                    m_logger->info("loading startup script %s",m_config.startupScript);
+                    strncpy(loadScriptOnLoop,m_config.startupScript,20);
+                } else {
+                    m_logger->warn("no startup script found");
+                }
+            } else {
+                m_logger->error("not restarting because last restart failed");
+            }
 
             m_httpServer->route("/",[this](Request* req, Response* resp){
                 this->getPage("index",req,resp);
@@ -73,7 +100,9 @@ namespace DevRelief {
                 ObjectParser parser(body);
                 m_config.read(parser);
                 m_executor.setConfig(m_config);
-                m_logger->debug("read config name %.15s",m_config.name);
+                m_logger->debug("set load script",m_config.startupScript);
+              
+                strncpy(loadScriptOnLoop,m_config.startupScript,20);
                 m_fileSystem->write("/config",body);
                 resp->send(200,"text/plain","posted /api/config");
                 //this->apiRequest(req->pathArg(0),req,resp);
@@ -95,6 +124,8 @@ namespace DevRelief {
                 const char * body = req->arg("plain").c_str();
                 //m_logger->debug("commands: %s", body.c_str());
                 m_fileSystem->write(path.concatTemp("/script/",script),body);
+                m_logger->debug("set load script",script);
+                
                 strcpy(loadScriptOnLoop,script);
                 //ObjectParser parser(body);
                 //m_currentScript.read(parser);
@@ -131,43 +162,39 @@ namespace DevRelief {
 
             m_httpServer->begin();
             
-            found = false;// m_fileSystem->read("/lastscene",fileBuffer);
-            if (found) {
-                m_logger->info("load last scenne %s",fileBuffer.text());
-                loadScene(fileBuffer.text());
-            } else {
-                m_logger->debug("no default scene found");
-            }
-
-            m_logger->debug("Running BasicControllerApplication configured: v1.0.0");
-
+ 
+            m_logger->debug("Running BasicControllerApplication configured: %s",VERSION);
+            m_initialized = true;
         }
 
         
         void loop() {
+            if (!m_initialized) {
+                return;
+            }
             if (loadScriptOnLoop[0] != 0) {
                 m_logger->info("Loading script %s",loadScriptOnLoop);
                 if (m_fileSystem->read(path.concatTemp("/script/",loadScriptOnLoop),fileBuffer)){
-                   ObjectParser parser(fileBuffer.text());
-                    m_currentScript.read(parser);
+                    scriptParser.setData(fileBuffer.text());
+                    m_currentScript.read(scriptParser);
+                    m_logger->debug("read script");
                     m_executor.setScript(&m_currentScript);
+                    m_logger->debug("set executor");
                 }
                 loadScriptOnLoop[0] = 0;
+                m_logger->debug("loop load done");
             } else {
+                m_logger->periodic(DEBUG_LEVEL,5000,lastLoopMessageTime,"loop()");
                 m_httpServer->handleClient();
                 m_executor.step();
+                if (strcmp(statusBuffer.text(),"starting")==0){
+                    strcpy((char*)statusBuffer.reserve(20),"running");
+                    m_fileSystem->write("/sysstatus","running");
+                }
             }
             
         }
 
-        void loadScene(const char * sceneName) {
-            auto found = m_fileSystem->read(path.concatTemp("/scene/",+sceneName),fileBuffer);
-            if (found) {
-                // parse script
-            } else {
-                m_logger->error("scene not found: %s",sceneName);
-            }
-        }
         
         String getMimeType(String path) {
             if (path.endsWith(".css")){
@@ -283,6 +310,7 @@ namespace DevRelief {
         Script m_currentScript;
         Config m_config;
         ScriptExecutor m_executor;
+        bool m_initialized;
     };
 
 }

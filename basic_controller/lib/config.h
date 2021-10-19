@@ -17,7 +17,7 @@ namespace DevRelief {
     class Config {
         public:
             Config() {
-                m_logger = new Logger("Config",100);
+                m_logger = new Logger("Config",80);
                 strcpy(name,CONFIG_HOSTNAME);
                 for(auto i=0;i<3;i++) {
                     stripPins[i] = -1;
@@ -32,6 +32,7 @@ namespace DevRelief {
                 ArrayParser stripArray;
                 ObjectParser obj;
                 bool result = parser.readStringValue("name",name);
+                parser.readStringValue("startup_script",startupScript);
                 stripCount = 0;
                 parser.getArray("strips",stripArray);
                 
@@ -39,6 +40,7 @@ namespace DevRelief {
                     obj.readIntValue("pin",&stripPins[stripCount]);
                     obj.readIntValue("leds",&stripLeds[stripCount]);
                     obj.readBoolValue("reverse",&stripReverse[stripCount],false);
+                    m_logger->debug("reverse %d %s",stripCount,stripReverse[stripCount] ? "reverse" : "forward");
                     stripCount++;
                 }
                 parser.readIntValue("brightness",&brightness);
@@ -49,6 +51,7 @@ namespace DevRelief {
             void write(Generator& gen) {
                 gen.startObject();
                 gen.writeNameValue("name",name);
+                gen.writeNameValue("startup_script",startupScript);
                 gen.writeNameValue("addr",addr);
                 gen.writeNameValue("stripCount",(int)stripCount);
                 gen.writeNameValue("brightness",brightness);
@@ -112,7 +115,8 @@ namespace DevRelief {
             int getPin(size_t idx) { return stripPins[idx];}
             int getLedCount(size_t idx) { return stripLeds[idx];}
             bool isReversed(size_t idx) { return stripReverse[idx];}
-            char     name[100];
+            char     name[50];
+            char     startupScript[50];
             char     addr[32];
             size_t stripCount;
             int  stripPins[4];
