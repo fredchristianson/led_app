@@ -271,7 +271,15 @@ enum HSLOperation {
     MAX=5
 };
 
-class HSLStrip: public AlteredStrip {
+class IHSLStrip {
+    public:
+        virtual void setHue(int index, int16_t hue, HSLOperation op)=0;
+        virtual void setSaturation(int index, int16_t hue, HSLOperation op)=0;
+        virtual void setLightness(int index, int16_t hue, HSLOperation op)=0;
+        virtual size_t getCount()=0;
+};
+
+class HSLStrip: public AlteredStrip, public IHSLStrip{
     public:
         HSLStrip(DRLedStrip* base): AlteredStrip(base) { 
             m_count = 0;
@@ -284,6 +292,7 @@ class HSLStrip: public AlteredStrip {
         ~HSLStrip() {
             reallocHSLData(0);
         }
+
 
         void setHue(int index, int16_t hue, HSLOperation op) {
             if (index<0 || index>=m_count) {
@@ -345,6 +354,8 @@ class HSLStrip: public AlteredStrip {
             }
             m_base->show();
         }
+
+        size_t getCount() { return AlteredStrip::getCount();}
 
     protected:
         void reallocHSLData(int count) {

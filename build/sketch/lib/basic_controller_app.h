@@ -45,6 +45,7 @@ namespace DevRelief {
             } else {
                 m_logger->error("status file not found");
             }
+            strncpy((char*)statusBuffer.reserve(20),"starting",20);
             m_fileSystem->write("/sysstatus","starting");
             char * result = (char*)fileBuffer.reserve(2000);
             auto found = m_fileSystem->read("/config",fileBuffer);

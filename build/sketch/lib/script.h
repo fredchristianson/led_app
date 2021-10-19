@@ -11,10 +11,14 @@ namespace DevRelief {
     char tmpBuffer[100];
     ArrayParser commandArray;
     ObjectParser obj;
+    ParserValue tempValue;
 
+    double INVALID_DOUBLE = __FLT_MAX__; // 1000000000.0;
+    long INVALID_LONG = LONG_MAX;
     class Script;
     class Command;
     class VariableCommand;
+
     class ExecutionState {
         public:
             ExecutionState(Config* config, Script* script, VariableCommand* variables) {
@@ -46,35 +50,6 @@ namespace DevRelief {
             long m_stepTime;
     };
 
-    class Animator {
-    public:
-        Animator() {
-
-        }
-    };
-
-    class ValueAnimator : public Animator {
-    public:
-        ValueAnimator() {
-
-        }
-
-        ~ValueAnimator() {
-            
-        }
-    };
-
-
-    class PositionAnimator : public Animator {
-    public:
-        PositionAnimator() {
-
-        }
-
-        ~PositionAnimator() {
-            
-        }
-    };
 
     Logger* commandLogger = new Logger("Command",80);
 
@@ -97,7 +72,7 @@ namespace DevRelief {
 
         const char * getType() { return m_type;}
 
-        virtual void execute(HSLStrip* strip,ExecutionState* state) {
+        virtual void execute(IHSLStrip* strip,ExecutionState* state) {
             m_logger->debug("execute command %s",m_type);
             doCommand(strip,state);
             if (next != NULL) {
@@ -126,21 +101,26 @@ namespace DevRelief {
 
 
     protected:
-        virtual void doCommand(HSLStrip* strip, ExecutionState* state)=0;
+        virtual void doCommand(IHSLStrip* strip, ExecutionState* state)=0;
         Logger * m_logger;
         char    m_type[20];
+
+        int getInt(ParserValue&val,int defaultValue,VariableCommand * variables);
+        double getFloat(ParserValue&val,double defaultValue,VariableCommand * variables);
+        const char * getString(ParserValue&val,char * resultValue,size_t maxLen, VariableCommand * variables);
     private:
         Command* next;
     };
 
     class VariableCommand : public Command {
     public:
-        static VariableCommand * create(ObjectParser& parser) {
-            VariableCommand * cmd = new VariableCommand(parser);
+        static VariableCommand * create(ObjectParser& parser, VariableCommand * prev) {
+            VariableCommand * cmd = new VariableCommand(parser,prev);
             return cmd;
         }
 
-        VariableCommand(ObjectParser& parser) : Command("variable") {
+        VariableCommand(ObjectParser& parser,VariableCommand * prev) : Command("variable") {
+            m_prev = prev;
             parser.readAll(data);
             variableParser.setData((const char *)data.reserve(1),0,data.getLength());
             
@@ -153,16 +133,22 @@ namespace DevRelief {
             return true;
         }
 
-        bool getString(const char * name, char * val) {
-            if (!variableParser.readStringValue(name,val)) {
-                return m_prev != NULL && m_prev->getString(name,val);
+        bool getFloat(const char * name, double& val) {
+            if (!variableParser.readFloatValue(name,&val)) {
+                return m_prev != NULL &&  m_prev->getFloat(name,val);
+            }
+            return true;
+        }
+
+        bool getString(const char * name, char * val, size_t maxLen) {
+            if (!variableParser.readStringValue(name,val,maxLen)) {
+                return m_prev != NULL && m_prev->getString(name,val,maxLen);
             }
             return true;
         }
 
     protected:
-        virtual void doCommand(HSLStrip* strip, ExecutionState * state) {
-            m_prev = state->getVariables();
+        virtual void doCommand(IHSLStrip* strip, ExecutionState * state) {
             state->setVariables(this);
         }
 
@@ -176,12 +162,139 @@ namespace DevRelief {
         PIXEL,
         PERCENT
     };
+
+    class AnimatorCommand : public Command {
+        public:
+            AnimatorCommand(ObjectParser& parser, VariableCommand * variables, const char * type = "animator") : Command(type) {
+                m_speed = INVALID_DOUBLE;
+                m_durationMsecs = INVALID_DOUBLE;
+                //m_logger = new Logger("Animator",100);
+                parser.readValue("speed",tempValue);
+                if (tempValue.isNumber()){
+                    m_speed = getFloat(tempValue,INVALID_DOUBLE,variables);
+                } else {
+                    parser.readValue("duration",tempValue);
+                    if (tempValue.isNumber()){
+                        m_durationMsecs = getInt(tempValue,INVALID_LONG,variables);
+                    }
+                }
+                m_logger->info("Animator speed=%f.  duration=%d",m_speed,m_durationMsecs);
+            }
+
+            double getAnimationPosition(double low,double high){
+                double diff = high-low;
+                if (diff == 0) {
+                    return low;
+                }
+                long runMsecs = executionState->getAnimationMsecs();
+                long duration = m_durationMsecs;
+                if (m_speed != INVALID_DOUBLE) {
+                    duration = diff*1000/m_speed;
+                } else if (m_durationMsecs != INVALID_DOUBLE){
+                    duration = m_durationMsecs;
+                } else {
+                    return low;
+                }
+                double dpos = (runMsecs)%duration;
+                double dpct = dpos/duration;
+                double result = low + dpct*diff;
+                m_logger->debug("animate %f-%f = %f.  duration=%d. dpos=%f.  pct=%f",low,high,result,duration,dpos,dpct);
+                result = result < low ?  low : result;
+                result = result > high ? high : result;
+                return result;
+
+
+            }
+
+            ExecutionState * executionState;
+        protected:
+            long m_durationMsecs;
+            double m_speed;
+    };
+
+    class PositionAnimator : public AnimatorCommand, public IHSLStrip {
+        public:
+            PositionAnimator(ObjectParser& parser, VariableCommand * variables) : AnimatorCommand(parser,variables, "PositionAnimator"){
+                parser.readValue("count",tempValue);
+                m_count = getInt(tempValue,INVALID_LONG,variables);
+                parser.readValue("start",tempValue);
+                m_start = getInt(tempValue,INVALID_LONG,variables);
+                parser.readValue("direction",tempValue);
+                m_forward = true;
+                if (getString(tempValue,tmpBuffer,100,variables)){
+                    m_forward = strncasecmp(tmpBuffer,"for",3) == 0;  // forword, foreword, forward, ...
+                }
+
+                m_logger->info("PositionAnimator %d %d %d %f %s",m_start,m_count, m_durationMsecs,m_speed,m_forward ? "forward":"backward");
+            }
+            void execute(IHSLStrip* strip,ExecutionState* state) {
+                m_logger->debug("execute PostionAnimator");
+                baseStrip = strip;
+                executionState = state;
+                doCommand(strip,state);
+                if (getNext() != NULL) {
+                    getNext()->execute(this,state);
+                }
+            }
+
+            void setHue(int index, int16_t hue, HSLOperation op) {
+                m_logger->debug("setHue in PostionAnimator %d %d",index,animateIndex(index));
+                if (baseStrip) {
+                    baseStrip->setHue(animateIndex(index),hue,op);
+                }
+            };
+            void setSaturation(int index, int16_t hue, HSLOperation op){
+                if (baseStrip) {
+                    baseStrip->setSaturation(animateIndex(index),hue,op);
+                }
+            };
+            void setLightness(int index, int16_t hue, HSLOperation op){
+                if (baseStrip) {
+                    baseStrip->setLightness(animateIndex(index),hue,op);
+                }
+
+            };
+            
+            size_t getCount() { if (baseStrip) { return baseStrip->getCount();} else { return 0;}}
+
+        protected:
+           virtual void doCommand(IHSLStrip* strip, ExecutionState * state) {
+               //not used
+            }
+
+            int animateIndex(int index) {
+                if (index < m_start || index >= m_start+m_count) {
+                    return index;
+                }
+                double pos = getAnimationPosition(m_start,m_start+m_count-1);
+                int idx=-1;
+                if (m_forward) {
+                    idx = m_start + ((int)(index+pos) % m_count);
+                    if (idx <0 || idx>=m_count+m_start) {
+                        m_logger->error("forward out of bounds %d %d %f",index,idx,pos);
+                    }
+                } else {
+                    idx = m_start + ((int)(index-pos+m_count) %m_count);
+                    if (idx <0 || idx>=m_count+m_start) {
+                        m_logger->error("backwards out of bounds %d %d %f",index,idx,pos);
+                    }
+                }
+
+                return idx;
+            }
+
+        private:
+            IHSLStrip * baseStrip;
+            int m_start;
+            int m_count;
+            bool m_forward;
+    };
     
     class HSLCommand : public Command {
     public:
        
         HSLCommand(const char * type, ObjectParser& parser) : Command(type) {
-            m_logger = new Logger("HSLCommand",80);
+            //m_logger = new Logger("HSLCommand",80);
             //m_logger->debug("Parse HSLCommand");
             parser.readValue("start",m_start);
             parser.readValue("count",m_count);
@@ -228,7 +341,7 @@ namespace DevRelief {
 
         }
 
-        virtual void doCommand(HSLStrip* strip, ExecutionState * state) {
+        virtual void doCommand(IHSLStrip* strip, ExecutionState * state) {
             int first = getInt(m_start,0,state->getVariables());
             int count = getInt(m_count,-1,state->getVariables());
             int vstart = getInt(m_valueStart,0,state->getVariables());
@@ -260,23 +373,10 @@ namespace DevRelief {
             }
         }
 
-        virtual void setHSLComponent(HSLStrip* strip,int index, int value)=0;
+        virtual void setHSLComponent(IHSLStrip* strip,int index, int value)=0;
         HSLOperation hslOp;
     private:
-        int getInt(ParserValue&val,int defaultValue,VariableCommand * variables){
-            int result = defaultValue;
-            if (val.type == INTEGER || val.type == FLOAT){
-                //m_logger->debug("getInt for INTEGER ParserValue %d %d",val.intValue,val.type);
-                result = val.intValue;
-            } else if (val.type == VARIABLE && variables != NULL) {
-                //m_logger->debug("getInt for variable ParserValue %s",val.nameValue);
-                variables->getInt(val.nameValue,result);
-            } else {
-                m_logger->warn("unknown ParserValue type %d %f",val.type,val.floatValue);
-            }
-            //m_logger->debug("\tresult=%d",result);
-            return result;
-        }
+
         ParserValue m_start;
         ParserValue m_count;
         ParserValue m_valueStart;
@@ -292,7 +392,7 @@ namespace DevRelief {
         }
 
     protected:
-        virtual void setHSLComponent(HSLStrip* strip,int index, int value) {
+        virtual void setHSLComponent(IHSLStrip* strip,int index, int value) {
 
             strip->setHue(index,value,hslOp);
         }
@@ -304,7 +404,7 @@ namespace DevRelief {
 
         }
     protected:
-        virtual void setHSLComponent(HSLStrip* strip,int index, int value) {
+        virtual void setHSLComponent(IHSLStrip* strip,int index, int value) {
             strip->setSaturation(index,value,hslOp);
         }        
     };
@@ -314,7 +414,7 @@ namespace DevRelief {
 
         }
     protected:
-        virtual void setHSLComponent(HSLStrip* strip,int index, int value) {
+        virtual void setHSLComponent(IHSLStrip* strip,int index, int value) {
             
             strip->setLightness(index,value,hslOp);
         }
@@ -323,7 +423,7 @@ namespace DevRelief {
     class Script {
         public:
             Script(){
-                m_logger = new Logger("Script",100);
+                m_logger = new Logger("Script",10);
                 strcpy(name,"Default");
                 next[0] = 0;
                 durationMsec = -1;
@@ -372,6 +472,7 @@ namespace DevRelief {
                 //m_logger->debug("commands: %d %d %d %.50s --- %.50s",commandArray.getStart(),commandArray.getEnd(),commandArray.getPos(),commandArray.getData()+commandArray.getStart(),commandArray.getData()+commandArray.getEnd()-25);
                     
                 m_logger->showMemory();
+                VariableCommand * vars = NULL;
                 while(commandArray.nextObject(&obj)){
                     m_logger->debug("object: %d %d %d ~~~%.*s~~~",obj.getStart(),obj.getEnd(),obj.getPos(),obj.getEnd()-obj.getStart(),obj.getData()+obj.getStart());
 
@@ -381,9 +482,12 @@ namespace DevRelief {
                     obj.readStringValue("type",tmpBuffer);
                     Command * cmd = NULL;
                     if (strcmp(tmpBuffer,"variable")==0) {
-                        cmd = VariableCommand::create(obj);
+                        vars = VariableCommand::create(obj,vars);
+                        cmd = vars;
                     } else if (strcmp(tmpBuffer,"hsl")==0) {
                         cmd = createHSLCommand(obj);
+                    } else if (strcmp(tmpBuffer,"position_animator")==0) {
+                        cmd = new PositionAnimator(obj,vars);
                     } else {
                         m_logger->error("unknown command type: %s",tmpBuffer);
                     }
@@ -527,5 +631,48 @@ namespace DevRelief {
             HSLStrip* m_ledStrip;
             Logger * m_logger;
     };
+
+
+     int Command::getInt(ParserValue&val,int defaultValue,VariableCommand * variables){
+            int result = defaultValue;
+            if (val.type == INTEGER || val.type == FLOAT){
+                //m_logger->debug("getInt for INTEGER ParserValue %d %d",val.intValue,val.type);
+                result = val.intValue;
+            } else if (val.type == VARIABLE && variables != NULL) {
+                //m_logger->debug("getInt for variable ParserValue %s",val.nameValue);
+                variables->getInt(val.nameValue,result);
+            } else {
+                m_logger->warn("unknown ParserValue type %d %f",val.type,val.floatValue);
+            }
+            //m_logger->debug("\tresult=%d",result);
+            return result;
+        }
+        double Command::getFloat(ParserValue&val,double defaultValue,VariableCommand * variables){
+            double result = defaultValue;
+            if (val.type == INTEGER || val.type == FLOAT){
+                //m_logger->debug("getInt for INTEGER ParserValue %d %d",val.intValue,val.type);
+                result = val.floatValue;
+            } else if (val.type == VARIABLE && variables != NULL) {
+                //m_logger->debug("getInt for variable ParserValue %s",val.nameValue);
+                variables->getFloat(val.nameValue,result);
+            } else {
+                m_logger->warn("unknown ParserValue type %d %f",val.type,val.floatValue);
+            }
+            //m_logger->debug("\tresult=%d",result);
+            return result;
+        }
+
+        const char * Command::getString(ParserValue&val,char * resultValue,size_t maxLen, VariableCommand * variables){
+            if (val.type == STRING) {
+                strncpy(resultValue,val.stringValue,maxLen);
+                return resultValue;
+            } else if (val.type == VARIABLE) {
+                if (variables->getString(val.nameValue,resultValue,maxLen)) {
+                    return resultValue;
+                }
+            }
+            return NULL;
+
+        }
 }
 #endif

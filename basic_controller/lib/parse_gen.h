@@ -34,6 +34,10 @@ class ParserValue {
             return type == FLOAT;
         }
 
+        bool isNumber() {
+            return isInt() || isFloat();
+        }
+
         bool isString() {
             return type == STRING;
         }
@@ -207,6 +211,19 @@ public:
             int16_t pos = skipChars(": \t\n\r",found);
             (*value) = atoi(m_data+pos);
             m_logger->debug("\tgot int: %d from %.15s",*value,m_data+pos);
+            return true;
+        }
+        return false;
+    }
+
+        
+    virtual bool readFloatValue(const char *name,double * value){
+        m_logger->debug("read int %s",name);
+        int16_t found = skipName(name);
+        if (found >= 0) {
+            int16_t pos = skipChars(": \t\n\r",found);
+            (*value) = atof(m_data+pos);
+            m_logger->debug("\tgot float: %f from %.15s",*value,m_data+pos);
             return true;
         }
         return false;
