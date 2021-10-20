@@ -555,7 +555,7 @@ public:
 
     }
 
-    int16_t readInts(int * values,int16_t max=INT_MAX) {
+    int16_t readInts(int * values,int16_t max=20) {
         m_logger->error("readInts not implemented");
         return 0;
     }
