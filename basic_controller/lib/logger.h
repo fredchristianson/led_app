@@ -125,6 +125,9 @@ public:
         write(ALWAYS,message,args);
     }
 
+     void never(const char * message,...) {
+     }
+
     void errorNoRepeat(const char * message,...) {
         if (strncmp(message,lastErrorMessage,100)==0){
             return; //don't repeat the error message

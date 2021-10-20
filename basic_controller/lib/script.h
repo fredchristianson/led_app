@@ -197,13 +197,140 @@ namespace DevRelief {
 
     };
 
-    Logger patternLogger("ValuePattern",80);
+
+    class ValueGradient : public ValueGenerator
+    {
+    public:
+        ValueGradient()
+        {
+            m_logger = commandLogger; //new Logger("ValueGradient",80);
+        }
+
+        bool read(ObjectParser &parser, VariableCommand *variables)
+        {
+            m_logger->debug("Read ValueGradient");
+            if (parser.readValue("value_start", tempValue)){
+                m_logger->always("got 'value_start' %d %d",tempValue.type,tempValue.intValue);
+                m_valueStart = ((Command *)variables)->getFloat(tempValue, INVALID_DOUBLE, variables);
+                parser.readValue("value_end", tempValue);
+                m_valueEnd = ((Command *)variables)->getFloat(tempValue, m_valueStart, variables);
+                parser.readBoolValue("unfold", &m_unfold, false);
+            } else {
+                if (parser.readValue("value", tempValue)) {
+                    m_logger->always("got 'value' %d %d",tempValue.type,tempValue.intValue);
+                    m_valueStart = ((Command *)variables)->getFloat(tempValue, INVALID_DOUBLE, variables);
+                    m_valueEnd = m_valueStart;
+                    m_unfold = false;
+                    return true;
+                } else {
+                    m_valueStart = INVALID_DOUBLE;
+                    m_valueEnd = INVALID_DOUBLE;
+                    return false;
+                }
+            }
+
+            m_speed = INVALID_DOUBLE;
+            m_durationMsecs = INVALID_DOUBLE;
+            m_type = PIXEL_GRADIENT;
+            //m_logger = new Logger("Animator",100);
+            if (parser.readValue("speed",tempValue)){
+                m_speed = ((Command*)variables)->getFloat(tempValue,INVALID_DOUBLE,variables);
+                if (m_speed != INVALID_DOUBLE) {
+                    m_type = TIME_GRADIENT;
+                }
+            } else if (parser.readValue("duration",tempValue)){
+                m_durationMsecs = ((Command*)variables)->getInt(tempValue,INVALID_LONG,variables);
+                if (m_durationMsecs != INVALID_LONG) {
+                    m_type = TIME_GRADIENT;
+                }
+            }
+            m_logger->debug("\tValueGradient %f %f %d %d %f %d",
+                m_valueStart,m_valueEnd,m_unfold,m_durationMsecs,m_speed,m_type);
+            return true;
+        }
+
+        double getValueAt(int index, int maxIndex, ExecutionState* state) {
+            if (m_valueStart == INVALID_DOUBLE) {
+                return INVALID_DOUBLE;
+            }
+            bool unfold = false;
+            if (m_unfold){
+                unfold = true;
+                maxIndex = maxIndex / 2;
+                if (index > maxIndex) {
+                    index = (maxIndex) - (index-maxIndex);
+                }
+            }
+            if (m_valueStart == m_valueEnd){
+                return m_valueStart;
+            }
+            if ((index == 0 && m_type==PIXEL_GRADIENT) || m_type == NO_GRADIENT) {
+                return m_valueStart;
+            } else if (index > maxIndex) {
+                m_logger->warn("index too big %d %d",index,maxIndex);
+                return m_valueEnd;
+            }
+            double value = m_valueStart;
+            if (m_type == TIME_GRADIENT) {
+                double pct = index*1.0/maxIndex;
+                long diff = (m_valueEnd-m_valueStart);
+
+                long runMsecs = state->getAnimationMsecs();
+                long duration = m_durationMsecs;
+
+                if (m_speed != INVALID_DOUBLE) {
+                    duration = diff*1000.0/m_speed;
+                } else if (m_durationMsecs != INVALID_DOUBLE){
+                    duration = m_durationMsecs;
+                } else {
+                    duration = 1000.0;
+                }
+                double dpos = (runMsecs)%duration;
+                if (m_unfold) {
+                    duration = duration/2;
+                    if (dpos>duration) {
+                        dpos = duration - (dpos-duration);;
+                    }
+                }
+                double dpct = dpos/(1.0*duration);
+                value = m_valueStart + dpct*diff;
+                if (index == 0) {
+                    m_logger->debug("time gradient value %d %d    %f    %f-%f  %f %f %d", index,maxIndex,value,m_valueStart,m_valueEnd,dpos,dpct,diff);
+                }
+
+            } else {
+                if (index == 0 || maxIndex == 0) {
+                    value = 0;
+                } else {
+                    double pct = index*1.0/maxIndex;
+                    long diff = (m_valueEnd-m_valueStart+1);
+                    double step = diff*pct;
+                    value = m_valueStart + step;
+                }
+                m_logger->debug("pixel gradient value %d %d %f %f-%f",index,maxIndex, value,m_valueStart,m_valueEnd);
+            }
+            
+            return value;
+        }
+
+        double getStartValue() { return m_valueStart;}
+        double getEndValue() { return m_valueEnd;}
+    private:
+        Logger * m_logger;
+        double m_valueStart;
+        double m_valueEnd;
+        bool m_unfold;
+        long m_durationMsecs;
+        double m_speed;
+        GradientType m_type;
+    };
+
+        Logger patternLogger("ValuePattern",80);
     class Pattern {
         public:
             Pattern() {
                 m_next = NULL;
                 m_count = 0;
-                m_value = 0;
             }
 
             ~Pattern() {
@@ -217,28 +344,22 @@ namespace DevRelief {
                     m_count = cmd->getInt(tempValue,0,variables);
                     patternLogger.debug("got pattern count %d",m_count);
                 }
-                
-                if (parser.readValue("value",tempValue) && tempValue.isNumber()) {
-                    m_value = cmd->getInt(tempValue,INVALID_DOUBLE,variables);
-                    patternLogger.debug("got pattern value %f",m_value);
-                }
-                else
-                {
-                   patternLogger.debug("bad pattern value", m_value);
-                   m_value = INVALID_DOUBLE;
-                }
+                m_valueGradient.read(parser,variables);
+                patternLogger.never("pattern value %f %f %f",m_valueGradient.getStartValue(),m_valueGradient.getEndValue(),INVALID_DOUBLE);
                 return true;
             }
 
             double getValueAt(int index, int maxIndex, ExecutionState* state) {
-
+                double result = INVALID_DOUBLE;
                 if (index <m_count) {
-                    return m_value;
+                    result = m_valueGradient.getValueAt(index,maxIndex,state);
+                } else {
+                    if (m_next != NULL) {
+                        result = m_next->getValueAt(index-m_count,maxIndex,state);
+                    }
                 }
-                if (m_next != NULL) {
-                    return m_next->getValueAt(index-m_count,maxIndex,state);
-                }
-                return INVALID_DOUBLE;
+                patternLogger.never("pattern value %d %f",index,result);
+                return result;
             }
             
             void setNext(Pattern*next) {m_next = next;}
@@ -248,7 +369,7 @@ namespace DevRelief {
         private: 
             Pattern* m_next;
             int     m_count;
-            double     m_value;
+            ValueGradient m_valueGradient;
     };
 
     class ValuePattern : public ValueGenerator
@@ -319,111 +440,6 @@ namespace DevRelief {
         int m_count;
     };
 
-    class ValueGradient : public ValueGenerator
-    {
-    public:
-        ValueGradient()
-        {
-            m_logger = commandLogger; //new Logger("ValueGradient",80);
-        }
-
-        bool read(ObjectParser &parser, VariableCommand *variables)
-        {
-            m_logger->debug("Read ValueGradient");
-            if (parser.readValue("value_start", tempValue)){
-                m_valueStart = ((Command *)variables)->getFloat(tempValue, 0, variables);
-                parser.readValue("value_end", tempValue);
-                m_valueEnd = ((Command *)variables)->getFloat(tempValue, 0, variables);
-                parser.readBoolValue("unfold", &m_unfold, false);
-            } else {
-                parser.readValue("value", tempValue);
-                m_valueStart = ((Command *)variables)->getFloat(tempValue, 0, variables);
-                m_valueEnd = m_valueStart;
-                m_unfold = false;
-                return true;
-            }
-
-            m_speed = INVALID_DOUBLE;
-            m_durationMsecs = INVALID_DOUBLE;
-            m_type = PIXEL_GRADIENT;
-            //m_logger = new Logger("Animator",100);
-            if (parser.readValue("speed",tempValue)){
-                m_speed = ((Command*)variables)->getFloat(tempValue,INVALID_DOUBLE,variables);
-                if (m_speed != INVALID_DOUBLE) {
-                    m_type = TIME_GRADIENT;
-                }
-            } else if (parser.readValue("duration",tempValue)){
-                m_durationMsecs = ((Command*)variables)->getInt(tempValue,INVALID_LONG,variables);
-                if (m_durationMsecs != INVALID_LONG) {
-                    m_type = TIME_GRADIENT;
-                }
-            }
-            m_logger->debug("\tValueGradient %f %f %d %d %f %d",
-                m_valueStart,m_valueEnd,m_unfold,m_durationMsecs,m_speed,m_type);
-            return true;
-        }
-
-        double getValueAt(int index, int maxIndex, ExecutionState* state) {
-            bool unfold = false;
-            if (m_unfold){
-                unfold = true;
-                maxIndex = maxIndex / 2;
-                if (index > maxIndex) {
-                    index = (maxIndex) - (index-maxIndex);
-                }
-            }
-            if (m_valueStart == m_valueEnd){
-                return m_valueStart;
-            }
-            if ((index == 0 && m_type==PIXEL_GRADIENT) || m_type == NO_GRADIENT) {
-                return m_valueStart;
-            } else if (index > maxIndex) {
-                m_logger->warn("index too big %d %d",index,maxIndex);
-                return m_valueEnd;
-            }
-            double value = m_valueStart;
-            if (m_type == TIME_GRADIENT) {
-                double pct = index*1.0/maxIndex;
-                long diff = (m_valueEnd-m_valueStart);
-
-                long runMsecs = state->getAnimationMsecs();
-                long duration = m_durationMsecs;
-                if (m_speed != INVALID_DOUBLE) {
-                    duration = diff*1000.0/m_speed;
-                } else if (m_durationMsecs != INVALID_DOUBLE){
-                    duration = m_durationMsecs;
-                } else {
-                    duration = 1000.0;
-                }
-                double dpos = (runMsecs)%duration;
-                double dpct = dpos/(1.0*duration);
-                value = m_valueStart + dpct*diff;
-                if (index == 0) {
-                    m_logger->debug("time gradient value %d %d    %f    %f-%f  %f %f %d", index,maxIndex,value,m_valueStart,m_valueEnd,dpos,dpct,diff);
-                }
-
-            } else {
-                if (index == 0 || maxIndex == 0) {
-                    value = 0;
-                } else {
-                    double pct = index*1.0/maxIndex;
-                    long diff = (m_valueEnd-m_valueStart+1);
-                    double step = diff*pct;
-                    value = m_valueStart + step;
-                }
-                m_logger->debug("pixel gradient value %d %d %f %f-%f",index,maxIndex, value,m_valueStart,m_valueEnd);
-            }
-            return value;
-        }
-    private:
-        Logger * m_logger;
-        float m_valueStart;
-        float m_valueEnd;
-        bool m_unfold;
-        long m_durationMsecs;
-        double m_speed;
-        GradientType m_type;
-    };
 
     class Position
     {
@@ -684,7 +700,11 @@ namespace DevRelief {
                 int pos = first + idx;
                 double val = m_value->getValueAt(idx,count,state);
                 if (val >=0 && val != INVALID_DOUBLE) {
-                    setHSLComponent(strip,pos,(int)val);
+                    if (val > 360) {
+                        m_logger->error("invalid value %d",val);
+                    } else {
+                        setHSLComponent(strip,pos,(int)val);
+                    }
                 }
             }
         }
@@ -974,7 +994,7 @@ namespace DevRelief {
                 //m_logger->debug("getInt for variable ParserValue %s",val.nameValue);
                 variables->getInt(val.nameValue,result);
             } else {
-                m_logger->warn("unknown ParserValue type %d %f",val.type,val.floatValue);
+                m_logger->warn("unknown ParserValue type for int %d %f",val.type,val.floatValue);
             }
             //m_logger->debug("\tresult=%d",result);
             return result;
@@ -988,7 +1008,7 @@ namespace DevRelief {
                 //m_logger->debug("getInt for variable ParserValue %s",val.nameValue);
                 variables->getFloat(val.nameValue,result);
             } else {
-                m_logger->warn("unknown ParserValue type %d %f",val.type,val.floatValue);
+                m_logger->warn("unknown ParserValue type for float %d %f",val.type,val.floatValue);
             }
             //m_logger->debug("\tresult=%d",result);
             return result;

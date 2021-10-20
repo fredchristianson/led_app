@@ -17,8 +17,16 @@
 
 #include "./logger.h"
 
+
+
 namespace DevRelief {
 
+    int clamp(int min, int max, int val) {
+        if (val < min) { return min;}
+        if (val>max) { return max;}
+        return val;
+    }
+    
     class CRGB {
         public: 
             CRGB() {
@@ -54,10 +62,10 @@ namespace DevRelief {
                 lightness = 0;
             }
             
-            CHSL(uint16_t hue,uint16_t saturation,uint16_t lightness) {
-                this->hue = hue;
-                this->saturation = saturation;
-                this->lightness = lightness;
+            CHSL(int16_t hue,int16_t saturation,int16_t lightness) {
+                this->hue = clamp(0,360,hue);
+                this->saturation = clamp(0,100,saturation);
+                this->lightness = clamp(0,100,lightness);
             }
 
             CRGB toRGB() {
