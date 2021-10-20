@@ -338,6 +338,7 @@ public:
 
     virtual bool getArray(const char * name,Parser& array) {
         int16_t found = skipName(name);
+        
         if (found >= 0) {
             int16_t start = skipTo('[',found);
             int16_t end = skipTo(']',start+1);

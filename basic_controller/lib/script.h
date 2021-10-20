@@ -10,7 +10,10 @@
 namespace DevRelief {
     char tmpBuffer[100];
     ArrayParser commandArray;
+    ArrayParser patternArray;
     ObjectParser obj;
+    ObjectParser pattern;
+    
     ParserValue tempValue;
 
     double INVALID_DOUBLE = __FLT_MAX__; // 1000000000.0;
@@ -187,7 +190,136 @@ namespace DevRelief {
         TIME_GRADIENT=1
     };
 
-    class ValueGradient
+    class ValueGenerator {
+        public:
+            virtual double getValueAt(int index, int maxIndex, ExecutionState* state)=0;
+
+
+    };
+
+    Logger patternLogger("ValuePattern",80);
+    class Pattern {
+        public:
+            Pattern() {
+                m_next = NULL;
+                m_count = 0;
+                m_value = 0;
+            }
+
+            ~Pattern() {
+                delete m_next;
+            }
+
+            bool read(ObjectParser& parser, VariableCommand * variables) {
+                Command * cmd = variables;
+                
+                if (parser.readValue("count",tempValue)) {
+                    m_count = cmd->getInt(tempValue,0,variables);
+                    patternLogger.debug("got pattern count %d",m_count);
+                }
+                
+                if (parser.readValue("value",tempValue) && tempValue.isNumber()) {
+                    m_value = cmd->getInt(tempValue,INVALID_DOUBLE,variables);
+                    patternLogger.debug("got pattern value %f",m_value);
+                }
+                else
+                {
+                   patternLogger.debug("bad pattern value", m_value);
+                   m_value = INVALID_DOUBLE;
+                }
+                return true;
+            }
+
+            double getValueAt(int index, int maxIndex, ExecutionState* state) {
+
+                if (index <m_count) {
+                    return m_value;
+                }
+                if (m_next != NULL) {
+                    return m_next->getValueAt(index-m_count,maxIndex,state);
+                }
+                return INVALID_DOUBLE;
+            }
+            
+            void setNext(Pattern*next) {m_next = next;}
+            int getCount() {
+                return m_count + (m_next == NULL ? 0 : m_next->getCount());
+            }
+        private: 
+            Pattern* m_next;
+            int     m_count;
+            double     m_value;
+    };
+
+    class ValuePattern : public ValueGenerator
+    {
+    public:
+        ValuePattern()
+        {
+            m_logger = &patternLogger;
+            m_firstPattern = NULL;
+            m_count = 0;
+            m_repeat = false;
+        }
+
+        ~ValuePattern() {
+            delete m_firstPattern;
+        }
+
+        void setRepeat(bool on) {
+            m_repeat = on;
+        }
+
+        bool read(ArrayParser* parser, VariableCommand *variables)
+        {
+            delete m_firstPattern;
+            m_firstPattern = NULL;
+            Pattern* lastPattern =  NULL;
+            while(parser->nextObject(&pattern)){
+                Pattern* next = new Pattern();
+                if (next->read(pattern,variables)) {
+                    if (lastPattern == NULL) {
+                        m_firstPattern = next;
+                    } else {
+                        lastPattern->setNext(next);
+                    }
+                    lastPattern = next;
+                } else {
+                    delete next;
+                }
+               
+            }
+            if (m_firstPattern!= NULL) {
+                m_count = m_firstPattern->getCount(); 
+            } else {
+                m_count = 0;
+            }
+           // m_logger->debug("read pattern %d",m_count);
+            return true;
+        }
+
+        double getValueAt(int index, int maxIndex, ExecutionState* state){
+            //m_logger->debug("get pattern index %d",index);
+            if (m_firstPattern == NULL) {
+                return INVALID_DOUBLE;
+            }
+            if ((index < 0 || index > m_count) && !m_repeat) {
+                return INVALID_DOUBLE;
+            }
+            index = index % m_count;
+            double val = m_firstPattern->getValueAt(index,maxIndex,state);
+           // m_logger->debug("\tvalue %f",val);
+            return val;
+        }
+
+    private:
+        Logger* m_logger;
+        Pattern* m_firstPattern;
+        bool m_repeat;
+        int m_count;
+    };
+
+    class ValueGradient : public ValueGenerator
     {
     public:
         ValueGradient()
@@ -232,12 +364,20 @@ namespace DevRelief {
         }
 
         double getValueAt(int index, int maxIndex, ExecutionState* state) {
+            bool unfold = false;
+            if (m_unfold){
+                unfold = true;
+                maxIndex = maxIndex / 2;
+                if (index > maxIndex) {
+                    index = (maxIndex) - (index-maxIndex);
+                }
+            }
             if (m_valueStart == m_valueEnd){
                 return m_valueStart;
             }
             if ((index == 0 && m_type==PIXEL_GRADIENT) || m_type == NO_GRADIENT) {
                 return m_valueStart;
-            } else if (index >= maxIndex) {
+            } else if (index > maxIndex) {
                 m_logger->warn("index too big %d %d",index,maxIndex);
                 return m_valueEnd;
             }
@@ -496,8 +636,18 @@ namespace DevRelief {
         HSLCommand(const char * type, ObjectParser& parser, VariableCommand* variables) : Command(type) {
             m_logger->warn("read position");
             m_position.read(parser,variables);
+            if (parser.getArray("pattern",patternArray)){
+            m_logger->warn("read pattern");
+                m_valuePattern.read(&patternArray,variables);
+                m_value = &m_valuePattern;
+                bool repeat;
+                parser.readBoolValue("repeat_pattern",&repeat,true);
+                m_valuePattern.setRepeat(repeat);
+            } else {
             m_logger->warn("read value");
-            m_value.read(parser,variables);
+                m_valueGradient.read(parser,variables);
+                m_value = &m_valueGradient;
+            }
             m_logger->warn("read op");
             if (!parser.readStringValue("op",hslOpText,20)){
                 strcpy(hslOpText,"replace");
@@ -532,9 +682,9 @@ namespace DevRelief {
 
             for(int idx=0;idx<count;idx++){
                 int pos = first + idx;
-                int val = m_value.getValueAt(idx,count,state);
-                if (val >=0) {
-                    setHSLComponent(strip,pos,val);
+                double val = m_value->getValueAt(idx,count,state);
+                if (val >=0 && val != INVALID_DOUBLE) {
+                    setHSLComponent(strip,pos,(int)val);
                 }
             }
         }
@@ -543,7 +693,9 @@ namespace DevRelief {
         HSLOperation hslOp;
     private:
         Position m_position;
-        ValueGradient m_value;
+        ValueGradient m_valueGradient;
+        ValuePattern m_valuePattern;
+        ValueGenerator* m_value;
         char hslOpText[10];
     };
 

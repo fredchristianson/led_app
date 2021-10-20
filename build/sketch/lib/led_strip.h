@@ -336,7 +336,10 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
             m_logger->debug("HSLStrip realloc for %d leds",count);
             reallocHSLData(count);
             m_logger->debug("clear HSL values");
-            memset(m_hue,-1,sizeof(int16_t)*count);
+            for(int i=0;i<count;i++) {
+                m_hue[i] = -1;
+            }
+            //memset(m_hue,-1,sizeof(int16_t)*count);
             memset(m_saturation,-1,sizeof(int8_t)*count);
             memset(m_lightness,-1,sizeof(int8_t)*count);
             m_base->clear();
@@ -345,7 +348,13 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
         void show() {
             m_logger->debug("show() %d",m_count);
             for(int idx=0;idx<m_count;idx++) {
-                CHSL hsl(clamp(0,360,m_hue[idx]),defaultValue(0,100,m_saturation[idx],100),defaultValue(0,100,m_lightness[idx],0));
+                int hue = m_hue[idx];
+                int sat = m_saturation[idx];
+                int light = m_lightness[idx];
+                if (hue < 0) {
+                    light = 0;
+                }
+                CHSL hsl(clamp(0,360,hue),defaultValue(0,100,sat,100),defaultValue(0,100,light,0));
                 if (idx == 0) {
                     const CRGB rgb = hsl.toRGB();
                     m_logger->debug("hsl(%d,%d,%d)->RGB(%d,%d,%d)",hsl.hue,hsl.saturation,hsl.lightness,rgb.red,rgb.green,rgb.blue);
