@@ -61,7 +61,7 @@ namespace DevRelief {
     };
 
 
-    Logger* commandLogger = new Logger("Command",80);
+    Logger* commandLogger = new Logger("Command",60);
 
     class Command {
     public:
@@ -324,7 +324,7 @@ namespace DevRelief {
     public:
         ValueGradient()
         {
-            m_logger = new Logger("ValueGradient",80);
+            m_logger = commandLogger; //new Logger("ValueGradient",80);
         }
 
         bool read(ObjectParser &parser, VariableCommand *variables)
@@ -430,7 +430,7 @@ namespace DevRelief {
     public:
         Position()
         {
-            m_logger = new Logger("Position",DEBUG_LEVEL);
+            m_logger = commandLogger; //new Logger("Position",WARN_LEVEL);
         }
 
         bool read(ObjectParser &parser, VariableCommand *variables)
@@ -634,27 +634,27 @@ namespace DevRelief {
     public:
        
         HSLCommand(const char * type, ObjectParser& parser, VariableCommand* variables) : Command(type) {
-            m_logger->warn("read position");
+            m_logger->debug("read position");
             m_position.read(parser,variables);
             if (parser.getArray("pattern",patternArray)){
-            m_logger->warn("read pattern");
+            m_logger->debug("read pattern");
                 m_valuePattern.read(&patternArray,variables);
                 m_value = &m_valuePattern;
                 bool repeat;
                 parser.readBoolValue("repeat_pattern",&repeat,true);
                 m_valuePattern.setRepeat(repeat);
             } else {
-            m_logger->warn("read value");
+            m_logger->debug("read value");
                 m_valueGradient.read(parser,variables);
                 m_value = &m_valueGradient;
             }
-            m_logger->warn("read op");
+            m_logger->debug("read op");
             if (!parser.readStringValue("op",hslOpText,20)){
                 strcpy(hslOpText,"replace");
             }
             hslOp = getHslOp(hslOpText);
 
-            m_logger->warn("\tparsed HSLCommand %s",m_type);
+            m_logger->debug("\tparsed HSLCommand %s",m_type);
         }
 
     protected:
@@ -760,14 +760,16 @@ namespace DevRelief {
 
             }
             
-            bool read(ObjectParser parser){
-                m_logger->showMemory();
+            void clear() {
+                delete m_firstCommand;
+                m_firstCommand = NULL;
+            }
 
-                if (m_firstCommand != NULL) {
-                    m_logger->debug("clear commands");
-                    delete m_firstCommand;
-                    m_firstCommand = NULL;
-                }
+
+
+            bool read(ObjectParser parser){
+                clear();
+
                 size_t idx;
                 if (!parser.readStringValue("name",name)) {
                     strcpy(name,"Default");
@@ -785,8 +787,8 @@ namespace DevRelief {
                 parser.getArray("commands",commandArray);
                 //m_logger->debug("commands: %d %d %d %.50s --- %.50s",commandArray.getStart(),commandArray.getEnd(),commandArray.getPos(),commandArray.getData()+commandArray.getStart(),commandArray.getData()+commandArray.getEnd()-25);
                     
-                m_logger->showMemory();
                 VariableCommand * vars = new StartCommand();
+                addCommand(vars);
                 while(commandArray.nextObject(&obj)){
                     m_logger->debug("object: %d %d %d ~~~%.*s~~~",obj.getStart(),obj.getEnd(),obj.getPos(),obj.getEnd()-obj.getStart(),obj.getData()+obj.getStart());
 
@@ -830,7 +832,6 @@ namespace DevRelief {
                     return NULL;
                 }
                 m_logger->info("created command %s",cmd->getType());
-                m_logger->showMemory();
                 return cmd;
             }
 
@@ -846,7 +847,8 @@ namespace DevRelief {
             }
 
             Command* getFirstCommand() { return m_firstCommand;}
-
+            int getDurationMsec() { return durationMsec;}
+            const char * getNextName() { return next;}
             char        name[100];
             char        next[100];
             int         durationMsec;
@@ -885,6 +887,22 @@ namespace DevRelief {
                     m_logger->debug("script set to %s",script->name);
                 }
                 m_script = script;
+            }
+
+            bool isComplete() {
+                if (m_script == NULL) { return false;}
+                int duration = m_script->getDurationMsec();
+                if (duration<=0) { return false;}
+                long now = millis();
+                if (m_startTime+duration>now) {
+                    return false;
+                }
+                m_logger->debug("complete: %d %d %d",m_startTime,duration,now);
+                return m_script->getNextName()[0]!=0;
+            }
+
+            const char * getNextScriptName() {
+                return m_script->getNextName();
             }
 
             void step() {

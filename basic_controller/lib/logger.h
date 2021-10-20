@@ -21,7 +21,8 @@ enum LogLevel {
     DEBUG_LEVEL=100,
     INFO_LEVEL=80,
     WARN_LEVEL=60,
-    ERROR_LEVEL=40
+    ERROR_LEVEL=40,
+    ALWAYS=1
 };
 
 #define MAX_MESSAGE_SIZE 1024
@@ -114,6 +115,14 @@ public:
         va_list args;
         va_start(args,message);
         write(20,message,args);
+    }
+
+    // mainly for new messages during development.  don't need to turn debug level on and get old debug messages.
+    // quick search-replace of "always"->"debug" when done
+    void always(const char * message,...) {
+        va_list args;
+        va_start(args,message);
+        write(ALWAYS,message,args);
     }
 
     void errorNoRepeat(const char * message,...) {

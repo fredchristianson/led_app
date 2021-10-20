@@ -32,6 +32,17 @@ public:
         return m_data;
     }
 
+    void setText(const char * text) {
+        if (text == NULL) {
+            reserve(1);
+            m_data[0] = 0;
+        }
+        int len=strlen(text)+1;
+        strcpy((char*)reserve(len),text);
+        m_length = len;
+        
+    };
+
     const char * text() {
         reserve(1); // make sure there's room for an empty string
         m_data[m_length] = 0;

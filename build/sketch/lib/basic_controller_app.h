@@ -45,7 +45,9 @@ namespace DevRelief {
             } else {
                 m_logger->error("status file not found");
             }
-            strncpy((char*)statusBuffer.reserve(20),"starting",20);
+            statusBuffer.setText("starting");
+            m_logger->debug("status %s",statusBuffer.reserve(1));
+            m_logger->debug("status text %s",statusBuffer.text());
             m_fileSystem->write("/sysstatus","starting");
             char * result = (char*)fileBuffer.reserve(2000);
             auto found = m_fileSystem->read("/config",fileBuffer);
@@ -177,6 +179,7 @@ namespace DevRelief {
                 m_logger->info("Loading script %s",loadScriptOnLoop);
                 if (m_fileSystem->read(path.concatTemp("/script/",loadScriptOnLoop),fileBuffer)){
                     scriptParser.setData(fileBuffer.text());
+                    m_currentScript.clear();
                     m_currentScript.read(scriptParser);
                     m_logger->debug("read script");
                     m_executor.setScript(&m_currentScript);
@@ -184,12 +187,24 @@ namespace DevRelief {
                 }
                 loadScriptOnLoop[0] = 0;
                 m_logger->debug("loop load done");
+            } else if (m_executor.isComplete()) {
+                const char * next = m_executor.getNextScriptName();
+                m_logger->always("next script: %s",next);
+                if (next[0] != NULL && m_fileSystem->read(path.concatTemp("/script/",next),fileBuffer)){
+                    m_logger->always("\t found next");
+                    scriptParser.setData(fileBuffer.text());
+                    m_currentScript.clear();
+                    m_currentScript.read(scriptParser);
+                    m_executor.setScript(&m_currentScript);
+                    m_logger->always("\tnext script loaded");
+                    m_logger->showMemory();
+                }                
             } else {
-                m_logger->periodic(DEBUG_LEVEL,5000,lastLoopMessageTime,"loop()");
+                m_logger->periodic(DEBUG_LEVEL,5000,lastLoopMessageTime,"loop() %s",statusBuffer.text());
                 m_httpServer->handleClient();
                 m_executor.step();
                 if (strcmp(statusBuffer.text(),"starting")==0){
-                    strcpy((char*)statusBuffer.reserve(20),"running");
+                    statusBuffer.setText("running");
                     m_fileSystem->write("/sysstatus","running");
                 }
             }

@@ -5,8 +5,8 @@
 #include "./buffer.h";
 
 namespace DevRelief {
-Logger* genLogger = new Logger("Gen",80);
-Logger* parserLogger = new Logger("Parse",60);
+Logger* genLogger = new Logger("Gen",WARN_LEVEL);
+Logger* parserLogger = new Logger("Parse",WARN_LEVEL);
 char skipBuf[100];
 char intValBuff[32];
 
@@ -231,7 +231,6 @@ public:
 
         
     virtual bool readValue(const char *name,ParserValue& val){
-        m_logger->setLevel(80);
         m_logger->debug("read ParserValue %s",name);
         val.type = UNKNOWN;
         int16_t found = skipName(name);
@@ -507,7 +506,7 @@ public:
 class ArrayParser : public Parser{
 public:
     ArrayParser(const char * data=NULL) : Parser(data) {
-        m_logger = new Logger("ArrayParser",40);
+        m_logger = parserLogger;// new Logger("ArrayParser",40);
     }   
 
     bool nextElement(Parser* parser) {
@@ -545,9 +544,7 @@ public:
     bool nextObject(Parser* parser) {
         m_logger->info("next object %.120s",m_data+m_pos);
         if (nextElement(parser)) {
-            m_logger->info("before trim: %d %d %d",parser->getStart(),parser->getEnd(),parser->getPos());
            parser->trim("{} \t\n\r,[]");
-           m_logger->info("after trim: %d %d %d",parser->getStart(),parser->getEnd(),parser->getPos());
             return true;
         }
         m_logger->info("\t not found");
