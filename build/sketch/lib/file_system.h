@@ -114,7 +114,7 @@ public:
         m_logger->debug("open %s",fullPath);
         File file = open(fullPath);
         if (!file.isFile()) {
-            m_logger->error("file not found %s",fullPath);
+            m_logger->warn("file not found %s",fullPath);
             return false;
         }
         size_t fileSize = file.size();
@@ -143,7 +143,7 @@ public:
         auto fullPath = getFullPath(path);
         File file = open(fullPath);
         if (!file.isFile()) {
-            m_logger->error("r file not found %s",fullPath);
+            m_logger->warn("r file not found %s",fullPath);
             return false;
         }
         size_t size = file.size();
@@ -161,7 +161,7 @@ public:
         auto fullPath = getFullPath(path);
         File file = open(fullPath);
         if (!file.isFile()) {
-            m_logger->error("rb file not found %s",fullPath);
+            m_logger->warn("rb file not found %s",fullPath);
             return false;
         }
         size_t size = file.size();

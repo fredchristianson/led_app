@@ -20,7 +20,7 @@
 
 namespace DevRelief {
 
-Logger* ledLogger = new Logger("LED",100);
+Logger* ledLogger = new Logger("LED",10);
 
 
 class DRLedStrip {
@@ -53,7 +53,7 @@ class DRLedStrip {
 class AdafruitLedStrip : public DRLedStrip {
     public: 
         AdafruitLedStrip(int pin, uint16_t ledCount){
-            m_logger = new Logger("AdafruitLED",80);
+            m_logger = new Logger("AdafruitLED",20);
             m_logger->debug("create AdafruitLedStrip %d %d",pin,ledCount);
             m_controller = new Adafruit_NeoPixel(ledCount,pin,NEO_GRB+NEO_KHZ800);
             m_controller->setBrightness(40);
@@ -107,7 +107,7 @@ class CompoundLedStrip : public DRLedStrip {
             strips[2] = NULL;
             strips[3] = NULL;
             count = 0;
-            m_logger = new Logger("CompoundStrip",80);
+            m_logger = new Logger("CompoundStrip",20);
             m_logger->info("create CompoundLedStrip");
         }
 
@@ -286,7 +286,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
             m_hue = NULL;
             m_saturation = NULL;
             m_lightness = NULL;
-            m_logger = new Logger("HSLStrip",80);
+            m_logger = new Logger("HSLStrip",20);
         }
 
         ~HSLStrip() {
@@ -353,6 +353,9 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
                 int light = m_lightness[idx];
                 if (hue < 0) {
                     light = 0;
+                }
+                if (false && idx < 20) {
+                    m_logger->always("light: %d",light);
                 }
                 CHSL hsl(clamp(0,360,hue),defaultValue(0,100,sat,100),defaultValue(0,100,light,0));
                 if (idx == 0) {

@@ -1,13 +1,13 @@
 #ifndef CONFIG_H
 #define CONFIG_H
-#define CONFIG_HOSTNAME  "test"
+#define CONFIG_HOSTNAME  "Lanai"
 
 #include "./parse_gen.h";
 #include "./logger.h";
 
 namespace DevRelief {
     const char * DEFAULT_CONFIG = R"config({ 
-        "name": "Test Controller",
+        "name": CONFIG_HOSTNAME,
         "addr": "unset",
         "scripts": [],
         "strips": [],

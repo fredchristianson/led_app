@@ -10,6 +10,7 @@
 #include "./parse_gen.h"
 #include "./config.h"
 #include "./script.h"
+#include "./standard.h"
 
 extern EspClass ESP;
 
@@ -38,6 +39,9 @@ namespace DevRelief {
             if (m_fileSystem->read("/sysstatus",statusBuffer)) {
                 if (strcmp(statusBuffer.text(),"running")==0) {
                     m_logger->error("restart after runtime failure: %s",statusBuffer.text());
+                    failed = false;
+                } else if (strcmp(statusBuffer.text(),"off")==0) {
+                    m_logger->error("restart with execution off: %s",statusBuffer.text());
                     failed = false;
                 } else {
                     m_logger->error("restart after boot failure: %s",statusBuffer.text());
@@ -77,6 +81,12 @@ namespace DevRelief {
             });
 
 
+            m_httpServer->routeBracesGet( "/api/off",[this](Request* req, Response* resp){
+                this->m_executor.turnOff();
+                m_fileSystem->write("/sysstatus","off");
+                resp->send(200,"text/json",fileBuffer.text());
+            });
+
             m_httpServer->routeBracesGet( "/api/config",[this](Request* req, Response* resp){
                 m_logger->debug("get /api/config");
                 char * result = (char*)fileBuffer.reserve(2000);
@@ -109,6 +119,11 @@ namespace DevRelief {
                 m_fileSystem->write("/config",body);
                 resp->send(200,"text/plain","posted /api/config");
                 //this->apiRequest(req->pathArg(0),req,resp);
+            });
+
+            m_httpServer->routeBraces( "/api/std/{}",[this](Request* req, Response* resp){
+                m_logger->always("std %s",req->pathArg(0).c_str());
+                resp->send(404,"text/plain","script not found");
             });
 
             m_httpServer->routeBracesGet( "/api/script/{}",[this](Request* req, Response* resp){
@@ -175,7 +190,13 @@ namespace DevRelief {
             if (!m_initialized) {
                 return;
             }
+            m_httpServer->handleClient();
+
             if (loadScriptOnLoop[0] != 0) {
+                if (strcmp(statusBuffer.text(),"off")==0) {
+                    loadScriptOnLoop[0]=0;
+                    return;
+                }
                 m_logger->info("Loading script %s",loadScriptOnLoop);
                 if (m_fileSystem->read(path.concatTemp("/script/",loadScriptOnLoop),fileBuffer)){
                     scriptParser.setData(fileBuffer.text());
@@ -183,27 +204,29 @@ namespace DevRelief {
                     m_currentScript.read(scriptParser);
                     m_logger->debug("read script");
                     m_executor.setScript(&m_currentScript);
+                    m_executor.start();
                     m_logger->debug("set executor");
                 }
                 loadScriptOnLoop[0] = 0;
                 m_logger->debug("loop load done");
-            } else if (m_executor.isComplete()) {
+            } else if (m_executor.isRunning() && m_executor.isComplete()) {
                 const char * next = m_executor.getNextScriptName();
-                m_logger->always("next script: %s",next);
+                m_logger->info("next script: %s",next);
                 if (next[0] != NULL && m_fileSystem->read(path.concatTemp("/script/",next),fileBuffer)){
-                    m_logger->always("\t found next");
+                    m_logger->info("\t found next");
                     scriptParser.setData(fileBuffer.text());
                     m_currentScript.clear();
                     m_currentScript.read(scriptParser);
                     m_executor.setScript(&m_currentScript);
-                    m_logger->always("\tnext script loaded");
+                    m_logger->info("\tnext script loaded");
                     m_logger->showMemory();
-                }                
+                } else {
+                    m_executor.restart();
+                }               
             } else {
                 m_logger->periodic(DEBUG_LEVEL,5000,lastLoopMessageTime,"loop() %s",statusBuffer.text());
-                m_httpServer->handleClient();
                 m_executor.step();
-                if (strcmp(statusBuffer.text(),"starting")==0){
+                if (strcmp(statusBuffer.text(),"running")!=0){
                     statusBuffer.setText("running");
                     m_fileSystem->write("/sysstatus","running");
                 }

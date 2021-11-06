@@ -336,11 +336,16 @@ public:
     }
 
     virtual bool getArray(const char * name,Parser& array) {
+        m_logger->never("getArray %s",name);
         int16_t found = skipName(name);
-        
         if (found >= 0) {
+            found = skipChars(": \t\n\r",found);
+            m_logger->never("\tfound  %d ~~~~%.115s~~~~~",found,m_data+found);
             int16_t start = skipTo('[',found);
             int16_t end = skipTo(']',start+1);
+            if (end == -1){
+                end = m_end;
+            }
             if (isValidPos(start,end)) {
                 array.setData(m_data,start+1,end);
                 if (m_logger->isDebug()){
@@ -351,6 +356,8 @@ public:
                 }
                 return true;
             } 
+            m_logger->never("\tinvalid pos %d %d %d %d",start,end,m_start,m_end);
+
         }
         return false;
     }
@@ -449,16 +456,16 @@ public:
     }
 
     void trim(const char *  ignore) {
-        m_logger->debug("trim %s from %.50s",ignore,m_data+m_start);
+        m_logger->never("trim ~~%s~~ from ~~%.50s~~",ignore,m_data+m_start);
         trimStart(ignore);
-        m_logger->debug("trimed start  %.50s",m_data+m_start);
+        m_logger->never("trimed start  ~~%.50s~~  %d",m_data+m_start,(int)m_data[m_start]);
         trimEnd(ignore);
-        m_logger->debug("trimed end  %d-%d  %d",m_start,m_end,m_pos);
+        m_logger->never("trimed end  %d-%d  %d",m_start,m_end,m_pos);
     }
 
     void trimStart(const char *  ignore) {
         while(m_start >= 0 && m_start <= m_end && strchr(ignore,m_data[m_start]) != NULL){
-            m_logger->debug("strim %d '%c'",m_start,m_data[m_start]);
+            m_logger->never("strim %d '%c'",m_start,m_data[m_start]);
             m_start += 1;
         }
         if (m_pos < m_start) {
@@ -482,10 +489,17 @@ public:
         m_pos = pos;
     }
 
+    void dump(Logger*logger) {
+        if (logger != NULL) {
+            logger->never("Parser start=%d end=%d pos=%d ~~~%.*s~~~",m_start,m_end,m_pos,getLen(),m_data+m_start);
+        }
+    }
+
     const char * getData() { return m_data;}
     int16_t getStart() { return m_start;}
     int16_t getEnd() { return m_end;}
     int16_t getPos() { return m_pos;}
+    int16_t getLen() { int16_t l = m_end-m_start+1;  return l<0 ? 0 : l;};
 
 protected:
     const char * m_data;
@@ -510,27 +524,32 @@ public:
     }   
 
     bool nextElement(Parser* parser) {
-        m_logger->info("next element %.20s",m_data+m_pos);
+        m_logger->never("next element %.20s",m_data+m_pos);
+        dump(m_logger);
         if (m_pos == -1 || m_pos >= m_end) {
-            m_logger->info("\tno next element");
+            m_logger->never("\tno next element");
             return false;
         }
         int16_t start = skipWhite(m_pos);
+        
         int16_t comma = skipTo(',',m_pos);
         int16_t bracket = skipTo(']',m_pos);
-            m_logger->info("%d %d",comma, bracket);
-        if (comma >=0 && comma < bracket) {
-            m_logger->info("found comma %d ~~~%.40s~~~",comma,m_data+comma-1);
+            m_logger->never("comma and bracket%d %d",comma, bracket);
+        if (comma == -1 && bracket == -1) {
+            comma = m_end;
+            m_pos = m_end;
+        } else if (comma >=0 && (bracket == -1 || comma < bracket)) {
+            m_logger->never("found comma %d ~~~%.40s~~~",comma,m_data+comma-1);
             m_pos = comma-1;
         } else if (bracket > 0) {
-            m_logger->info("found bracket %d",comma);
+            m_logger->never("found bracket %d",comma);
             m_pos = bracket-1;
         } else {
             parser->setData(m_data,start,start);
             return false;
         }
-        m_logger->info("got element %d-%d ~~~%.*s~~~",start,m_pos,m_pos-start,m_data);
-        if (m_pos > 0 && m_pos >start && m_pos < m_end) {
+        m_logger->never("got element %d-%d ~~~%.*s~~~",start,m_pos,m_pos-start,m_data+start);
+        if (m_pos > 0 && m_pos >start && m_pos <= m_end) {
             parser->setData(m_data,start,m_pos);
             m_pos += 2;
             return true;
@@ -542,12 +561,21 @@ public:
 
 
     bool nextObject(Parser* parser) {
-        m_logger->info("next object %.120s",m_data+m_pos);
+        m_logger->never("next object %.120s",m_data+m_pos);
         if (nextElement(parser)) {
-           parser->trim("{} \t\n\r,[]");
+           parser->trim(" \t\n\r,{}[]");
+           char first = m_data[m_start];
+           char last = m_data[m_end];
+           m_logger->never("first/last %c/%c   %d - %d",first,last,m_start,m_end);
+           if ((first == '{' && last == '}') || (first == '[' && last == ']')) {
+               m_start += 1;
+               m_end -= 1;
+               m_pos = m_pos < m_start ? m_start : m_pos;
+               m_pos = m_pos > m_end ? m_end : m_pos;
+           }
             return true;
         }
-        m_logger->info("\t not found");
+        m_logger->never("\t not found");
         
         return false;
 

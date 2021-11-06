@@ -210,14 +210,14 @@ namespace DevRelief {
         {
             m_logger->debug("Read ValueGradient");
             if (parser.readValue("value_start", tempValue)){
-                m_logger->always("got 'value_start' %d %d",tempValue.type,tempValue.intValue);
+                m_logger->debug("got 'value_start' %d %d",tempValue.type,tempValue.intValue);
                 m_valueStart = ((Command *)variables)->getFloat(tempValue, INVALID_DOUBLE, variables);
                 parser.readValue("value_end", tempValue);
                 m_valueEnd = ((Command *)variables)->getFloat(tempValue, m_valueStart, variables);
                 parser.readBoolValue("unfold", &m_unfold, false);
             } else {
                 if (parser.readValue("value", tempValue)) {
-                    m_logger->always("got 'value' %d %d",tempValue.type,tempValue.intValue);
+                    m_logger->debug("got 'value' %d %d",tempValue.type,tempValue.intValue);
                     m_valueStart = ((Command *)variables)->getFloat(tempValue, INVALID_DOUBLE, variables);
                     m_valueEnd = m_valueStart;
                     m_unfold = false;
@@ -392,11 +392,15 @@ namespace DevRelief {
         }
 
         bool read(ArrayParser* parser, VariableCommand *variables)
-        {
+        {   
+            parser->dump(m_logger);
+            m_logger->debug("\t\tread ValuePattern ~~%.*s~~",parser->getLen(),parser->getData());
             delete m_firstPattern;
             m_firstPattern = NULL;
             Pattern* lastPattern =  NULL;
             while(parser->nextObject(&pattern)){
+                m_logger->debug("got object");
+                pattern.dump(m_logger);
                 Pattern* next = new Pattern();
                 if (next->read(pattern,variables)) {
                     if (lastPattern == NULL) {
@@ -406,14 +410,18 @@ namespace DevRelief {
                     }
                     lastPattern = next;
                 } else {
+                    m_logger->debug("failed to read pattern");
                     delete next;
                 }
                
             }
+
             if (m_firstPattern!= NULL) {
                 m_count = m_firstPattern->getCount(); 
+                m_logger->debug("\t\tpattern length %d",m_count);
             } else {
                 m_count = 0;
+                m_logger->debug("\t\tno pattern");
             }
            // m_logger->debug("read pattern %d",m_count);
             return true;
@@ -463,6 +471,7 @@ namespace DevRelief {
                 m_logger->debug("\ttype percent");
                 m_positionType = PERCENT;
             }
+
             parser.readValue("start", tempValue);
             m_logger->debug("\tread start");
             m_start = ((Command *)variables)->getInt(tempValue, 0, variables);
@@ -653,14 +662,14 @@ namespace DevRelief {
             m_logger->debug("read position");
             m_position.read(parser,variables);
             if (parser.getArray("pattern",patternArray)){
-            m_logger->debug("read pattern");
+                m_logger->debug("read pattern");
                 m_valuePattern.read(&patternArray,variables);
                 m_value = &m_valuePattern;
                 bool repeat;
                 parser.readBoolValue("repeat_pattern",&repeat,true);
                 m_valuePattern.setRepeat(repeat);
             } else {
-            m_logger->debug("read value");
+                m_logger->debug("read value");
                 m_valueGradient.read(parser,variables);
                 m_value = &m_valueGradient;
             }
@@ -700,8 +709,8 @@ namespace DevRelief {
                 int pos = first + idx;
                 double val = m_value->getValueAt(idx,count,state);
                 if (val >=0 && val != INVALID_DOUBLE) {
-                    if (val > 360) {
-                        m_logger->error("invalid value %d",val);
+                    if (val >= 361) {
+                        m_logger->errorNoRepeat("invalid value %f",val);
                     } else {
                         setHSLComponent(strip,pos,(int)val);
                     }
@@ -727,7 +736,9 @@ namespace DevRelief {
 
     protected:
         virtual void setHSLComponent(IHSLStrip* strip,int index, int value) {
-
+            if (index < 20) {
+                m_logger->debug("CMD hue %d %d",index,value);
+            }
             strip->setHue(index,value,hslOp);
         }
         
@@ -749,7 +760,9 @@ namespace DevRelief {
         }
     protected:
         virtual void setHSLComponent(IHSLStrip* strip,int index, int value) {
-            
+            if (index < 20) {
+                m_logger->debug("CMD Light %d %d",index,value);
+            }
             strip->setLightness(index,value,hslOp);
         }
     };
@@ -879,12 +892,19 @@ namespace DevRelief {
 
     };
 
+    enum ExecuteStatus{
+        STOPPED=0,
+        RUNNING=1,
+        OFF=2
+    };
+
     class ScriptExecutor {
         public:
             ScriptExecutor() {
                 m_logger = new Logger("ScriptExecutor",80);
                 m_startTime = micros();
                 m_lastStepTime = m_startTime;
+                m_status = STOPPED;
             }
 
             ~ScriptExecutor() {
@@ -909,8 +929,13 @@ namespace DevRelief {
                 m_script = script;
             }
 
+            bool isRunning() {
+                return m_status == RUNNING;
+            }
+
             bool isComplete() {
                 if (m_script == NULL) { return false;}
+
                 int duration = m_script->getDurationMsec();
                 if (duration<=0) { return false;}
                 long now = millis();
@@ -921,13 +946,39 @@ namespace DevRelief {
                 return m_script->getNextName()[0]!=0;
             }
 
+            void start() {
+                m_startTime = millis();
+                m_lastStepTime = m_startTime;
+                m_status = RUNNING;
+            }
+
+            void stop() {
+                m_startTime = millis();
+                m_lastStepTime = m_startTime;
+                m_status = STOPPED;
+            }
+
+            void restart() {
+                m_startTime = millis();
+                m_lastStepTime = m_startTime;
+                m_status = RUNNING;
+            }
+
+            void turnOff() {
+                m_status = OFF;
+                if (m_ledStrip) {
+                    m_ledStrip->clear();
+                    m_ledStrip->show();
+                }
+            }
+
             const char * getNextScriptName() {
                 return m_script->getNextName();
             }
 
             void step() {
                 
-                if (m_script == NULL || m_script->getFirstCommand() == NULL) {
+                if (m_status != RUNNING || m_script == NULL || m_script->getFirstCommand() == NULL) {
                     //m_logger->debug("no script");
                     return;
                 }
@@ -974,7 +1025,10 @@ namespace DevRelief {
                 m_logger->info("created HSLStrip");
             }
 
+
+
         private: 
+            ExecuteStatus m_status;
             long m_startTime;
             long m_lastStepTime;
             int m_brightness;

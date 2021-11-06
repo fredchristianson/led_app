@@ -168,6 +168,9 @@ public:
         }if (level > 40) {
             return "WARN ";
         }
+        if (level ==  ALWAYS) {
+            return "ALWAYS";
+        }
         return "ERROR";
         
     }
