@@ -6,8 +6,10 @@
 #include "./logger.h";
 #include "./led_strip.h";
 #include "./config.h";
+#include "./standard.h";
 
 namespace DevRelief {
+    #define MAX_PARAMETER_NAME  20
     char tmpBuffer[100];
     ArrayParser commandArray;
     ArrayParser patternArray;
@@ -20,7 +22,7 @@ namespace DevRelief {
     long INVALID_LONG = LONG_MAX;
     class Script;
     class Command;
-    class VariableCommand;
+    class VariableBaseCommand;
 
     enum PositionType {
         PIXEL,
@@ -31,7 +33,7 @@ namespace DevRelief {
 
     class ExecutionState {
         public:
-            ExecutionState(Config* config, Script* script, VariableCommand* variables) {
+            ExecutionState(Config* config, Script* script, VariableBaseCommand* variables) {
                 m_config = config;
                 m_script = script;
                 m_variables = variables;
@@ -50,18 +52,18 @@ namespace DevRelief {
 
             Config *getConfig() { return m_config; }
             Script *getScript() { return m_script; }
-            VariableCommand *getVariables() { return m_variables; }
-            void setVariables(VariableCommand*cmd) { m_variables = cmd;}
+            VariableBaseCommand *getVariables() { return m_variables; }
+            void setVariables(VariableBaseCommand*cmd) { m_variables = cmd;}
         private:
             Config* m_config;
             Script* m_script;
-            VariableCommand * m_variables;
+            VariableBaseCommand * m_variables;
             long m_startTime;
             long m_stepTime;
     };
 
 
-    Logger* commandLogger = new Logger("Command",60);
+    Logger* commandLogger = new Logger("Command",100);
 
     class Command {
     public:
@@ -109,40 +111,68 @@ namespace DevRelief {
             }
         }
 
-        int getInt(ParserValue&val,int defaultValue,VariableCommand * variables);
-        double getFloat(ParserValue&val,double defaultValue,VariableCommand * variables);
-        const char * getString(ParserValue&val,char * resultValue,size_t maxLen, VariableCommand * variables);
+        int getInt(ParserValue&val,int defaultValue,VariableBaseCommand * variables);
+        double getFloat(ParserValue&val,double defaultValue,VariableBaseCommand * variables);
+        const char * getString(ParserValue&val,char * resultValue,size_t maxLen, VariableBaseCommand * variables);
 
     protected:
         virtual void doCommand(IHSLStrip* strip, ExecutionState* state)=0;
         Logger * m_logger;
         char    m_type[20];
 
+
      private:
         Command* next;
     };
 
-    class VariableCommand : public Command {
+    class VariableBaseCommand : public Command {
+        public: 
+            VariableBaseCommand(const char * subtype="VariableBaseCommand") : Command(subtype) {}    
+            virtual bool getInt(const char * name, int& val) = 0;
+            virtual bool getFloat(const char * name, double& val) = 0;
+            virtual bool getString(const char * name, char * val, size_t maxLength) = 0;
+            void setPreviousVariables(VariableBaseCommand * prev) {
+                m_prev = prev;
+            }
+
+        protected: 
+            VariableBaseCommand * m_prev;
+
+    };
+
+    class VariableCommand : public VariableBaseCommand {
     public:
-        static VariableCommand * create(ObjectParser& parser, VariableCommand * prev) {
+        static VariableCommand * create(ObjectParser& parser, VariableBaseCommand * prev) {
             VariableCommand * cmd = new VariableCommand(parser,prev);
             return cmd;
         }
 
         /* derived classes can manage variables.  not config object to init */
-        VariableCommand(const char * subtype) : Command(subtype) {
+        VariableCommand(const char * subtype, const char * values) : VariableBaseCommand(subtype) {
             m_prev = NULL;
-            variableParser.setData((const char *)data.reserve(1),0,data.getLength());
+            variableParser.setData(values,0,strlen(values));
+            if (!variableParser.readBoolValue("default",&defaults)) {
+                defaults = false;
+            }
         }
 
-        VariableCommand(ObjectParser& parser,VariableCommand * prev) : Command("variable") {
+        VariableCommand(ObjectParser& parser,VariableBaseCommand * prev) : VariableBaseCommand("variable") {
             m_prev = prev;
             parser.readAll(data);
             variableParser.setData((const char *)data.reserve(1),0,data.getLength());
-            
+            if (!variableParser.readBoolValue("default",&defaults)) {
+                defaults = false;
+            }            
+        }
+
+        void setPreviousVariables(VariableBaseCommand * prev) {
+            m_prev = prev;
         }
 
         bool getInt(const char * name, int& val) {
+            if (defaults && m_prev && m_prev->getInt(name,val)) {
+                return true;
+            }
             if (!variableParser.readIntValue(name,&val)) {
                 return m_prev != NULL &&  m_prev->getInt(name,val);
             }
@@ -150,6 +180,9 @@ namespace DevRelief {
         }
 
         bool getFloat(const char * name, double& val) {
+            if (defaults && m_prev && m_prev->getFloat(name,val)) {
+                return true;
+            }
             if (!variableParser.readFloatValue(name,&val)) {
                 return m_prev != NULL &&  m_prev->getFloat(name,val);
             }
@@ -157,11 +190,16 @@ namespace DevRelief {
         }
 
         bool getString(const char * name, char * val, size_t maxLen) {
+            if (defaults && m_prev && m_prev->getString(name,val,maxLen)) {
+                return true;
+            }
             if (!variableParser.readStringValue(name,val,maxLen)) {
                 return m_prev != NULL && m_prev->getString(name,val,maxLen);
             }
             return true;
         }
+
+
 
     protected:
         virtual void doCommand(IHSLStrip* strip, ExecutionState * state) {
@@ -169,19 +207,137 @@ namespace DevRelief {
         }
 
     private:
-        VariableCommand * m_prev;
         DRBuffer data;
         ObjectParser variableParser;
+        bool defaults;
     };
 
-    /*
-    StartCommand does nothing for now.  ensures we always have a VariableCommand before any other commands so they don't need to check NULL
-    */
+
     class StartCommand : public VariableCommand {
         public:
-            StartCommand() : VariableCommand("StartCommand") {
+            StartCommand() : VariableCommand("StartCommand", STD_VARIABLES) {
 
             }
+    };
+
+    class ParameterValue {
+    public:        
+        ~ParameterValue() {
+            delete next;
+        }
+        ParameterValue*  next;
+        char name[MAX_PARAMETER_NAME];
+
+        ValueType type;
+        union{
+            int intValue;
+            double floatValue;
+            bool boolValue;
+            char stringValue[PARSER_VALUE_MAX_LEN];
+        };
+    };
+
+    class ParameterVariableCommand : public VariableBaseCommand {
+        public:
+            ParameterVariableCommand() : VariableBaseCommand("ParameterVariableCommand") {
+                firstValue = NULL;
+                m_logger = new Logger("ParameterVariableCommand",DEBUG_LEVEL);
+            }
+
+            ~ParameterVariableCommand() {
+                delete firstValue;
+            }
+
+            void add(const char * name, const char * val) {
+                if (name == NULL || val == NULL) {
+                    return;
+                }
+
+                m_logger->always("Add parameter value %s=%s",name,val);
+                ParameterValue * next = new ParameterValue();
+                strncpy(next->name,name,MAX_PARAMETER_NAME);
+                if (isdigit(val[0])) {
+                    if (strchr(val,'.') == NULL) {
+                        next->type = INTEGER;
+                        next->intValue = atoi(val);
+                        m_logger->always("\tint value %d",next->intValue);
+                    } else {
+                        next->type = FLOAT;
+                        next->floatValue = atof(val);
+                        m_logger->always("\tint value %f",next->floatValue);
+                    }
+                } else {
+                    strncpy(next->stringValue,val,PARSER_VALUE_MAX_LEN);
+                    next->type = STRING;
+                }
+                next->next = firstValue;
+                firstValue = next;
+            }
+            
+            bool getInt(const char * name, int& val) {
+                ParameterValue * f = find(name);
+                m_logger->always("get parameter value %s",name);
+                if (f != NULL) {
+                    if (f->type == STRING) {
+                        m_logger->always(" \tvalue is a string %d",f->stringValue);
+                        return m_prev && m_prev->getInt(f->stringValue,val);
+                    }
+                    val = f->intValue;
+                    m_logger->always("\tgot %d",val);
+                    return true;
+                } else {
+                    m_logger->always(" parameter value %s not found",name);
+
+                }
+                return false;
+            }
+
+            bool getFloat(const char * name, double& val) {
+                m_logger->always("get float parameter value %s",name);
+                 ParameterValue * f = find(name);
+                if (f != NULL) {
+                    if (f->type == STRING) {
+                        m_logger->always(" \tvalue is a string %s",f->stringValue);
+                        return m_prev && m_prev->getFloat(f->stringValue,val);
+                    }
+                    if (f->type == FLOAT) {
+                        val = f->floatValue;
+                    } else if (f->type == INTEGER) {
+                        val = f->intValue;
+                    }
+                    m_logger->always("\tgot %f",val);
+                    return true;
+                } else {
+                    m_logger->always(" parameter value %s not found",name);
+
+                }
+                return false;
+            }
+
+            bool getString(const char * name, char * val, size_t maxLen) {
+                ParameterValue * f = find(name);
+                if (f != NULL) {
+                    val = f->stringValue;
+                    return true;
+                }
+                return false;
+            }
+
+            ParameterValue* find(const char * name) {
+                ParameterValue * f = firstValue;
+                while( f != NULL && strcmp(f->name,name) != 0) {
+                    f = f->next;
+                }
+                return f;
+            }
+        protected:
+            virtual void doCommand(IHSLStrip* strip, ExecutionState * state) {
+                state->setVariables(this);
+            }
+
+        private: 
+            ParameterValue * firstValue;
+
     };
 
     enum GradientType {
@@ -206,7 +362,7 @@ namespace DevRelief {
             m_logger = commandLogger; //new Logger("ValueGradient",80);
         }
 
-        bool read(ObjectParser &parser, VariableCommand *variables)
+        bool read(ObjectParser &parser, VariableBaseCommand *variables)
         {
             m_logger->debug("Read ValueGradient");
             if (parser.readValue("value_start", tempValue)){
@@ -307,7 +463,9 @@ namespace DevRelief {
                     double step = diff*pct;
                     value = m_valueStart + step;
                 }
-                m_logger->debug("pixel gradient value %d %d %f %f-%f",index,maxIndex, value,m_valueStart,m_valueEnd);
+                if (index == 0) {
+                    m_logger->debug("pixel gradient value %d %d %f %f-%f",index,maxIndex, value,m_valueStart,m_valueEnd);
+                }
             }
             
             return value;
@@ -337,7 +495,7 @@ namespace DevRelief {
                 delete m_next;
             }
 
-            bool read(ObjectParser& parser, VariableCommand * variables) {
+            bool read(ObjectParser& parser, VariableBaseCommand * variables) {
                 Command * cmd = variables;
                 
                 if (parser.readValue("count",tempValue)) {
@@ -391,7 +549,7 @@ namespace DevRelief {
             m_repeat = on;
         }
 
-        bool read(ArrayParser* parser, VariableCommand *variables)
+        bool read(ArrayParser* parser, VariableBaseCommand *variables)
         {   
             parser->dump(m_logger);
             m_logger->debug("\t\tread ValuePattern ~~%.*s~~",parser->getLen(),parser->getData());
@@ -454,10 +612,11 @@ namespace DevRelief {
     public:
         Position()
         {
-            m_logger = commandLogger; //new Logger("Position",WARN_LEVEL);
+            //m_logger = commandLogger; 
+            m_logger = new Logger("Position",WARN_LEVEL);
         }
 
-        bool read(ObjectParser &parser, VariableCommand *variables)
+        bool read(ObjectParser &parser, VariableBaseCommand *variables)
         {   
             m_logger->debug("parse Position object");
             parser.readStringValue("position_type", tmpBuffer, 20);
@@ -482,14 +641,14 @@ namespace DevRelief {
             {
                 m_logger->debug("\tread end");
                 parser.readValue("end", tempValue);
-                int end = ((Command *)variables)->getInt(tempValue, m_start, variables);
+                int end = ((Command *)variables)->getInt(tempValue, 100, variables);
                 m_count = end - m_start + 1;
                 m_logger->debug("\tgot end %d %d %d",end,m_start,m_count);
 
             }
             else
             {
-                m_count = ((Command *)variables)->getInt(tempValue, 0, variables);
+                m_count = ((Command *)variables)->getInt(tempValue, 100, variables);
                 m_logger->debug("\tgot count %d",m_count);
             }
             return true;
@@ -513,11 +672,18 @@ namespace DevRelief {
 
         int convert(int val, IHSLStrip *strip)
         {
+
             if (m_positionType == PIXEL)
             {
                 return val;
             }
             int count = strip->getCount();
+            if (val <= 0) {
+                return 0;
+            }
+            if (val >= 100) {
+                return count;
+            }
             return (int)round((val * count) / 100.0);
         }
 
@@ -530,7 +696,7 @@ namespace DevRelief {
 
     class AnimatorCommand : public Command {
         public:
-            AnimatorCommand(ObjectParser& parser, VariableCommand * variables, const char * type = "animator") : Command(type) {
+            AnimatorCommand(ObjectParser& parser, VariableBaseCommand * variables, const char * type = "animator") : Command(type) {
                 m_speed = INVALID_DOUBLE;
                 m_durationMsecs = INVALID_DOUBLE;
                 //m_logger = new Logger("Animator",100);
@@ -577,7 +743,7 @@ namespace DevRelief {
 
     class PositionAnimator : public AnimatorCommand, public IHSLStrip {
         public:
-            PositionAnimator(ObjectParser& parser, VariableCommand * variables) : AnimatorCommand(parser,variables, "PositionAnimator"){
+            PositionAnimator(ObjectParser& parser, VariableBaseCommand * variables) : AnimatorCommand(parser,variables, "PositionAnimator"){
                 parser.readValue("direction",tempValue);
                 m_forward = true;
                 if (getString(tempValue,tmpBuffer,100,variables)){
@@ -658,7 +824,7 @@ namespace DevRelief {
     class HSLCommand : public Command {
     public:
        
-        HSLCommand(const char * type, ObjectParser& parser, VariableCommand* variables) : Command(type) {
+        HSLCommand(const char * type, ObjectParser& parser, VariableBaseCommand* variables) : Command(type) {
             m_logger->debug("read position");
             m_position.read(parser,variables);
             if (parser.getArray("pattern",patternArray)){
@@ -704,7 +870,7 @@ namespace DevRelief {
         virtual void doCommand(IHSLStrip* strip, ExecutionState * state) {
             int first = m_position.getStart(strip);
             int count = m_position.getCount(strip);
-
+            m_logger->always("doCommand %s %d %d",m_type,first,count);
             for(int idx=0;idx<count;idx++){
                 int pos = first + idx;
                 double val = m_value->getValueAt(idx,count,state);
@@ -730,13 +896,13 @@ namespace DevRelief {
 
     class HueCommand : public HSLCommand {
     public:
-        HueCommand(ObjectParser& parser, VariableCommand* variables) : HSLCommand("hue",parser,variables) {
+        HueCommand(ObjectParser& parser, VariableBaseCommand* variables) : HSLCommand("hue",parser,variables) {
 
         }
 
     protected:
         virtual void setHSLComponent(IHSLStrip* strip,int index, int value) {
-            if (index < 20) {
+            if (index < 5) {
                 m_logger->debug("CMD hue %d %d",index,value);
             }
             strip->setHue(index,value,hslOp);
@@ -745,22 +911,25 @@ namespace DevRelief {
     };
     class SaturationCommand : public HSLCommand {
     public:
-        SaturationCommand(ObjectParser& parser, VariableCommand* variables) : HSLCommand("saturation",parser,variables) {
+        SaturationCommand(ObjectParser& parser, VariableBaseCommand* variables) : HSLCommand("saturation",parser,variables) {
 
         }
     protected:
         virtual void setHSLComponent(IHSLStrip* strip,int index, int value) {
             strip->setSaturation(index,value,hslOp);
+            if (index < 5) {
+                m_logger->debug("CMD sat %d %d",index,value);
+            }
         }        
     };
     class LightnessCommand : public HSLCommand {
     public:
-        LightnessCommand(ObjectParser& parser, VariableCommand* variables) : HSLCommand("lightness",parser,variables) {
+        LightnessCommand(ObjectParser& parser, VariableBaseCommand* variables) : HSLCommand("lightness",parser,variables) {
 
         }
     protected:
         virtual void setHSLComponent(IHSLStrip* strip,int index, int value) {
-            if (index < 20) {
+            if (index < 5) {
                 m_logger->debug("CMD Light %d %d",index,value);
             }
             strip->setLightness(index,value,hslOp);
@@ -770,7 +939,7 @@ namespace DevRelief {
     class Script {
         public:
             Script(){
-                m_logger = new Logger("Script",10);
+                m_logger = new Logger("Script",100);
                 strcpy(name,"Default");
                 next[0] = 0;
                 durationMsec = -1;
@@ -786,9 +955,12 @@ namespace DevRelief {
             }
 
             void run(HSLStrip * strip, ExecutionState* state) {
+                m_logger->always("run script. brightness=%d",brightness);
                 strip->setBrightness(brightness);
                 if (m_firstCommand != NULL) {
                     m_firstCommand->execute(strip,state);
+                } else {
+                    m_logger->always("no script");
                 }
 
             }
@@ -800,7 +972,7 @@ namespace DevRelief {
 
 
 
-            bool read(ObjectParser parser){
+            bool read(ObjectParser parser, VariableBaseCommand * scriptVars=NULL){
                 clear();
 
                 size_t idx;
@@ -813,15 +985,19 @@ namespace DevRelief {
                 if (!parser.readIntValue("duration",&durationMsec)) {
                     durationMsec = -1;
                 }
-                if (!parser.readIntValue("duration",&brightness)) {
-                    brightness = -1;
+                if (!parser.readIntValue("brightness",&brightness)) {
+                    brightness = 40;
                 }
 
                 parser.getArray("commands",commandArray);
                 //m_logger->debug("commands: %d %d %d %.50s --- %.50s",commandArray.getStart(),commandArray.getEnd(),commandArray.getPos(),commandArray.getData()+commandArray.getStart(),commandArray.getData()+commandArray.getEnd()-25);
                     
-                VariableCommand * vars = new StartCommand();
+                VariableBaseCommand * vars = new StartCommand();
                 addCommand(vars);
+                if (scriptVars!=NULL) {
+                    scriptVars->setPreviousVariables(vars);
+                    vars = scriptVars;
+                }
                 while(commandArray.nextObject(&obj)){
                     m_logger->debug("object: %d %d %d ~~~%.*s~~~",obj.getStart(),obj.getEnd(),obj.getPos(),obj.getEnd()-obj.getStart(),obj.getData()+obj.getStart());
 
@@ -851,7 +1027,7 @@ namespace DevRelief {
                 return true;
             }
 
-            HSLCommand * createHSLCommand(ObjectParser& parser, VariableCommand*variables) {
+            HSLCommand * createHSLCommand(ObjectParser& parser, VariableBaseCommand*variables) {
                 parser.readStringValue("component",tmpBuffer);
                 HSLCommand * cmd = NULL;
                 if (strcmp(tmpBuffer,"hue")==0) {
@@ -979,15 +1155,10 @@ namespace DevRelief {
             void step() {
                 
                 if (m_status != RUNNING || m_script == NULL || m_script->getFirstCommand() == NULL) {
-                    //m_logger->debug("no script");
+                    m_logger->debug("no script");
                     return;
                 }
-                /*
-                long now = micros();
-                if (((now-m_lastStepTime)/1000000)<5) {
-                    return; // only step every 5 seconds for now;
-                }
-                */
+
                 long now = millis();
                 if (m_ledStrip == NULL) {
                     m_logger->errorNoRepeat("no HSLStrip to run script");
@@ -1039,7 +1210,7 @@ namespace DevRelief {
     };
 
 
-     int Command::getInt(ParserValue&val,int defaultValue,VariableCommand * variables){
+     int Command::getInt(ParserValue&val,int defaultValue,VariableBaseCommand * variables){
             int result = defaultValue;
             if (val.type == INTEGER || val.type == FLOAT){
                 //m_logger->debug("getInt for INTEGER ParserValue %d %d",val.intValue,val.type);
@@ -1053,7 +1224,7 @@ namespace DevRelief {
             //m_logger->debug("\tresult=%d",result);
             return result;
         }
-        double Command::getFloat(ParserValue&val,double defaultValue,VariableCommand * variables){
+        double Command::getFloat(ParserValue&val,double defaultValue,VariableBaseCommand * variables){
             double result = defaultValue;
             if (val.type == INTEGER || val.type == FLOAT){
                 //m_logger->debug("getInt for INTEGER ParserValue %d %d",val.intValue,val.type);
@@ -1068,7 +1239,7 @@ namespace DevRelief {
             return result;
         }
 
-        const char * Command::getString(ParserValue&val,char * resultValue,size_t maxLen, VariableCommand * variables){
+        const char * Command::getString(ParserValue&val,char * resultValue,size_t maxLen, VariableBaseCommand * variables){
             if (val.type == STRING) {
                 strncpy(resultValue,val.stringValue,maxLen);
                 return resultValue;

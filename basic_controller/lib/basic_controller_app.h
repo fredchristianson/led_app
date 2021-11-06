@@ -122,8 +122,35 @@ namespace DevRelief {
             });
 
             m_httpServer->routeBraces( "/api/std/{}",[this](Request* req, Response* resp){
-                m_logger->always("std %s",req->pathArg(0).c_str());
-                resp->send(404,"text/plain","script not found");
+                const char * name = req->pathArg(0).c_str();
+                m_logger->always("std %s",name);
+                const char * script = NULL;
+                if (strcmp(name,"off")==0) {
+                    script = STD_OFF;
+                } else if (strcmp(name,"white")==0) {
+                    script = STD_WHITE;
+                } else if (strcmp(name,"color")==0) {
+                    script = STD_COLOR;
+                }
+
+                if (script != NULL) {
+                    m_fileSystem->write("/sysstatus","off");
+                    ParameterVariableCommand* cmd = new ParameterVariableCommand();
+                    for(int i=0;i<req->args();i++) {
+                        m_logger->always("\t%s=%s",req->argName(i).c_str(),req->arg(i).c_str());
+                        cmd->add(req->argName(i).c_str(),req->arg(i).c_str());
+                    }
+                    m_logger->always("script %s",script);
+                    scriptParser.setData(script);
+                    m_currentScript.clear();
+                    m_currentScript.read(scriptParser,cmd);
+                    m_logger->debug("read script");
+                    m_executor.setScript(&m_currentScript);
+                    m_executor.start();
+                    resp->send(200,"text/plain","running ");
+                } else {
+                    resp->send(404,"text/plain","script not found");
+                }
             });
 
             m_httpServer->routeBracesGet( "/api/script/{}",[this](Request* req, Response* resp){
@@ -192,7 +219,7 @@ namespace DevRelief {
             }
             m_httpServer->handleClient();
 
-            if (loadScriptOnLoop[0] != 0) {
+            if (false && loadScriptOnLoop[0] != 0) {
                 if (strcmp(statusBuffer.text(),"off")==0) {
                     loadScriptOnLoop[0]=0;
                     return;
@@ -254,26 +281,7 @@ namespace DevRelief {
             ////m_logger->debug("handle API %s",api.c_str());
             Serial.println("*** handle api ");
             Serial.println(api);
-            /*
-            if (api == "restart") {
-                ////m_logger->warn("restart API called");
-                resp->send(200,"text/json","{result:true,message:\"restarting\"}");
-                ESP.restart();
-            } else if (api == "serial"){
-                ////m_logger->debug("restart serial port");
-                Serial.println("***");
-                Serial.println(api.c_str());
-                Serial.begin(115200);
-                Serial.println("serial restarted");
-                ////m_logger->debug("serial restarted");
-                resp->send(200,"text/json","{result:true,message:\"serial restarted\"}");
-            }  else if (api == "show"){
-                ////m_logger->info("show leds");
-                m_strip->show();
-                resp->send(200,"text/json","{result:true,message:\"FastLED.show()\"}");
-            } else {
-                resp->send(200,"text/json","{result:false,message:\"unknown api \"}");
-            }*/
+         
              resp->send(200,"text/json","{result:false,message:\"unknown api \"}");
         }
 
@@ -301,46 +309,7 @@ namespace DevRelief {
           
         }
 
-       /*
-        void runScene(String commandText) {
-
-            const char * text = commandText.c_str();
-            //m_logger->warn("execute commands");
-            //m_logger->warn(text);
-            int start = 0;
-            int end = commandText.indexOf('\n');
-            m_setLedCount = m_ledCount;
-            m_strip->clear(); 
-            
-            for(int idx=0;idx<300;idx++){
-                hslData.leds[idx].hue = 0;
-                hslData.leds[idx].saturation = 0;
-                hslData.leds[idx].lightness = 0;
-            }
-            while(end>=0) {
-                char cmd[100];
-                memcpy(cmd,text+start,end-start);// = commandText.substring(start,end);
-                cmd[end-start] = 0;
-                //m_logger->debug("run command %s",cmd);
-                runCommand(cmd,hslData.leds);
-                //m_logger->debug("command done");
-                start = end + 1;
-                //////m_logger->debug("start/end  %d/%d",start,end);
-                end = commandText.indexOf('\n',start);
-               // ////m_logger->debug("next start/end  %d/%d",start,end);
-            }
-
-            int number;
-            //m_logger->debug("set strip values %d",m_setLedCount);
-            for(number=0;number<m_ledCount && number < this->m_setLedCount;number++) {
-              CHSL& color = hslData.leds[number];
-              // ////m_logger->debug("HSV %d (%d,%d,%d)",number,color.hue,color.saturation,color.value);
-              auto rgb = HSLToRGB(color);
-              m_strip->setColor(number,rgb);
-            }
-        }
-*/
-        
+    
     private: 
         Logger * m_logger;
         DRFileSystem * m_fileSystem;

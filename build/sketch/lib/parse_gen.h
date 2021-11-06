@@ -296,6 +296,7 @@ public:
                 return true;
             }
         }
+        m_logger->debug("\tnot found");
         return false;
     }
 
