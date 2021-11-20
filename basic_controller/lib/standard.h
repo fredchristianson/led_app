@@ -2,6 +2,23 @@
 #define STANDARD_VALS_H
 
 namespace DevRelief {
+    const char * STD_HOME = R"home({
+        <html>
+        <style>
+        a { display: inline-block; margin-right: 4rem; border: 1px solid black;}
+        </style>
+        <body>
+        <div><a>/</a>this page</div>
+        <div><a>/{page}.html</a>display {page}</div>
+        <div><a>/api/off</a>turn off all leds</div>
+        <div><a>/api/config</a>show config.  POST to set config</div>
+        <div><a>/api/std/{standard_script}</a>run "white","off","color"</div>
+        <div><a>/api/script/{script}</a>return  script.  save and run with POST</div>
+        <div><a>/api/run/{script}</a>run script</div>
+        
+        </body></home>
+    })home";
+
     const char * STD_VARIABLES = R"vars({ 
         "RED": 0,
         "ORANGE" 30,
@@ -18,7 +35,7 @@ namespace DevRelief {
 
 
 
-    const char * STD_OFF = R"std({
+    const char * STD_OFF = R"std(
         {
             "name": "std_off",
             "brightness": 0,
@@ -28,9 +45,9 @@ namespace DevRelief {
                 }
             ]
         }
-    })std";
+    )std";
 
-    const char * STD_WHITE = R"std({
+    const char * STD_WHITE = R"std(
         {
             "name": "std_white",
             "brightness": 40,
@@ -41,20 +58,20 @@ namespace DevRelief {
                 {"type": "hsl", "component": "lightness", "value": "var(lightness)"}
             ]
         }
-    })std";
+    )std";
 
-    const char * STD_COLOR = R"std({
+    const char * STD_COLOR = R"std(
         {
             "name": "std_color",
             "brightness": 40,
             "commands": [
-                { "type": "variable", "default":true, "lightness":100, "saturation":50,"hue":0},
+                { "type": "variable", "default":true, "lightness":50, "saturation":100,"hue":0},
                 {"type": "hsl", "component": "hue", "value": "var(hue)"},
                 {"type": "hsl", "component": "saturation", "value": "var(saturation)"},
                 {"type": "hsl", "component": "lightness", "value": "var(lightness)"}
             ]
         }
-    })std";
+    )std";
 }
 
 #endif

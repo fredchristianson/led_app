@@ -28,31 +28,13 @@ namespace DevRelief {
    
    
         BasicControllerApplication() {
-            m_logger = new Logger("BasicControllerApplication",100);
+            m_logger = new Logger("BasicControllerApplication",80);
             m_initialized = false;
             loadScriptOnLoop[0] =0;
             m_logger->showMemory();
             m_httpServer = new HttpServer();
             m_fileSystem = new DRFileSystem();
 
-            bool failed = true;
-            if (m_fileSystem->read("/sysstatus",statusBuffer)) {
-                if (strcmp(statusBuffer.text(),"running")==0) {
-                    m_logger->error("restart after runtime failure: %s",statusBuffer.text());
-                    failed = false;
-                } else if (strcmp(statusBuffer.text(),"off")==0) {
-                    m_logger->error("restart with execution off: %s",statusBuffer.text());
-                    failed = false;
-                } else {
-                    m_logger->error("restart after boot failure: %s",statusBuffer.text());
-                }
-            } else {
-                m_logger->error("status file not found");
-            }
-            statusBuffer.setText("starting");
-            m_logger->debug("status %s",statusBuffer.reserve(1));
-            m_logger->debug("status text %s",statusBuffer.text());
-            m_fileSystem->write("/sysstatus","starting");
             char * result = (char*)fileBuffer.reserve(2000);
             auto found = m_fileSystem->read("/config",fileBuffer);
             if (found) {
@@ -61,19 +43,42 @@ namespace DevRelief {
                 m_config.read(DEFAULT_CONFIG);
             }
             m_executor.setConfig(m_config);
-            if (!failed) {
+
+            bool loadDefault = true;
+            if (m_fileSystem->read("/sysstatus",statusBuffer)) {
+                m_logger->always("statusbuffer: %s",statusBuffer.text());
+                if (strcmp(statusBuffer.text(),"running")==0) {
+                    m_logger->error("restart after: %s",statusBuffer.text());
+                    loadDefault = true;
+                } else if (strcmp(statusBuffer.text(),"off")==0) {
+                    m_logger->error("restart with execution off: %s",statusBuffer.text());
+                    loadDefault = false;
+                }  else if (strcmp(statusBuffer.text(),"std")==0) {
+                    loadDefault = false;
+                    readStdScript();
+                } else {
+                    m_logger->error("restart after boot failure: %s",statusBuffer.text());
+                    loadDefault = false;
+                }
+            } else {
+                m_logger->error("status file not found");
+            }
+            m_logger->debug("status %s",statusBuffer.reserve(1));
+            m_logger->debug("status text %s",statusBuffer.text());
+            
+            if (loadDefault) {
+                statusBuffer.setText("starting");
+                m_fileSystem->write("/sysstatus","starting");
                 if (m_config.startupScript[0] != 0) {
                     m_logger->info("loading startup script %s",m_config.startupScript);
                     strncpy(loadScriptOnLoop,m_config.startupScript,20);
                 } else {
                     m_logger->warn("no startup script found");
                 }
-            } else {
-                m_logger->error("not restarting because last restart failed");
-            }
+            } 
 
             m_httpServer->route("/",[this](Request* req, Response* resp){
-                this->getPage("index",req,resp);
+                this->getPage("STD_HOME",req,resp);
             });
 
             m_httpServer->routeBraces("/{}.html",[this](Request* req, Response* resp){
@@ -123,7 +128,7 @@ namespace DevRelief {
 
             m_httpServer->routeBraces( "/api/std/{}",[this](Request* req, Response* resp){
                 const char * name = req->pathArg(0).c_str();
-                m_logger->always("std %s",name);
+                m_logger->debug("std %s",name);
                 const char * script = NULL;
                 if (strcmp(name,"off")==0) {
                     script = STD_OFF;
@@ -134,24 +139,47 @@ namespace DevRelief {
                 }
 
                 if (script != NULL) {
-                    m_fileSystem->write("/sysstatus","off");
                     ParameterVariableCommand* cmd = new ParameterVariableCommand();
                     for(int i=0;i<req->args();i++) {
-                        m_logger->always("\t%s=%s",req->argName(i).c_str(),req->arg(i).c_str());
+                        m_logger->debug("\t%s=%s",req->argName(i).c_str(),req->arg(i).c_str());
                         cmd->add(req->argName(i).c_str(),req->arg(i).c_str());
                     }
-                    m_logger->always("script %s",script);
+                    m_logger->debug("script %s",script);
                     scriptParser.setData(script);
                     m_currentScript.clear();
                     m_currentScript.read(scriptParser,cmd);
                     m_logger->debug("read script");
                     m_executor.setScript(&m_currentScript);
                     m_executor.start();
-                    resp->send(200,"text/plain","running ");
+                    m_fileSystem->write("/sysstatus","std");
+
+                    Generator gen(&fileBuffer);
+                    gen.startObject();
+                    gen.writeNameValue("name",name);
+                    gen.writeName("args");
+                    gen.startProperty();
+                    gen.startArray();
+                    for(int i=0;i<req->args();i++) {
+                        gen.startProperty();
+                        gen.startObject();
+                        gen.writeNameValue("name",req->argName(i).c_str());
+                        gen.writeNameValue("value",req->arg(i).c_str());
+                        gen.endObject();
+                        gen.endProperty();
+                    }
+                    gen.endArray();
+                    gen.endProperty();
+                    gen.endObject();
+
+                    m_logger->debug("script: %s",fileBuffer.text());
+                    m_fileSystem->write("std_script",fileBuffer.text());
+                    statusBuffer.setText("running");
+                    resp->send(200,"text/plain",fileBuffer.text());
                 } else {
                     resp->send(404,"text/plain","script not found");
                 }
             });
+
 
             m_httpServer->routeBracesGet( "/api/script/{}",[this](Request* req, Response* resp){
                 if (m_fileSystem->read(path.concatTemp("/script/",req->pathArg(0).c_str()),fileBuffer)){
@@ -212,6 +240,47 @@ namespace DevRelief {
             m_initialized = true;
         }
 
+
+        void readStdScript(){
+            if (m_fileSystem->read("std_script",fileBuffer)) {
+                m_currentScript.clear();
+                m_logger->always("starting std script: %s",fileBuffer.text());
+                scriptParser.setData(fileBuffer.text());
+                scriptParser.readStringValue("name",tmpBuffer,20);
+                const char * script = NULL;
+                if (strcmp(tmpBuffer,"off")==0) {
+                    script = STD_OFF;
+                } else if (strcmp(tmpBuffer,"white")==0) {
+                    script = STD_WHITE;
+                } else if (strcmp(tmpBuffer,"color")==0) {
+                    script = STD_COLOR;
+                }
+                m_logger->always("read std script %s",script);
+                ArrayParser args;
+                scriptParser.getArray("args",args);
+                ObjectParser arg;
+                
+                ParameterVariableCommand* cmd = new ParameterVariableCommand();
+                char pname[20];
+                char pval[20];
+                while(args.nextObject(&arg)) {
+                    if (arg.readStringValue("name",pname,20) &&
+                        arg.readStringValue("value",pval,20)) {
+                            cmd->add(pname,pval);
+                            m_logger->always("param: %s=%s",pname,pval);
+                        }
+                }
+                m_currentScript.clear();
+                scriptParser.setData(script);
+                m_currentScript.read(scriptParser,cmd);
+                m_executor.setScript(&m_currentScript);
+                m_executor.start();
+                m_logger->always("started std script: %s",tmpBuffer);
+            } else {
+                m_logger->error("std_script not found");
+            }
+
+        }
         
         void loop() {
             if (!m_initialized) {

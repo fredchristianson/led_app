@@ -63,7 +63,7 @@ namespace DevRelief {
     };
 
 
-    Logger* commandLogger = new Logger("Command",100);
+    Logger* commandLogger = new Logger("Command",80);
 
     class Command {
     public:
@@ -870,7 +870,7 @@ namespace DevRelief {
         virtual void doCommand(IHSLStrip* strip, ExecutionState * state) {
             int first = m_position.getStart(strip);
             int count = m_position.getCount(strip);
-            m_logger->always("doCommand %s %d %d",m_type,first,count);
+            m_logger->debug("doCommand %s %d %d",m_type,first,count);
             for(int idx=0;idx<count;idx++){
                 int pos = first + idx;
                 double val = m_value->getValueAt(idx,count,state);
@@ -939,7 +939,7 @@ namespace DevRelief {
     class Script {
         public:
             Script(){
-                m_logger = new Logger("Script",100);
+                m_logger = new Logger("Script",80);
                 strcpy(name,"Default");
                 next[0] = 0;
                 durationMsec = -1;
@@ -955,7 +955,7 @@ namespace DevRelief {
             }
 
             void run(HSLStrip * strip, ExecutionState* state) {
-                m_logger->always("run script. brightness=%d",brightness);
+                m_logger->debug("run script. brightness=%d",brightness);
                 strip->setBrightness(brightness);
                 if (m_firstCommand != NULL) {
                     m_firstCommand->execute(strip,state);
