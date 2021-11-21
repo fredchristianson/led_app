@@ -1212,23 +1212,35 @@ namespace DevRelief {
 
      int Command::getInt(ParserValue&val,int defaultValue,VariableBaseCommand * variables){
             int result = defaultValue;
-            if (val.type == INTEGER || val.type == FLOAT){
+            if (val.type == INTEGER){
                 //m_logger->debug("getInt for INTEGER ParserValue %d %d",val.intValue,val.type);
                 result = val.intValue;
+            } else if (val.type == FLOAT){
+                //m_logger->debug("getInt for INTEGER ParserValue %d %d",val.intValue,val.type);
+                result = (int)val.floatValue;
             } else if (val.type == VARIABLE && variables != NULL) {
                 //m_logger->debug("getInt for variable ParserValue %s",val.nameValue);
                 variables->getInt(val.nameValue,result);
+            } else if (val.type == STRING) {
+                //m_logger->debug("getInt for variable ParserValue %s",val.nameValue);
+                result = atoi(val.stringValue);
             } else {
-                m_logger->warn("unknown ParserValue type for int %d %f",val.type,val.floatValue);
+                m_logger->warn("unknown ParserValue type for int %d",val.type);
             }
             //m_logger->debug("\tresult=%d",result);
             return result;
         }
         double Command::getFloat(ParserValue&val,double defaultValue,VariableBaseCommand * variables){
             double result = defaultValue;
-            if (val.type == INTEGER || val.type == FLOAT){
+            if (val.type == INTEGER){
+                //m_logger->debug("getInt for INTEGER ParserValue %d %d",val.intValue,val.type);
+                result = val.intValue;
+            } else if (val.type == FLOAT){
                 //m_logger->debug("getInt for INTEGER ParserValue %d %d",val.intValue,val.type);
                 result = val.floatValue;
+            } else if (val.type == STRING){
+                //m_logger->debug("getInt for INTEGER ParserValue %d %d",val.intValue,val.type);
+                result = atof(val.stringValue);
             } else if (val.type == VARIABLE && variables != NULL) {
                 //m_logger->debug("getInt for variable ParserValue %s",val.nameValue);
                 variables->getFloat(val.nameValue,result);
