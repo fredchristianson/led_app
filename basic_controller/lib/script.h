@@ -29,6 +29,23 @@ namespace DevRelief {
         PERCENT
     };
 
+    HSLOperation getHslOp(const char * text) {
+        if (strcasecmp(text,"ADD") == 0){
+            return ADD;
+        } else if (strcasecmp(text,"SUBTRACT") == 0){
+            return SUBTRACT;
+        } else if (strcasecmp(text,"AVERAGE") == 0){
+            return AVERAGE;
+        } else if (strcasecmp(text,"MIN") == 0){
+            return MIN;
+        } else if (strcasecmp(text,"MAX") == 0){
+            return MAX;
+        } else {
+            return REPLACE;
+        }
+        return REPLACE;
+
+    }
 
 
     class ExecutionState {
@@ -85,7 +102,7 @@ namespace DevRelief {
         const char * getType() { return m_type;}
 
         virtual void execute(IHSLStrip* strip,ExecutionState* state) {
-            m_logger->debug("execute command %s",m_type);
+            m_logger->never("execute command %s",m_type);
             doCommand(strip,state);
             if (next != NULL) {
                 next->execute(strip,state);
@@ -371,7 +388,8 @@ namespace DevRelief {
     public:
         ValueGradient()
         {
-            m_logger = commandLogger; //new Logger("ValueGradient",80);
+            m_logger = commandLogger; 
+            m_logger = new Logger("ValueGradient",100);
         }
 
         bool read(ObjectParser &parser, VariableBaseCommand *variables)
@@ -391,6 +409,7 @@ namespace DevRelief {
                     m_unfold = false;
                     return true;
                 } else {
+                    m_logger->error("invalide ValueGradient value %.75s",parser.getData());
                     m_valueStart = INVALID_DOUBLE;
                     m_valueEnd = INVALID_DOUBLE;
                     return false;
@@ -483,6 +502,10 @@ namespace DevRelief {
             return value;
         }
 
+        double setRange(double start, double end) {
+            m_valueStart = start;
+            m_valueEnd = end;
+        }
         double getStartValue() { return m_valueStart;}
         double getEndValue() { return m_valueEnd;}
     private:
@@ -774,6 +797,13 @@ namespace DevRelief {
                 }
             }
 
+            void setRGB(int index, CRGB& rgb, HSLOperation op) {
+                m_logger->debug("setRGB in PostionAnimator %d %d",index,animateIndex(index));
+                if (baseStrip) {
+                    baseStrip->setRGB(animateIndex(index),rgb,op);
+                }
+            };
+
             void setHue(int index, int16_t hue, HSLOperation op) {
                 m_logger->debug("setHue in PostionAnimator %d %d",index,animateIndex(index));
                 if (baseStrip) {
@@ -851,33 +881,17 @@ namespace DevRelief {
                 m_valueGradient.read(parser,variables);
                 m_value = &m_valueGradient;
             }
-            m_logger->debug("read op");
             if (!parser.readStringValue("op",hslOpText,20)){
                 strcpy(hslOpText,"replace");
             }
             hslOp = getHslOp(hslOpText);
+            m_logger->debug("read op %d",hslOp);
 
             m_logger->debug("\tparsed HSLCommand %s",m_type);
         }
 
     protected:
-        HSLOperation getHslOp(const char * text) {
-            if (strcasecmp(text,"add") == 0){
-                return ADD;
-            } else if (strcasecmp(text,"SUBTRACT") == 0){
-                return SUBTRACT;
-            } else if (strcasecmp(text,"AVERAGE") == 0){
-                return AVERAGE;
-            } else if (strcasecmp(text,"MIN") == 0){
-                return MIN;
-            } else if (strcasecmp(text,"MAX") == 0){
-                return MAX;
-            } else {
-                return REPLACE;
-            }
-            return REPLACE;
 
-        }
 
         virtual void doCommand(IHSLStrip* strip, ExecutionState * state) {
             int first = m_position.getStart(strip);
@@ -946,6 +960,73 @@ namespace DevRelief {
             }
             strip->setLightness(index,value,hslOp);
         }
+    };
+
+    class RGBCommand :  public Command {
+    public:
+       
+        RGBCommand(ObjectParser& parser, VariableBaseCommand* variables) : Command("RGBCommand") {
+            m_logger = new Logger("RGBCommand");
+            m_logger->debug("read position");
+            m_position.read(parser,variables);
+            if (parser.getArray("pattern",patternArray)){
+                m_logger->debug("read pattern");
+                m_valuePattern.read(&patternArray,variables);
+                m_value = &m_valuePattern;
+                bool repeat;
+                parser.readBoolValue("repeat_pattern",&repeat,true);
+                m_valuePattern.setRepeat(repeat);
+            } else {
+                m_valueGradient.read(parser,variables);
+                m_value = &m_valueGradient;
+                m_logger->debug("got value");
+                CRGB rgb(255,0,0);
+                CHSL hsl = RGBToHSL_dbg(rgb);
+                m_logger->debug("HSL %d %d %d",hsl.hue,hsl.saturation,hsl.lightness);
+            }
+            if (!parser.readStringValue("op",hslOpText,20)){
+                strcpy(hslOpText,"replace");
+            }
+            hslOp = getHslOp(hslOpText);
+            m_logger->debug("read op %d",hslOp);
+
+            m_logger->debug("\tparsed RGBCommand %s",m_type);
+        }
+
+    protected:
+
+
+        virtual void doCommand(IHSLStrip* strip, ExecutionState * state) {
+            int first = m_position.getStart(strip);
+            int count = m_position.getCount(strip);
+            m_logger->debug("doCommand %s %d %d",m_type,first,count);
+            for(int idx=0;idx<count;idx++){
+                int pos = first + idx;
+                double val = m_value->getValueAt(idx,count,state);
+                if (val >=0.0 && val <= 256.0 && val != INVALID_DOUBLE) {
+                    CRGB rgb(0,val,0);
+                    //m_logger->periodic(100,5000,NULL,"RGB value %d=%f,  %d,%d,%d",pos,val,rgb.red,rgb.green,rgb.blue);
+                    if (idx == 0) {
+                        CHSL hsl = RGBToHSL_dbg(rgb);
+                        m_logger->debug("RGB value %d=%f,  %d,%d,%d=>%d,%d,%d",pos,val,rgb.red,rgb.green,rgb.blue,hsl.hue,hsl.saturation,hsl.lightness);
+                    }
+                    strip->setRGB(pos,rgb, hslOp);
+                } else {
+                    //m_logger->errorNoRepeat("invalid value %f",val);
+                    if (idx == 0) {
+                        m_logger->error("invalid value %f",val);
+                    }
+                } 
+            }
+        }
+
+        HSLOperation hslOp;
+    private:
+        Position m_position;
+        ValueGradient m_valueGradient;
+        ValuePattern m_valuePattern;
+        ValueGenerator* m_value;
+        char hslOpText[10];
     };
 
     class Script {
@@ -1027,6 +1108,8 @@ namespace DevRelief {
                         cmd = createHSLCommand(obj,vars);
                     } else if (strcmp(tmpBuffer,"position_animator")==0) {
                         cmd = new PositionAnimator(obj,vars);
+                    }  else if (strcmp(tmpBuffer,"rgb")==0) {
+                        cmd = new RGBCommand(obj,vars);
                     } else {
                         m_logger->error("unknown command type: %s",tmpBuffer);
                     }

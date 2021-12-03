@@ -29,6 +29,16 @@ namespace DevRelief {
    
         BasicControllerApplication() {
             m_logger = new Logger("BasicControllerApplication",80);
+
+            CRGB rgb(255,0,0);
+            CHSL hsl = RGBToHSL_dbg(rgb);
+            rgb.red = 0;
+            rgb.green = 255;
+            hsl = RGBToHSL_dbg(rgb);
+            rgb.green = 0;
+            rgb.blue = 255;
+            hsl = RGBToHSL_dbg(rgb);
+
             m_initialized = false;
             loadScriptOnLoop[0] =0;
             m_logger->showMemory();
@@ -354,7 +364,7 @@ namespace DevRelief {
                     m_executor.restart();
                 }               
             } else {
-                m_logger->periodic(DEBUG_LEVEL,5000,lastLoopMessageTime,"loop() %s",statusBuffer.text());
+                m_logger->periodic(DEBUG_LEVEL,5000,&lastLoopMessageTime,"loop() %s",statusBuffer.text());
                 m_executor.step();
             }
             

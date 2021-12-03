@@ -37,6 +37,8 @@ public:
         initializeWriter();
         m_name = name + padding;
         m_name = m_name.substring(0, padding.length());
+        
+        m_periodicTimer = 0;
         m_level = level;
     }
 
@@ -142,10 +144,13 @@ public:
         write(20,message,args);
     }
 
-    void periodic(int level,long frequencyMS, long&lastTimer,const char * message,...){
-        if (millis() >lastTimer + frequencyMS)
+    void periodic(int level,long frequencyMS, long * lastTimer,const char * message,...){
+        if (lastTimer == NULL) {
+            lastTimer = &m_periodicTimer;
+        }
+        if (millis() > (*lastTimer + frequencyMS))
         {
-            lastTimer = millis();
+            *lastTimer = millis();
             va_list args;
             va_start(args, message);
             write(level, message, args);
@@ -183,6 +188,7 @@ public:
 private:
     String m_name;
     int m_level;
+    long m_periodicTimer;
 };
 
 #endif

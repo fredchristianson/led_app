@@ -41,7 +41,7 @@ class DRLedStrip {
         virtual void show()=0;
 
         virtual void setColor(uint16_t index, CHSL& color) {
-            return setColor(index,color.toRGB());
+            return setColor(index,HSLToRGB(color));
         }
 
         long validCheck;
@@ -276,6 +276,7 @@ class IHSLStrip {
         virtual void setHue(int index, int16_t hue, HSLOperation op)=0;
         virtual void setSaturation(int index, int16_t hue, HSLOperation op)=0;
         virtual void setLightness(int index, int16_t hue, HSLOperation op)=0;
+        virtual void setRGB(int index, CRGB& rgb, HSLOperation op)=0;
         virtual size_t getCount()=0;
 };
 
@@ -293,6 +294,12 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
             reallocHSLData(0);
         }
 
+        void setRGB(int index, CRGB& rgb,HSLOperation op) {
+            CHSL hsl = RGBToHSL(rgb);
+            setHue(index,hsl.hue,op);
+            setLightness(index,hsl.saturation,op);
+            setLightness(index,hsl.lightness,op);
+        }
 
         void setHue(int index, int16_t hue, HSLOperation op) {
             if (index<0 || index>=m_count) {
@@ -359,7 +366,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
                 }
                 CHSL hsl(clamp(0,360,hue),defaultValue(0,100,sat,100),defaultValue(0,100,light,0));
                 if (idx == 0) {
-                    const CRGB rgb = hsl.toRGB();
+                    const CRGB rgb = HSLToRGB(hsl);
                     m_logger->debug("hsl(%d,%d,%d)->RGB(%d,%d,%d)",hsl.hue,hsl.saturation,hsl.lightness,rgb.red,rgb.green,rgb.blue);
                 }
                 m_base->setColor(idx,hsl);
