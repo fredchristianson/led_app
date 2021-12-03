@@ -1,0 +1,9 @@
+.drjs-pager ul li {
+  display: inline-block;
+  margin: 0.5rem 0.1rem;
+  font-size: 0.75rem;
+  background-color: black;
+  color: #aaf;
+  padding: 0.10rem;
+}
+/*# sourceMappingURL=drjs.css.map */

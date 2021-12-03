@@ -1,0 +1,42 @@
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="../css/drjs.css?v=1"/>
+        <link rel="stylesheet" href="../css/ledapp.css?v=4"/>
+        <style>
+
+        </style>
+    </head>
+<body>
+
+    <body>
+        <header>
+
+        </header>
+        <div id='log-container' class='log hidden'>
+            <button id='log-clear'>Clear</button>
+            <div class='messages'>
+            </div>
+        </div>
+        <section id='strips'>
+            
+        </section>
+        <section id='main-content'>
+            
+        </section>
+
+        <footer></footer>
+    </body>
+</body>
+<script type="module">
+import {ConsoleLogWriter} from '../drjs/log-writer-console.js';
+import {Logger,LOG_LEVEL} from '../drjs/logger.js';
+const log = new Logger("LEDs");
+const console = new ConsoleLogWriter(LOG_LEVEL.DEBUG);
+log.debug("logger"); 
+import {LedApp} from '../js/led-app.js?v=4';
+const app = new LedApp();
+app.start();
+</script>
+
+</html>
