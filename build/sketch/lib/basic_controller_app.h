@@ -34,6 +34,7 @@ namespace DevRelief {
             m_logger->showMemory();
             m_httpServer = new HttpServer();
             m_fileSystem = new DRFileSystem();
+            loadScriptOnLoop[0] = 0;
 
             char * result = (char*)fileBuffer.reserve(2000);
             auto found = m_fileSystem->read("/config",fileBuffer);
@@ -44,41 +45,30 @@ namespace DevRelief {
             }
             m_executor.setConfig(m_config);
 
-            bool loadDefault = true;
             if (m_fileSystem->read("/sysstatus",statusBuffer)) {
-                m_logger->always("statusbuffer: %s",statusBuffer.text());
-                if (strcmp(statusBuffer.text(),"running")==0) {
-                    m_logger->error("restart after: %s",statusBuffer.text());
-                    loadDefault = true;
+                m_fileSystem->write("/sysstatus","starting");
+                m_logger->info("statusbuffer: %s",statusBuffer.text());
+                if (strcmp(statusBuffer.text(),"script")==0) {
+                    m_fileSystem->read("/run_script",fileBuffer);
+                    m_logger->info("restart with script: %s",fileBuffer.text());
+                    strncpy(loadScriptOnLoop,fileBuffer.text(),50);
+
                 } else if (strcmp(statusBuffer.text(),"off")==0) {
-                    m_logger->error("restart with execution off: %s",statusBuffer.text());
-                    loadDefault = false;
+                    m_logger->info("restart with execution off");
                 }  else if (strcmp(statusBuffer.text(),"std")==0) {
-                    loadDefault = false;
+                    m_logger->info("restart with std script");
                     readStdScript();
                 } else {
                     m_logger->error("restart after boot failure: %s",statusBuffer.text());
-                    loadDefault = false;
                 }
             } else {
                 m_logger->error("status file not found");
             }
-            m_logger->debug("status %s",statusBuffer.reserve(1));
-            m_logger->debug("status text %s",statusBuffer.text());
-            
-            if (loadDefault) {
-                statusBuffer.setText("starting");
-                m_fileSystem->write("/sysstatus","starting");
-                if (m_config.startupScript[0] != 0) {
-                    m_logger->info("loading startup script %s",m_config.startupScript);
-                    strncpy(loadScriptOnLoop,m_config.startupScript,20);
-                } else {
-                    m_logger->warn("no startup script found");
-                }
-            } 
 
+            
             m_httpServer->route("/",[this](Request* req, Response* resp){
-                this->getPage("STD_HOME",req,resp);
+                //this->getPage("STD_HOME",req,resp);
+                resp->send(200,"text/html",STD_HOME);
             });
 
             m_httpServer->routeBraces("/{}.html",[this](Request* req, Response* resp){
@@ -118,7 +108,8 @@ namespace DevRelief {
                 ObjectParser parser(body);
                 m_config.read(parser);
                 m_executor.setConfig(m_config);
-                m_logger->debug("set load script",m_config.startupScript);
+                m_logger->always("set config",body);
+                m_logger->always("set load script",m_config.startupScript);
               
                 strncpy(loadScriptOnLoop,m_config.startupScript,20);
                 m_fileSystem->write("/config",body);
@@ -128,7 +119,7 @@ namespace DevRelief {
 
             m_httpServer->routeBraces( "/api/std/{}",[this](Request* req, Response* resp){
                 const char * name = req->pathArg(0).c_str();
-                m_logger->debug("std %s",name);
+                m_logger->never("std %s",name);
                 const char * script = NULL;
                 if (strcmp(name,"off")==0) {
                     script = STD_OFF;
@@ -140,15 +131,40 @@ namespace DevRelief {
 
                 if (script != NULL) {
                     ParameterVariableCommand* cmd = new ParameterVariableCommand();
-                    for(int i=0;i<req->args();i++) {
-                        m_logger->debug("\t%s=%s",req->argName(i).c_str(),req->arg(i).c_str());
-                        cmd->add(req->argName(i).c_str(),req->arg(i).c_str());
-                    }
-                    m_logger->debug("script %s",script);
                     scriptParser.setData(script);
+
+                    for(int i=0;i<req->args();i++) {
+                        m_logger->never("\t%s=%s",req->argName(i).c_str(),req->arg(i).c_str());
+                        const char * name = req->argName(i).c_str();
+                        const char * val = req->arg(i).c_str();
+                        if (name[0] == 'p'){
+                            addPattern(m_currentScript,name+1,val);
+                        } else {
+                            cmd->add(req->argName(i).c_str(),req->arg(i).c_str());
+                        }
+                    }
                     m_currentScript.clear();
                     m_currentScript.read(scriptParser,cmd);
-                    m_logger->debug("read script");
+                    /*
+                    int test = 89;
+                    if (cmd->getInt("hue",test)) {
+                        m_logger->never("---- got hue:  %d",test);
+                    } else {
+                        m_logger->never("---- hue failed:  %d",test);
+                    }
+
+                    Command* c = m_currentScript.getFirstCommand();
+                    while(c != NULL) {
+                        if (c->hasVariables()){
+                            if (cmd->getInt("hue",test)) {
+                                m_logger->never("---- var cmd got hue:  %d",test);
+                            } else {
+                                m_logger->never("---- var cmd hue failed:  %d",test);
+                            }   
+                        }
+                        c = c->getNext();
+                    }
+                    */
                     m_executor.setScript(&m_currentScript);
                     m_executor.start();
                     m_fileSystem->write("/sysstatus","std");
@@ -171,7 +187,7 @@ namespace DevRelief {
                     gen.endProperty();
                     gen.endObject();
 
-                    m_logger->debug("script: %s",fileBuffer.text());
+                    m_logger->never("script: %s",fileBuffer.text());
                     m_fileSystem->write("std_script",fileBuffer.text());
                     statusBuffer.setText("running");
                     resp->send(200,"text/plain",fileBuffer.text());
@@ -243,6 +259,7 @@ namespace DevRelief {
 
         void readStdScript(){
             if (m_fileSystem->read("std_script",fileBuffer)) {
+                loadScriptOnLoop[0] = 0;
                 m_currentScript.clear();
                 m_logger->always("starting std script: %s",fileBuffer.text());
                 scriptParser.setData(fileBuffer.text());
@@ -254,41 +271,56 @@ namespace DevRelief {
                     script = STD_WHITE;
                 } else if (strcmp(tmpBuffer,"color")==0) {
                     script = STD_COLOR;
+                } else if (strcmp(tmpBuffer,"pattern")==0) {
+                    script = STD_PATTERN;
                 }
-                m_logger->always("read std script %s",script);
+                m_logger->never("read std script %s",script);
                 ArrayParser args;
                 scriptParser.getArray("args",args);
                 ObjectParser arg;
                 
-                ParameterVariableCommand* cmd = new ParameterVariableCommand();
+                ParameterVariableCommand* varCmd = new ParameterVariableCommand();
+
+                
                 char pname[20];
                 char pval[20];
                 while(args.nextObject(&arg)) {
                     if (arg.readStringValue("name",pname,20) &&
                         arg.readStringValue("value",pval,20)) {
-                            cmd->add(pname,pval);
+                        if (pname[0] == 'p'){
+                            addPattern(m_currentScript,pname+1,pval);
+                        } else {
+                            varCmd->add(pname,pval);
                             m_logger->always("param: %s=%s",pname,pval);
                         }
+                    }
                 }
                 m_currentScript.clear();
                 scriptParser.setData(script);
-                m_currentScript.read(scriptParser,cmd);
+                m_currentScript.read(scriptParser,varCmd);
                 m_executor.setScript(&m_currentScript);
                 m_executor.start();
+                m_fileSystem->write("/sysstatus","std");
                 m_logger->always("started std script: %s",tmpBuffer);
             } else {
+                m_fileSystem->write("/sysstatus","off");
                 m_logger->error("std_script not found");
             }
 
         }
         
+        void addPattern(Script& script, const char * pattern, const char * pval) {
+            // to add HSL patterns in scripts
+            m_logger->error("addPattern not implemented");
+        }
+
         void loop() {
             if (!m_initialized) {
                 return;
             }
             m_httpServer->handleClient();
 
-            if (false && loadScriptOnLoop[0] != 0) {
+            if (loadScriptOnLoop[0] != 0) {
                 if (strcmp(statusBuffer.text(),"off")==0) {
                     loadScriptOnLoop[0]=0;
                     return;
@@ -303,6 +335,8 @@ namespace DevRelief {
                     m_executor.start();
                     m_logger->debug("set executor");
                 }
+                m_fileSystem->write("/run_script",loadScriptOnLoop);
+                m_fileSystem->write("/sysstatus","script");
                 loadScriptOnLoop[0] = 0;
                 m_logger->debug("loop load done");
             } else if (m_executor.isRunning() && m_executor.isComplete()) {
@@ -322,10 +356,6 @@ namespace DevRelief {
             } else {
                 m_logger->periodic(DEBUG_LEVEL,5000,lastLoopMessageTime,"loop() %s",statusBuffer.text());
                 m_executor.step();
-                if (strcmp(statusBuffer.text(),"running")!=0){
-                    statusBuffer.setText("running");
-                    m_fileSystem->write("/sysstatus","running");
-                }
             }
             
         }
@@ -345,11 +375,17 @@ namespace DevRelief {
             return "text/plain";
         }
 
-        void apiRequest(const char * api,Request * req,Response * resp) {
+        
 
-            ////m_logger->debug("handle API %s",api.c_str());
-            Serial.println("*** handle api ");
-            Serial.println(api);
+        void apiRequest(const char * api,Request * req,Response * resp) {
+            m_logger->debug("handle API %s",api);
+            if (strcmp(api,"reboot") == 0) {
+                resp->send(200,"text/json","{result:true,message:\"rebooting ... \"}");   
+                delay(1000);
+                ESP.restart();
+            }
+            //Serial.println("*** handle api ");
+            //Serial.println(api);
          
              resp->send(200,"text/json","{result:false,message:\"unknown api \"}");
         }

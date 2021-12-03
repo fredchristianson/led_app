@@ -317,7 +317,16 @@ public:
         value[0] = 0;
         int16_t found = skipName(name);
         if (found >= 0) {
-            int16_t start = skipTo('"',found);
+            m_logger->debug("readStringValue %d ~%.50s~",found,m_data+found);
+            found = skipChars(" \t\n\r:",found);
+            m_logger->debug("\tskipped %d ~%.50s~",found,m_data+found);
+            int16_t start = skipTo('"',found-1);
+            int16_t comma = skipTo(',',found);
+            if (comma > found && comma < start) {
+                value[0] = 0;
+                m_logger->debug("found comma before string %d %d",comma,start);
+                return true;
+            }
             int16_t end = skipTo('"',start+1);
             if (start > 0 && start < end && start <= m_end && end <= m_end) {
                 start++;
@@ -333,6 +342,7 @@ public:
                 }
             }
         }
+        m_logger->debug("no value found");
         return false;
     }
 

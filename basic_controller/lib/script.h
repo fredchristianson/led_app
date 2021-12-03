@@ -63,7 +63,7 @@ namespace DevRelief {
     };
 
 
-    Logger* commandLogger = new Logger("Command",80);
+    Logger* commandLogger = new Logger("Command",60);
 
     class Command {
     public:
@@ -114,7 +114,7 @@ namespace DevRelief {
         int getInt(ParserValue&val,int defaultValue,VariableBaseCommand * variables);
         double getFloat(ParserValue&val,double defaultValue,VariableBaseCommand * variables);
         const char * getString(ParserValue&val,char * resultValue,size_t maxLen, VariableBaseCommand * variables);
-
+        virtual bool hasVariables() { return false;}
     protected:
         virtual void doCommand(IHSLStrip* strip, ExecutionState* state)=0;
         Logger * m_logger;
@@ -135,6 +135,8 @@ namespace DevRelief {
                 m_prev = prev;
             }
 
+            virtual bool hasVariables() { return true;}
+
         protected: 
             VariableBaseCommand * m_prev;
 
@@ -154,6 +156,7 @@ namespace DevRelief {
             if (!variableParser.readBoolValue("default",&defaults)) {
                 defaults = false;
             }
+            m_logger->never("Variable command %s", (defaults ? "default":"not default"));
         }
 
         VariableCommand(ObjectParser& parser,VariableBaseCommand * prev) : VariableBaseCommand("variable") {
@@ -163,6 +166,7 @@ namespace DevRelief {
             if (!variableParser.readBoolValue("default",&defaults)) {
                 defaults = false;
             }            
+            m_logger->never("Variable command %s", (defaults ? "default":"not default"));
         }
 
         void setPreviousVariables(VariableBaseCommand * prev) {
@@ -170,12 +174,17 @@ namespace DevRelief {
         }
 
         bool getInt(const char * name, int& val) {
+            m_logger->never("Variable::getInt %s", (defaults ? "default":"not default"));
             if (defaults && m_prev && m_prev->getInt(name,val)) {
+            m_logger->never("Variable::getInt got default");
                 return true;
             }
+
             if (!variableParser.readIntValue(name,&val)) {
+            m_logger->never("Variable::getInt got prev");
                 return m_prev != NULL &&  m_prev->getInt(name,val);
             }
+            m_logger->never("Variable::getInt got val %d",val);
             return true;
         }
 
@@ -241,7 +250,7 @@ namespace DevRelief {
         public:
             ParameterVariableCommand() : VariableBaseCommand("ParameterVariableCommand") {
                 firstValue = NULL;
-                m_logger = new Logger("ParameterVariableCommand",DEBUG_LEVEL);
+                m_logger = new Logger("ParameterVariableCommand",WARN_LEVEL);
             }
 
             ~ParameterVariableCommand() {
@@ -250,21 +259,22 @@ namespace DevRelief {
 
             void add(const char * name, const char * val) {
                 if (name == NULL || val == NULL) {
+                    m_logger->error("bad parameter value %s=%s",name,val);
                     return;
                 }
 
-                m_logger->always("Add parameter value %s=%s",name,val);
+                m_logger->info("Add parameter value %s=%s",name,val);
                 ParameterValue * next = new ParameterValue();
                 strncpy(next->name,name,MAX_PARAMETER_NAME);
                 if (isdigit(val[0])) {
                     if (strchr(val,'.') == NULL) {
                         next->type = INTEGER;
                         next->intValue = atoi(val);
-                        m_logger->always("\tint value %d",next->intValue);
+                        m_logger->never("\tint value %d",next->intValue);
                     } else {
                         next->type = FLOAT;
                         next->floatValue = atof(val);
-                        m_logger->always("\tint value %f",next->floatValue);
+                        m_logger->never("\tint value %f",next->floatValue);
                     }
                 } else {
                     strncpy(next->stringValue,val,PARSER_VALUE_MAX_LEN);
@@ -276,28 +286,28 @@ namespace DevRelief {
             
             bool getInt(const char * name, int& val) {
                 ParameterValue * f = find(name);
-                m_logger->always("get parameter value %s",name);
+                m_logger->never("ParameterVariable:getInt value %s",name);
                 if (f != NULL) {
                     if (f->type == STRING) {
-                        m_logger->always(" \tvalue is a string %d",f->stringValue);
+                        m_logger->never(" \tvalue is a string %d",f->stringValue);
                         return m_prev && m_prev->getInt(f->stringValue,val);
                     }
                     val = f->intValue;
-                    m_logger->always("\tgot %d",val);
+                    m_logger->never("\tgot %d",val);
                     return true;
                 } else {
-                    m_logger->always(" parameter value %s not found",name);
+                    m_logger->never(" parameter value %s not found",name);
 
                 }
                 return false;
             }
 
             bool getFloat(const char * name, double& val) {
-                m_logger->always("get float parameter value %s",name);
+                m_logger->never("get float parameter value %s",name);
                  ParameterValue * f = find(name);
                 if (f != NULL) {
                     if (f->type == STRING) {
-                        m_logger->always(" \tvalue is a string %s",f->stringValue);
+                        m_logger->never(" \tvalue is a string %s",f->stringValue);
                         return m_prev && m_prev->getFloat(f->stringValue,val);
                     }
                     if (f->type == FLOAT) {
@@ -305,10 +315,10 @@ namespace DevRelief {
                     } else if (f->type == INTEGER) {
                         val = f->intValue;
                     }
-                    m_logger->always("\tgot %f",val);
+                    m_logger->never("\tgot %f",val);
                     return true;
                 } else {
-                    m_logger->always(" parameter value %s not found",name);
+                    m_logger->never(" parameter value %s not found",name);
 
                 }
                 return false;
@@ -326,8 +336,10 @@ namespace DevRelief {
             ParameterValue* find(const char * name) {
                 ParameterValue * f = firstValue;
                 while( f != NULL && strcmp(f->name,name) != 0) {
+                    m_logger->never("find param %s!=%s",f->name,name);
                     f = f->next;
                 }
+                m_logger->never("found %s %s",name,(f==NULL ? "false": "true"));
                 return f;
             }
         protected:
@@ -902,8 +914,8 @@ namespace DevRelief {
 
     protected:
         virtual void setHSLComponent(IHSLStrip* strip,int index, int value) {
-            if (index < 5) {
-                m_logger->debug("CMD hue %d %d",index,value);
+            if (index < 1) {
+                m_logger->never("CMD hue %d %d",index,value);
             }
             strip->setHue(index,value,hslOp);
         }
@@ -939,7 +951,7 @@ namespace DevRelief {
     class Script {
         public:
             Script(){
-                m_logger = new Logger("Script",80);
+                m_logger = new Logger("Script",60);
                 strcpy(name,"Default");
                 next[0] = 0;
                 durationMsec = -1;
@@ -960,7 +972,7 @@ namespace DevRelief {
                 if (m_firstCommand != NULL) {
                     m_firstCommand->execute(strip,state);
                 } else {
-                    m_logger->always("no script");
+                    m_logger->never("no script");
                 }
 
             }
@@ -995,6 +1007,8 @@ namespace DevRelief {
                 VariableBaseCommand * vars = new StartCommand();
                 addCommand(vars);
                 if (scriptVars!=NULL) {
+                    m_logger->never("have parameter variables");
+                    addCommand(scriptVars);
                     scriptVars->setPreviousVariables(vars);
                     vars = scriptVars;
                 }
@@ -1225,7 +1239,7 @@ namespace DevRelief {
                 //m_logger->debug("getInt for variable ParserValue %s",val.nameValue);
                 result = atoi(val.stringValue);
             } else {
-                m_logger->warn("unknown ParserValue type for int %d",val.type);
+                m_logger->warn("unknown ParserValue type for int %d %.20s",val.type,val.stringValue);
             }
             //m_logger->debug("\tresult=%d",result);
             return result;
