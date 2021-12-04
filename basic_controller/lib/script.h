@@ -389,7 +389,13 @@ namespace DevRelief {
         ValueGradient()
         {
             m_logger = commandLogger; 
-            m_logger = new Logger("ValueGradient",100);
+            m_logger = new Logger("ValueGradient",80);
+            m_valueStart = 0;
+            m_valueEnd=0;
+            m_unfold = false;
+            m_durationMsecs=0;
+            m_speed=0;
+            m_type=PIXEL_GRADIENT;
         }
 
         bool read(ObjectParser &parser, VariableBaseCommand *variables)
@@ -503,9 +509,13 @@ namespace DevRelief {
         }
 
         double setRange(double start, double end) {
+           m_logger->debug("set range");
+           // m_logger->debug("\t%f %f",start,end);
             m_valueStart = start;
             m_valueEnd = end;
+           // m_logger->debug("\tdone %f %f",m_valueStart,m_valueEnd);
         }
+
         double getStartValue() { return m_valueStart;}
         double getEndValue() { return m_valueEnd;}
     private:
@@ -649,36 +659,45 @@ namespace DevRelief {
         {
             //m_logger = commandLogger; 
             m_logger = new Logger("Position",WARN_LEVEL);
+            m_start = 0;
+            m_count = 100;
+            m_positionType = PERCENT;
         }
 
         bool read(ObjectParser &parser, VariableBaseCommand *variables)
         {   
             m_logger->debug("parse Position object");
-            parser.readStringValue("position_type", tmpBuffer, 20);
-            if (strncasecmp(tmpBuffer, "pixel", 5) == 0)
-            {
-                m_logger->debug("\ttype pixel");
-                m_positionType = PIXEL;
+            m_start = 0;
+            m_count = 100;
+            m_positionType = PERCENT;
+            if (parser.readStringValue("position_type", tmpBuffer, 20)){
+                if (strncasecmp(tmpBuffer, "pixel", 5) == 0)
+                {
+                    m_logger->debug("\ttype pixel");
+                    m_positionType = PIXEL;
+                }
+                else
+                {
+                    m_logger->debug("\ttype percent");
+                    m_positionType = PERCENT;
+                }
             }
-            else
-            {
-                m_logger->debug("\ttype percent");
-                m_positionType = PERCENT;
+            
+
+            if (parser.readValue("start", tempValue)){
+                m_logger->debug("\tread start");
+                m_start = ((Command *)variables)->getInt(tempValue, 0, variables);
+                m_logger->debug("\tgot start %d",m_start);
             }
-
-            parser.readValue("start", tempValue);
-            m_logger->debug("\tread start");
-            m_start = ((Command *)variables)->getInt(tempValue, 0, variables);
-            m_logger->debug("\tgot start %d",m_start);
-
             m_logger->debug("\tread count");
             if (!parser.readValue("count", tempValue))
             {
                 m_logger->debug("\tread end");
-                parser.readValue("end", tempValue);
-                int end = ((Command *)variables)->getInt(tempValue, 100, variables);
-                m_count = end - m_start + 1;
-                m_logger->debug("\tgot end %d %d %d",end,m_start,m_count);
+                if (parser.readValue("end", tempValue)) {
+                    int end = ((Command *)variables)->getInt(tempValue, 100, variables);
+                    m_count = end - m_start + 1;
+                    m_logger->debug("\tgot end %d %d %d",end,m_start,m_count);
+                }
 
             }
             else
@@ -967,30 +986,86 @@ namespace DevRelief {
        
         RGBCommand(ObjectParser& parser, VariableBaseCommand* variables) : Command("RGBCommand") {
             m_logger = new Logger("RGBCommand");
+            m_redGradient = new ValueGradient();
+            m_greenGradient = new ValueGradient();
+            m_blueGradient = new ValueGradient();
             m_logger->debug("read position");
+
             m_position.read(parser,variables);
-            if (parser.getArray("pattern",patternArray)){
-                m_logger->debug("read pattern");
-                m_valuePattern.read(&patternArray,variables);
-                m_value = &m_valuePattern;
-                bool repeat;
-                parser.readBoolValue("repeat_pattern",&repeat,true);
-                m_valuePattern.setRepeat(repeat);
-            } else {
-                m_valueGradient.read(parser,variables);
-                m_value = &m_valueGradient;
-                m_logger->debug("got value");
-                CRGB rgb(255,0,0);
-                CHSL hsl = RGBToHSL_dbg(rgb);
-                m_logger->debug("HSL %d %d %d",hsl.hue,hsl.saturation,hsl.lightness);
+            
+            int redStart=0;
+            int redEnd=0;
+            int greenStart=0;
+            int greenEnd=0;
+            int blueStart=0;
+            int blueEnd=0;
+            double ds = 0;
+            double de = 255;
+            m_redGradient->setRange(ds,de);
+ 
+            m_logger->debug("read red");
+            if (parser.readValue("red_start",tempValue) || parser.readValue("red",tempValue)){
+                m_logger->debug("found var");
+
+                redStart = ((Command *)variables)->getInt(tempValue, 0, variables);
+                redEnd = redStart;
+                m_logger->debug("\tgot %d",redStart);
+
             }
-            if (!parser.readStringValue("op",hslOpText,20)){
+            m_logger->debug("read op %d",hslOp);
+            m_logger->debug("read red_end");
+            if (parser.readValue("red_end",tempValue)){
+                redEnd = ((Command *)variables)->getFloat(tempValue, redStart, variables);
+            }
+
+          
+/*
+            m_logger->debug("read green");
+
+            if (parser.readValue("green_start",tempValue) || parser.readValue("green",tempValue)){
+                greenStart = ((Command *)variables)->getFloat(tempValue, 0, variables);
+                greenEnd = greenStart;
+            }
+
+            m_logger->debug("read green_end");
+            if (parser.readValue("green_end",tempValue)){
+                greenEnd = ((Command *)variables)->getFloat(tempValue, greenStart, variables);
+            }
+
+            m_logger->debug("read blue");
+
+            if (parser.readValue("blue_start",tempValue) || parser.readValue("blue",tempValue)){
+                blueStart = ((Command *)variables)->getFloat(tempValue, 0, variables);
+                blueEnd = blueStart;
+            }
+
+            if (parser.readValue("blue_end",tempValue)){
+                blueEnd = ((Command *)variables)->getFloat(tempValue, blueStart, variables);
+            }
+
+            m_logger->debug("set ranges");
+
+            m_logger->debug("set ranges");
+            m_greenGradient.setRange(greenStart,greenEnd);
+            m_logger->debug("set ranges");
+            m_blueGradient.setRange(blueStart,blueEnd);
+            m_logger->debug("got value");
+         
+
+*/
+           if (!parser.readStringValue("op",hslOpText,20)){
                 strcpy(hslOpText,"replace");
             }
             hslOp = getHslOp(hslOpText);
-            m_logger->debug("read op %d",hslOp);
-
+ 
             m_logger->debug("\tparsed RGBCommand %s",m_type);
+        }
+
+        ~RGBCommand() {
+            m_logger->info("in ~RGBCommand()");
+            delete m_redGradient;
+            delete m_blueGradient;
+            delete m_greenGradient;
         }
 
     protected:
@@ -999,33 +1074,30 @@ namespace DevRelief {
         virtual void doCommand(IHSLStrip* strip, ExecutionState * state) {
             int first = m_position.getStart(strip);
             int count = m_position.getCount(strip);
-            m_logger->debug("doCommand %s %d %d",m_type,first,count);
+            m_logger->never("doCommand %s %d %d",m_type,first,count);
             for(int idx=0;idx<count;idx++){
                 int pos = first + idx;
-                double val = m_value->getValueAt(idx,count,state);
-                if (val >=0.0 && val <= 256.0 && val != INVALID_DOUBLE) {
-                    CRGB rgb(0,val,0);
+                double r = m_redGradient->getValueAt(idx,count,state);
+                double g = m_greenGradient->getValueAt(idx,count,state);
+                double b = m_blueGradient->getValueAt(idx,count,state);
+                CRGB rgb(r,g,b);
                     //m_logger->periodic(100,5000,NULL,"RGB value %d=%f,  %d,%d,%d",pos,val,rgb.red,rgb.green,rgb.blue);
-                    if (idx == 0) {
-                        CHSL hsl = RGBToHSL_dbg(rgb);
-                        m_logger->debug("RGB value %d=%f,  %d,%d,%d=>%d,%d,%d",pos,val,rgb.red,rgb.green,rgb.blue,hsl.hue,hsl.saturation,hsl.lightness);
-                    }
-                    strip->setRGB(pos,rgb, hslOp);
-                } else {
-                    //m_logger->errorNoRepeat("invalid value %f",val);
-                    if (idx == 0) {
-                        m_logger->error("invalid value %f",val);
-                    }
-                } 
+                if (idx == 0) {
+                    CHSL hsl = RGBToHSL_dbg(rgb);
+                    m_logger->debug("RGB value %d=%f,%f,%f,  %d,%d,%d=>%d,%d,%d",pos,r,g,b,rgb.red,rgb.green,rgb.blue,hsl.hue,hsl.saturation,hsl.lightness);
+                }
+                strip->setRGB(pos,rgb, hslOp);
+
             }
         }
 
         HSLOperation hslOp;
     private:
         Position m_position;
-        ValueGradient m_valueGradient;
-        ValuePattern m_valuePattern;
-        ValueGenerator* m_value;
+        ValueGradient* m_blueGradient;
+        ValueGradient* m_greenGradient;        
+        ValueGradient* m_redGradient;
+
         char hslOpText[10];
     };
 

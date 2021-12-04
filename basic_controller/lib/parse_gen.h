@@ -233,8 +233,9 @@ public:
     virtual bool readValue(const char *name,ParserValue& val){
         m_logger->debug("read ParserValue %s",name);
         val.type = UNKNOWN;
+        val.stringValue[0] = 0;
         int16_t found = skipName(name);
-
+    
         if (found >= 0) {
             int16_t pos = skipChars(": \t\n\r",found);
             if (pos > m_end) {

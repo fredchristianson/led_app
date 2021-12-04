@@ -434,7 +434,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
             case MAX:
                 return currentValue > operand ? currentValue : operand;
             default:
-                m_logger->error("unknown HSL operation %d",op);
+                m_logger->errorNoRepeat("unknown HSL operation %d",op);
             }
             return operand;
         }
