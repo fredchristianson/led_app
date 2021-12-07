@@ -4,601 +4,1203 @@
 #include "./logger.h";
 #include "./buffer.h";
 
+
+
 namespace DevRelief {
-Logger* genLogger = new Logger("Gen",WARN_LEVEL);
-Logger* parserLogger = new Logger("Parse",WARN_LEVEL);
+
 char skipBuf[100];
 char intValBuff[32];
 
-enum ValueType {
-    UNKNOWN=999,
-    INTEGER=0,
-    FLOAT=1,
-    STRING=2,
-    BOOLEAN=3,
-    VARIABLE=4
-};
-#define PARSER_VALUE_MAX_LEN 20
-class ParserValue {
+class JsonBase;
+
+
+class MemLogger {
     public:
-        ParserValue() {
-            type = UNKNOWN;
+    MemLogger() {
+        m_logger = new Logger("Memory",WARN_LEVEL);
+
+    }
+
+    void construct(const char * type, JsonBase* object);
+
+    void destruct(const char * type, JsonBase* object);
+
+    void construct(const char * type, const char * name, JsonBase* object);
+    
+
+    void destruct(const char * type, const char * name,JsonBase* object) ;
+
+    void allocString(const char * type, size_t len, JsonBase* object);
+
+    void freeString(const char * type,JsonBase* object);
+
+    private:
+    Logger* m_logger;
+
+};
+
+MemLogger mem;
+
+class PGLogger: public Logger {
+    public:
+    PGLogger(const char * module, int level) : Logger(module,level) {
+        strcpy(skipBuf,"Logger ");
+        strcat(skipBuf,module);
+    }
+};
+
+Logger JSONLogger("Json",WARN_LEVEL);
+Logger ParserLogger("JsonParser",WARN_LEVEL);
+Logger GeneratorLogger("JsonGenerator",WARN_LEVEL);
+
+
+typedef enum TokenType {
+    TOK_EOD=1000,
+    TOK_ERROR=1001,
+    TOK_START=1002,
+    TOK_OBJECT_START=1,
+    TOK_OBJECT_END=2,
+    TOK_ARRAY_START=3,
+    TOK_ARRAY_END=4,
+    TOK_STRING=5,
+    TOK_INT=6,
+    TOK_FLOAT=7,
+    TOK_COLON=8,
+    TOK_COMMA=9
+};
+
+typedef enum JsonType {
+    JSON_UNKNOWN=999,
+    JSON_NULL=998,
+    JSON_INTEGER=100,
+    JSON_FLOAT=101,
+    JSON_STRING=102,
+    JSON_BOOLEAN=103,
+    JSON_VARIABLE=104,
+    JSON_OBJECT=5,
+    JSON_ARRAY=6,
+    JSON_ROOT=7,
+    JSON_PROPERTY=8,
+    JSON_ARRAY_ITEM=9
+};
+
+class JsonRoot;
+class JsonElement;
+class JsonArray;
+class JsonObject;
+
+class JsonBase {
+    public:
+        JsonBase() {
+            mem.construct("JsonBase",this);
+            m_jsonId = -1;
+        }
+        virtual ~JsonBase() {
+            mem.destruct("JsonBase",this);
+        }
+        virtual JsonRoot* getRoot() = 0;
+        virtual bool add(JsonElement* child)=0;
+        virtual JsonType getType()=0;
+        virtual Logger* getLogger() =0;
+
+        virtual bool isArray() { return false;}
+        virtual bool isObject() { return false;}
+        
+        virtual JsonArray* asArray() { return NULL;}
+        virtual JsonObject* asObject() { return NULL;}
+
+        virtual bool getIntValue(int& value,int defaultValue) {
+            value = defaultValue;
+            return false;
+        }
+
+        virtual bool getFloatValue(double & value, double defaultValue) {
+            value = defaultValue;
+            return false;
+        }
+
+        virtual bool getBoolValue(bool & value, bool defaultValue) {
+            value = defaultValue;
+            return false;
+        }
+
+        virtual int getStringValue(char * value, size_t maxLen,const char* defaultValue=NULL) {
+            if (defaultValue != NULL) {
+                strncpy(value,defaultValue,maxLen);
+            } else {
+                value[0] = 0;
+            }
+            return false;
+        }
+
+        int getJsonId() { return m_jsonId;}
+        void setJsonId(int id) { m_jsonId = id;}
+    private:
+        int m_jsonId;
+};
+
+class JsonRoot : public JsonBase {
+    public:
+        JsonRoot() : JsonBase() {
+            m_value = NULL;
+            m_logger = &JSONLogger;
+            mem.construct("JsonRoot",this);
+            m_nextJsonId = 1;
+            setJsonId(this);
+        }
+
+        void setJsonId(JsonBase* element) {
+            element->setJsonId(m_nextJsonId++);
+        }
+
+        virtual ~JsonRoot();
+        virtual JsonType getType() { return JSON_ROOT;}
+        char * allocString(const char * val, size_t len) {
+            char * str = (char*)malloc(len+1);
+            strncpy(str,val,len+1);
+            str[len] = 0;
+            mem.allocString(str,len,this);
+        
+        
+            return str;
+        }
+
+        void freeString(const char * val) {
+            mem.freeString(val,this);
+            free((void*)val);
+        }
+
+        virtual JsonRoot* getRoot() { return this;}
+
+        virtual bool add(JsonElement* child) { 
+            if (m_value != NULL) { 
+                m_logger->error("adding multiple children to JsonRoot is not allowed");
+                return false;
+            }
+            m_value = child;
+            return true;
+        }
+
+        void forget(JsonElement* child) {
+            if (child != m_value) {
+                m_logger->error("forget() called with wrong child");
+            }
+            m_value = NULL;
+        }
+
+        JsonElement* getValue(){
+            return m_value;
+        }
+
+        virtual Logger* getLogger() { return m_logger;}
+    protected:
+        int m_nextJsonId;
+        JsonElement * m_value;
+        Logger* m_logger;
+};
+
+class JsonElement : public JsonBase {
+    public:
+        JsonElement(JsonRoot& root,JsonType t) :m_root(root) {
+            m_type = t;
+            root.setJsonId(this);
+            m_logger = m_root.getLogger();
+            mem.construct("JsonElement",this);
+
+        }
+        virtual ~JsonElement() {
+            mem.destruct("JsonElement",this);
+         }
+
+        virtual JsonRoot* getRoot() { return & m_root;}
+        virtual Logger* getLogger() { return m_root.getLogger();}
+        virtual bool add(JsonElement* child) { 
+            return false;
+        }
+
+        virtual JsonType getType() { return m_type;}
+
+        JsonRoot& m_root;
+    protected:
+        Logger * m_logger;
+        JsonType m_type;
+};
+
+
+
+class JsonProperty : public JsonElement {
+    public:
+        JsonProperty(JsonRoot& root, const char * name,size_t nameLength,JsonElement* value) : JsonElement(root,JSON_PROPERTY) {
+            m_name = root.allocString(name,nameLength);
+            m_value = value;
+            m_next = NULL;
+            m_logger->info("JsonProperty for type %d",m_value->getType());
+            mem.construct("JsonProperty",name,this);
+        }
+        
+        JsonProperty(JsonRoot& root, const char * name,JsonElement* value) : JsonElement(root,JSON_PROPERTY) {
+            m_logger->info("construct property %s",name);
+            m_logger->info("\tvalue type %d",(value == NULL ? JSON_NULL : value->getType()));
+            size_t nameLength = strlen(name)+1;
+            m_name = root.allocString(name,nameLength);
+            m_value = value;
+            m_next = NULL;
+            m_logger->info("\tconstrcted JsonProperty %s for type %d",m_name,(m_value == NULL ? JSON_NULL :m_value->getType()));
+            mem.construct("JsonProperty",name,this);
+        }
+        virtual ~JsonProperty() { 
+            delete m_next;
+            m_root.freeString(m_name); 
+            delete m_value;
+            mem.destruct("JsonProperty",m_name,this);
+        }
+
+        JsonProperty* getNext() { return m_next;}
+        JsonElement * getValue() { return m_value;}
+        const char * getName() { return m_name;}
+        
+        int getCount() { return m_next == NULL ? 1 : 1+m_next->getCount();}
+        JsonElement* getAt(size_t idx) {
+            return idx==0 ? m_value : m_next == NULL ? NULL :m_next->getAt(idx-1);
+        }
+
+        void setNext(JsonProperty*  next) {
+            m_logger->info("setNext property [%d]-->[%d]",getJsonId(),(next == NULL ? -1 : next->getJsonId()));
+            if (m_next != NULL) {
+                delete m_next;
+            }
+            m_next = next;
+        }
+
+        void addEnd(JsonProperty* next) {
+            if (m_next == NULL) {
+                m_logger->info("addEnd last [%d]-->[%d]",getJsonId(),(next == NULL ? -1 : next->getJsonId()));
+                m_next = next;
+            } else {
+                m_logger->info("addEnd middle [%d]-->[%d]",getJsonId(),(next == NULL ? -1 : next->getJsonId()));
+                m_next->addEnd(next);
+            }
+        }
+
+        void setValue(JsonElement*val) {
+            delete m_value;
+            m_value = val;
+        }
+
+        // JsonProperty is reponsible for deleting the value.
+        // use this to keep the value after the property is deleted
+        void forgetValue() {
+            m_value = NULL;
+        }
+    private:
+        char* m_name;
+        JsonElement* m_value;
+        JsonProperty* m_next;
+};
+
+class JsonObject : public JsonElement {
+    public:
+        JsonObject(JsonRoot& root) : JsonElement(root,JSON_OBJECT) {
+            m_logger->debug("create JsonObject ");
+            m_firstProperty = NULL;
+            mem.construct("JsonObject",this);
+            add("jsonId",getJsonId());
+        }
+        virtual ~JsonObject() {
+            delete m_firstProperty;
+             mem.destruct("JsonObject",this);
+       }
+        
+        virtual bool isObject() { return true;}
+        virtual JsonObject* asObject() { return this;}
+
+        virtual bool add(JsonElement* child) { 
+            return false;
+        }
+
+        JsonProperty* add(JsonProperty* prop){
+            if (m_firstProperty == NULL) {
+                m_logger->info("set firstProperty of [%d]",getJsonId());
+                m_firstProperty = prop;
+            } else {
+                m_logger->info("add property  [%d] (count=%d)",getJsonId(),getCount());
+                JsonProperty * end = m_firstProperty;
+                while(end->getNext() != NULL) {
+                    end = end->getNext();
+                }
+                end->setNext(prop);
+                m_logger->info("\tadded property  [%d] (count=%d)",getJsonId(),getCount());
+                for(JsonProperty*p=m_firstProperty;p!=NULL;p=p->getNext()){
+                    m_logger->info("\t\tprop [%d] %d",p->getJsonId(),p->getType());
+                }                
+            }
+            return prop;
+        }
+
+        JsonProperty* add(const char *nameStart,size_t nameLen,JsonElement * value){
+            JsonProperty* prop = new JsonProperty(m_root,nameStart,nameLen,value);
+            add(prop);
+            return prop;
+        }
+
+        
+        JsonProperty* add(const char *name,JsonElement * value){
+            m_logger->info("add property [%d] %s",getJsonId(),name,(value == NULL ? -1 : value->getType()));
+            JsonProperty*prop = getProperty(name);
+            if (prop != NULL) {
+                m_logger->info("\tproperty exists.  replacing value for %s",name);
+                prop->setValue(value);
+            } else {
+                m_logger->info("\tcreate new property %s",name);
+
+                prop = new JsonProperty(m_root,name,value);
+                add(prop);
+                m_logger->info("\t\tcreated property %s",name);
+              
+            }
+            return prop;
+        }
+
+        JsonProperty* add(const char *name,bool value);
+        JsonProperty* add(const char *name,int value);
+        JsonProperty* add(const char *name,const char *value);
+        JsonProperty* add(const char *name,double);
+
+        JsonProperty * getProperty(const char * name) {
+            m_logger->debug("get property %s",name);
+            for(JsonProperty*prop=m_firstProperty;prop!=NULL;prop=prop->getNext()){
+                m_logger->debug("\tcheck%s",prop->getName());
+                if (strcmp(prop->getName(),name)==0) {
+                    return prop;
+                }
+            }
+            return NULL;
+        }
+        JsonProperty* getFirstProperty() { return m_firstProperty;}
+
+        JsonElement * getPropertyValue(const char * name) {
+            JsonProperty*e = m_firstProperty;
+            while(e != NULL && strcmp(e->getName(),name) != 0) {
+                e = e->getNext();
+            }
+            return e == NULL ? NULL : e->getValue();
+        }
+
+        int getCount() { return m_firstProperty == NULL ? 0 : m_firstProperty->getCount();}
+        JsonElement* getAt(size_t idx) {
+            return m_firstProperty == NULL ? NULL : m_firstProperty->getAt(idx);
+        }
+    protected:
+        JsonProperty* m_firstProperty;
+};
+
+
+
+class JsonArrayItem : public JsonElement {
+    public:
+        JsonArrayItem(JsonRoot& root, JsonElement * value,JsonArrayItem* next) :JsonElement(root,JSON_ARRAY_ITEM) {
+            m_logger->debug("create JsonArray item for type %d",value->getType());
+
+            m_value = value;
+            m_next = next;
+            mem.construct("JsonArrayItem",this);
 
         }
 
-        bool isInt() {
-            return type == INTEGER;
+        virtual ~JsonArrayItem() {
+            delete m_value;
+            delete m_next;
+            mem.destruct("JsonArrayItem",this);
         }
 
-        bool isFloat() {
-            return type == FLOAT;
+
+        int getCount() { return m_next == NULL ? 1 : 1+m_next->getCount();}
+        
+        JsonElement* getAt(size_t idx) {
+            return idx==0 ? m_value : m_next == NULL ? NULL :m_next->getAt(idx-1);
         }
 
-        bool isNumber() {
-            return isInt() || isFloat();
+        JsonArrayItem* getNext() { return m_next;}
+        JsonElement* getValue() { return m_value;}
+        
+    protected:
+        JsonElement* m_value;
+        JsonArrayItem* m_next;
+};
+
+class JsonArray : public JsonElement {
+    public:
+        JsonArray(JsonRoot& root) : JsonElement(root,JSON_ARRAY) {
+            m_logger->debug("create JsonArray ");
+            m_firstItem = NULL;
+            mem.construct("JsonArray",this);
+        
+        }
+        virtual ~JsonArray() {
+            delete m_firstItem;
+            mem.destruct("JsonArray",this);
+        
         }
 
-        bool isString() {
-            return type == STRING;
-        }
-        bool isBoolean() {
-            return type == BOOLEAN;
-        }
-        bool isVariable() {
-            return type == VARIABLE;
+        virtual bool isArray() { return true;}
+        virtual JsonArray* asArray() { return this;}
+
+        JsonArrayItem* addItem(JsonElement * value){
+            JsonArrayItem* item = new JsonArrayItem(m_root,value,m_firstItem);
+            m_firstItem = item;
+            return item;
         }
 
-        ValueType type;
-        union{
-            int intValue;
-            double floatValue;
-            bool boolValue;
-            char stringValue[PARSER_VALUE_MAX_LEN];
-            char nameValue[PARSER_VALUE_MAX_LEN];
-        };
+        int getCount() { return m_firstItem == NULL ? 0 : m_firstItem->getCount();}
+        JsonElement* getAt(size_t idx) {
+            return m_firstItem == NULL ? NULL : m_firstItem->getAt(idx);
+        }
+        JsonArrayItem* getFirstItem() {
+            return m_firstItem;
+        }
+    protected: 
+        JsonArrayItem * m_firstItem;
+};
+
+class JsonValue : public JsonElement {
+    public:
+        JsonValue(JsonRoot& root, JsonType type) : JsonElement(root,type) {
+            mem.construct("JsonValue",this);
+        
+        }
+        virtual ~JsonValue() {
+            mem.destruct("JsonValue",this);
+        
+        }
+};
+
+class JsonString : public JsonValue {
+    public:
+        JsonString(JsonRoot& root, const char * value) : JsonValue(root,JSON_STRING) {
+            size_t len = strlen(value);
+            m_value = root.allocString(value,len);
+            m_logger->debug("create JsonString ~%s~ ",m_value);
+            mem.construct("JsonString",this);
+        }
+        JsonString(JsonRoot& root, const char * value, size_t len) : JsonValue(root,JSON_STRING) {
+            m_value = root.allocString(value,len);
+            m_logger->debug("create JsonString ~%s~ ",m_value);
+            mem.construct("JsonString",this);
+        }
+
+        virtual ~JsonString() { getRoot()->freeString(m_value);
+            mem.destruct("JsonString",this);
+        }
+        
+        virtual int getStringValue(char * value, size_t maxLen,const char* defaultValue=NULL) {
+            strncpy(value,m_value,maxLen);
+            return true;
+        }
+
+        const char * getText() { return m_value;}
+    protected:
+        char* m_value;
+};
+
+
+class JsonInt : public JsonValue {
+    public:
+        JsonInt(JsonRoot& root, int value) : JsonValue(root,JSON_INTEGER) {
+            m_logger->debug("create JsonInt %d ",value);
+
+            m_value = value;
+            mem.construct("JsonInt",this);
+        
+        }
+
+        virtual ~JsonInt() { 
+            mem.destruct("JsonInt",this);
+        }
+
+        virtual bool getIntValue(int& value,int defaultValue) {
+            value = m_value;
+            return true;
+        }
+    protected:
+        int m_value;
+};
+
+
+class JsonFloat : public  JsonValue {
+    public:
+        JsonFloat(JsonRoot& root, double value) : JsonValue(root,JSON_FLOAT) {
+            m_logger->debug("create JsonFloat %f ",value);
+
+            m_value = value;
+            mem.construct("JsonFloat",this);
+        
+        }
+
+        virtual ~JsonFloat() { 
+            mem.destruct("JsonFloat",this);
+        }
+
+        virtual bool getFloatValue(double& value,double defaultValue) {
+            value = m_value;
+            return true;
+        }
+    protected:
+        double m_value;
+};
+
+class JsonBool : public  JsonValue {
+    public:
+        JsonBool(JsonRoot& root, bool value) : JsonValue(root,JSON_BOOLEAN) {
+            m_logger->debug("create JsonFloat %s ",value?"true":"false");
+
+            m_value = value;
+            mem.construct("JsonBool",this);
+        
+        }
+
+        virtual ~JsonBool() { 
+            mem.destruct("JsonBool",this);
+        }
+
+        virtual bool getBoolValue(bool& value,bool defaultValue) {
+            value = m_value;
+            return true;
+        }
+    protected:
+        bool m_value;
+};
+
+class JsonVariable : public JsonValue {
+    public:
+        JsonVariable(JsonRoot& root, const char * value, size_t len):  JsonValue(root,JSON_VARIABLE) {
+            m_value = root.allocString(value,len);
+            m_logger->debug("create JsonVariable %s ",m_value);
+            mem.construct("JsonVariable",this);
+        
+
+        }
+
+        virtual ~JsonVariable() { delete m_value;
+            mem.destruct("JsonVariable",this);
+         }
+
+         const char* getText() { return m_value;}
+    protected:
+        char * m_value;
 };
 
 class ParseGen {
 
 };
 
-class Generator : public ParseGen {
+class JsonGenerator : public ParseGen {
 public:
-    Generator(DRBuffer* buffer) {
+    JsonGenerator(DRBuffer& buffer) : m_buf(buffer) {
         m_buf = buffer;
-        depth = 0;
-        pos = 0;
-        m_buf->reserve(1)[0] = 0;  
-        m_logger = genLogger;
+        m_depth = 0;
+        m_pos = 0;
+        m_logger = &GeneratorLogger;
     }
 
-    void startObject() {
-        write("{\n",true);
-        depth += 1;
-        m_logger->debug("start obj: %.20s",m_buf->text());
+    ~JsonGenerator() {
+        
     }
-    void endObject() {
-        char *  data = (char *) m_buf->text();
-        int16_t comma = pos;
 
-        while(comma > 0 && data[comma] != ',') {
-            data[comma] = ' ';
-            comma -= 1;
+    bool generate(JsonBase* element) {
+        m_logger->debug("Generate JSON %d",element->getType());
+        m_pos = 0;
+        m_depth = 0;
+        m_buf.clear();
+        if (element->getType() == JSON_ROOT){
+            writeElement(((JsonRoot*)element)->getValue());
+        } else {
+            writeElement((JsonElement*)element);
         }
-        if (comma > 0) {
-            data[comma] = '\n';
-        }
-        depth -= 1;
-        write("}",true);
-        m_logger->debug("end obj: %.500s",m_buf->text());
+        return true;
     }
 
+    void writeElement(JsonElement* element){
+        if (element == NULL) {
+            writeText("null");
+            writeNewline();
+            return;
+        }
+        int type = element->getType();
+        m_logger->debug("write element type %d",type);
+        switch(type) {
+            case JSON_UNKNOWN:
+                writeText("unknown element type");
+                writeInt(type);
+                writeNewline();
+                break;
+            case JSON_NULL:
+                writeText("null");
+                writeInt(type);
+                writeNewline();
+                break;
+            case JSON_INTEGER:
+                writeInteger((JsonInt*)element);
+                break;
+            case JSON_FLOAT:
+                writeFloat((JsonFloat*)element);
+                break;
+            case JSON_STRING:
+                writeString((JsonString*)element);
+                break;
+            case JSON_BOOLEAN:
+                writeBool((JsonBool*)element);
+                break;
+            case JSON_VARIABLE:
+                writeVariable((JsonVariable*)element);
+                break;
+            case JSON_OBJECT:
+                writeObject((JsonObject*)element);
+                break;
+            case JSON_ARRAY:
+                writeArray((JsonArray*)element);
+                break;
+            case JSON_ROOT:
+                writeElement(((JsonRoot*)element)->getValue());
+                break;
+            case JSON_PROPERTY:
+                writeProperty((JsonProperty*)element);
+                break;
+            case JSON_ARRAY_ITEM:
+                writeArrayItem((JsonArrayItem*)element);
+                break;
+            default:
+                writeText("unknown type: ");
+                writeInt(type);
+                writeNewline();
+                break;
+        }
+    }
+
+    void writeObject(JsonObject * object) {
+        writeText("{");
+        m_depth += 1;
+        m_logger->info("write object [%d] count=%d",object->getJsonId(),object->getCount());
+        for(JsonProperty*prop=object->getFirstProperty();prop!=NULL;prop=prop->getNext()){
+            m_logger->info("\tprop %s [%d]",(prop == NULL ? "no prop":prop->getName()),prop->getJsonId());
+            writeNewline();
+
+            writeProperty(prop);
+
+            if (prop->getNext() != NULL) {
+                writeText(",");
+            }
+        }
+        m_logger->debug("\twrote properties");
+        m_depth -= 1;
+        writeNewline();
+        writeText("}");
+    }
+
+    void writeProperty(JsonProperty * prop) {
+        if (prop == NULL) {
+            m_logger->error("writeProperty got null");
+        }
+        m_logger->debug("write property %s",prop->getName());
+        writeString(prop->getName());
+        m_logger->debug("\twrote name %s",prop->getName());
+        
+        writeText(": ");
+        m_logger->debug("\twrote colon");
+        JsonElement* val = prop->getValue();
+        m_logger->debug("\twrite element %d",val);
+        writeElement(val);
+        m_logger->debug("\twrote value");
+    }
+
+    void writeArray(JsonArray* array) {
+        writeText("[");
+        m_depth += 1;
+        for(JsonArrayItem* item=array->getFirstItem();item!= NULL;item=item->getNext()){
+            writeNewline();
+            writeArrayItem(item);
+            if (item->getNext() != NULL) {
+                writeText(",");
+                writeNewline();
+            }
+        }
+        m_depth -= 1;
+        writeNewline();
+        writeText("]");
+    }
+
+    void writeArrayItem(JsonArrayItem* item) {
+        writeElement(item->getValue());
+    }
+  
+    void writeInteger(JsonInt* element) {
+        int i;
+        if (element->getIntValue(i,0)) {
+            writeInt(i);
+        } else {
+            writeText("null");
+        }
+    }
     
-    void startArray() {
-        write("[\n",true);
-        depth += 1;
-        m_logger->debug("start array: %.500s",m_buf->text());
-    }
-    void endArray() {
-        depth -= 1;
-        char *  data = (char *) m_buf->text();
-        int16_t comma = pos;
-
-        while(comma > 0 && data[comma] != ',') {
-            data[comma] = ' ';
-            comma -= 1;
+    void writeFloat(JsonFloat* element) {
+        double f;
+        if (element->getFloatValue(f,0)) {
+            writeFloat(f);
+        } else {
+            writeText("null");
         }
-        if (comma > 0) {
-            data[comma] = '\n';
-        }
-        write("]",true);
-        m_logger->debug("end array: %.500s",m_buf->text());
     }
-
-    void startProperty() {
-
-    }
-
-    void endProperty() {
-        write(",\n");
-    }
-
-    void writeName(const char * name) {
-        write("\"",true);
-        write(name);
-        write("\": ");
-    }
-
-    void writeArrayValue(const char * val) {
-        write("\"",true);
-        write(val);
-        write("\", ");
-    }
-
-    void writeNameValue(const char * name,const char* string) {
-        writeName(name);
-        write("\"");
-        write(string);
-        write("\",\n");
-        m_logger->debug("add name/str: %s:%s : %.500s",name,string,m_buf->text());
-    }
-
-
-
-    void writeNameValue(const char * name,int val) {
-        sprintf(intValBuff,"%d",val);
-        writeName(name);
-        write(intValBuff);
-        write(",\n");
-    }
-
     
-    void writeNameValue(const char * name,bool val) {
-        writeName(name);
-        write(val ? "true":"false");
-        write(",\n");
+   
+        
+    void writeBool(JsonBool* element) {
+        bool b;
+        if (element->getBoolValue(b,false)) {
+            writeText(b ? "true":"false");
+        } else {
+            writeText("null");
+        }
+    }
+    
+    void writeString(JsonString* element) {
+        writeText(element->getText());
+    }
+    
+        
+    void writeVariable(JsonVariable* element) {
+        writeText(element->getText());
+    }
+    
+    void writeText(const char * text) {
+        if (text == NULL) {
+            return;
+        }
+        size_t len = strlen(text);
+        if (len == 0) {
+            return;
+        }
+        m_logger->never("writeText %d %s",len,text);
+        char *pos = m_buf.increaseLength(len);
+        m_logger->never("\t ptr %d.  buf %d",pos,m_buf.data());
+        memcpy(pos,text,len);
+        m_logger->never("\tcopied");
+        pos[len] = 0;
+        m_logger->never("\tterminated");
     }
 
-    void write(const char * data,bool indent=false) {
-        if (indent) {
-            uint8_t * spaces = m_buf->reserve(pos+depth*2)+pos;
-            memset(spaces,' ',depth*2);
-            pos += depth*2;
+    void writeString(const char * text) {
+        writeText("\"");
+        writeText(text);
+        writeText("\"");
+    }
+
+    void writeInt(int i) {
+        snprintf(m_tmp,32,"%d",i);
+        writeText(m_tmp);
+    }
+
+    void writeFloat(double f) {
+        snprintf(m_tmp,32,"%f",f);
+        writeText(m_tmp);
+    }
+
+    void writeNewline() {
+        writeText("\n");
+        writeTabs();
+    }
+
+    void writeTabs(){
+        int cnt = m_depth;
+        while(cnt-- > 0) {
+            writeText("\t");
         }
-        size_t len = strlen(data);
-        uint8_t  * to =  m_buf->reserve(pos+len+1)+pos;
-        memcpy(to,data,len);
-        pos += len;
-        m_buf->setLength(pos);
-        to[len] = '~';
     }
 
 protected:
-    DRBuffer* m_buf;    
-    int depth;
-    size_t pos;
+    char m_tmp[32];
+    DRBuffer& m_buf;    
+    int m_depth;
+    size_t m_pos;
     Logger * m_logger;
 };
 
-class Parser : public ParseGen {
-public:
-    Parser( const char * data) {
-        m_logger = parserLogger;
 
-        m_data = data;
-        m_start = 0;
-        m_end = data ? strlen(data)-1 : 0;
-        m_pos = 0;
 
-    }    
-
-    virtual bool readAll(DRBuffer& buf){
-        if (m_start<0) {
-            return false;
+class TokenParser {
+    public:
+        TokenParser(const char  * data) {
+            m_data = data;
+            m_pos = data;
+            m_errorMessage = NULL;
+            m_token = TOK_START;
         }
-        int len = m_end-m_start+1;
-        char * data = (char*)buf.reserve(m_end-m_start+2);
-        memcpy(data,m_data+m_start,m_end-m_start+1);
-        data[m_end-m_start+1] = 0;
-        buf.setLength(m_end-m_start+2);
-        return true;
-    } 
-    
-    virtual bool readIntValue(const char *name,int * value){
-        m_logger->debug("read int %s",name);
-        int16_t found = skipName(name);
-        if (found >= 0) {
-            int16_t pos = skipChars(": \t\n\r",found);
-            (*value) = atoi(m_data+pos);
-            m_logger->debug("\tgot int: %d from %.15s",*value,m_data+pos);
-            return true;
-        }
-        return false;
-    }
 
-        
-    virtual bool readFloatValue(const char *name,double * value){
-        m_logger->debug("read int %s",name);
-        int16_t found = skipName(name);
-        if (found >= 0) {
-            int16_t pos = skipChars(": \t\n\r",found);
-            (*value) = atof(m_data+pos);
-            m_logger->debug("\tgot float: %f from %.15s",*value,m_data+pos);
-            return true;
+        TokenType peek(){
+            const char* pos = m_pos;            
+            const char * tpos = m_tokPos;
+            TokenType old = m_token;
+            TokenType type = next();
+            m_pos = pos;
+            m_tokPos = tpos;
+            m_token = old;
+            return type;
         }
-        return false;
-    }
 
-        
-    virtual bool readValue(const char *name,ParserValue& val){
-        m_logger->debug("read ParserValue %s",name);
-        val.type = UNKNOWN;
-        val.stringValue[0] = 0;
-        int16_t found = skipName(name);
-    
-        if (found >= 0) {
-            int16_t pos = skipChars(": \t\n\r",found);
-            if (pos > m_end) {
+        TokenType next() {
+            TokenType t = TOK_ERROR;
+            const char * pos = m_pos;
+
+            if (!skipWhite()) {
+                t = TOK_EOD;
+                return m_token;
+            }
+            char c = m_pos[0];
+            m_tokPos = m_pos;
+            m_pos+= 1;
+            if (c == '['){
+                m_token = TOK_ARRAY_START;
+            } else if (c == ']'){
+                m_token = TOK_ARRAY_END;
+            } else if (c == '{'){
+                m_token = TOK_OBJECT_START;
+            } else if (c == '}'){
+                m_token = TOK_OBJECT_END;
+            }  else if (c == '"'){
+                m_token = TOK_STRING;
+            }  else if (isdigit(c)){
+                const char * n = m_tokPos;
+                while(*n !=0 && isdigit(*n)){
+                    n++;
+                }
+                m_token = *n == '.' ? TOK_FLOAT : TOK_INT;
+            }  else if (c == ':'){
+                m_token = TOK_COLON;
+            }  else if (c == ','){
+                m_token = TOK_COMMA;
+            }  else {
+                m_token = TOK_ERROR;
+            }
+            return m_token;
+        }
+
+        bool skipWhite() {
+            while(strchr(" \t\n\r",m_pos[0]) != NULL) {
+                m_pos++;
+            }
+            if (m_pos[0] == 0) {
+                m_token = TOK_EOD;
                 return false;
             }
-            char ch = m_data[pos];
-            if (ch == '"'){
-                int16_t end = skipTo('"',pos+1);
-                if (end == -1) {
-                    return false;
-                }
-                pos += 1; // skip quote
-                int len = end-pos;
-                if (strncmp(m_data+pos,"var(",4)==0){
-                    val.type = VARIABLE;
-                    len -= 5;
-                    if (len>PARSER_VALUE_MAX_LEN) {
-                        m_logger->error("ParserValue variable name too long");
-                        len = PARSER_VALUE_MAX_LEN;
-                    }
-                    memcpy(val.nameValue,m_data+pos+4,len);
-                    val.nameValue[len]=0;
-                    m_logger->debug("got VARIABLE type %d %d %.50s",pos,end,val.nameValue);
-                }else {
-                    val.type = STRING;
-                    if (len>PARSER_VALUE_MAX_LEN) {
-                        m_logger->error("ParserValue string too long");
-                        len = PARSER_VALUE_MAX_LEN;
-                    }
-                    memcpy(val.stringValue,m_data+pos,len);
-                    val.stringValue[len]=0;
-                    m_logger->debug("got VARIABLE type %d %d %.50s",pos,end,val.stringValue);
-                }
-                return true;
-            }
-            if (ch>='0' && ch <='9'){
-                val.type = INTEGER;
-                for(int p=pos;p<10 && m_data[p]>='0' && m_data[p]<='9';p++) {
-                    if (m_data[p] == '.'){
-                        val.type = FLOAT;
-                    }
-                }
-                val.floatValue = atof(m_data+pos);
-                val.intValue = round(val.floatValue);
-                if (val.intValue != val.floatValue) {
-                    val.type = FLOAT;
-                }
-                m_logger->debug("got NUMBER type %d %d %.50s",val.intValue,pos,m_data+pos);
-                return true;
-            }
-            if (strncmp(m_data+pos,"true",4)==0){
-                val.type = BOOLEAN;
-                val.boolValue = true;
-                return true;
-            }
-            if (strncmp(m_data+pos,"false",5)==0){
-                val.type = BOOLEAN;
-                val.boolValue = false;
-                return true;
-            }
-        }
-        m_logger->debug("\tnot found");
-        return false;
-    }
-
-    virtual bool readBoolValue(const char *name,bool * value, bool defaultValue=false){
-        m_logger->debug("read bool %s",name);
-        int16_t found = skipName(name);
-        if (found >= 0) {
-            int16_t pos = skipChars(": \t\n\r",found);
-            (*value) = strncmp(m_data+pos,"true",4)==0;
-            m_logger->debug("\tgot int: %d from %.15s",*value,m_data+pos);
             return true;
         }
-        *value = defaultValue;
-        return false;
-    }
 
-    virtual bool readStringValue(const char *name,char * value, int maxLen=-1) {
-        value[0] = 0;
-        int16_t found = skipName(name);
-        if (found >= 0) {
-            m_logger->debug("readStringValue %d ~%.50s~",found,m_data+found);
-            found = skipChars(" \t\n\r:",found);
-            m_logger->debug("\tskipped %d ~%.50s~",found,m_data+found);
-            int16_t start = skipTo('"',found-1);
-            int16_t comma = skipTo(',',found);
-            if (comma > found && comma < start) {
-                value[0] = 0;
-                m_logger->debug("found comma before string %d %d",comma,start);
+        bool nextInt(int& val) {
+            val = 0;
+            if (next() == TOK_INT) {
+                val = atoi(m_tokPos);
+                skipNumber();
                 return true;
             }
-            int16_t end = skipTo('"',start+1);
-            if (start > 0 && start < end && start <= m_end && end <= m_end) {
-                start++;
-                if (end <= m_end) {
-                    int len = end-start;
-                    if (maxLen>0 && len>=maxLen-1) {
-                        len = maxLen-1;
-                    }
-                    memcpy(value,m_data+start,len);
-                    *(value+end-start)= 0;
-                    m_logger->debug("read string: %s",value);
-                    return true;
-                }
-            }
+            return false;
         }
-        m_logger->debug("no value found");
-        return false;
-    }
 
-    virtual bool getArray(const char * name,Parser& array) {
-        m_logger->never("getArray %s",name);
-        int16_t found = skipName(name);
-        if (found >= 0) {
-            found = skipChars(": \t\n\r",found);
-            m_logger->never("\tfound  %d ~~~~%.115s~~~~~",found,m_data+found);
-            int16_t start = skipTo('[',found);
-            int16_t end = skipTo(']',start+1);
-            if (end == -1){
-                end = m_end;
-            }
-            if (isValidPos(start,end)) {
-                array.setData(m_data,start+1,end);
-                if (m_logger->isDebug()){
-                    DRBuffer buf(end-start);
-                    memcpy(buf.data(),m_data+start+1,end-start);
-                    *(buf.data()+end-start) = 0;
-                    m_logger->debug("read array: %s",buf.data());
-                }
+        bool nextFloat(double& val) {
+            val = 0;
+            TokenType n = next();
+            if (n == TOK_INT || n == TOK_FLOAT) {
+                val = atof(m_tokPos);
+                skipNumber();
                 return true;
-            } 
-            m_logger->never("\tinvalid pos %d %d %d %d",start,end,m_start,m_end);
-
-        }
-        return false;
-    }
-
-
-    int16_t skipWhite(int16_t start = 0) {
-        int16_t pos = start;
-        char * white = " \t\n\r";
-        return skipChars(white,start);
-    }
-
-    int16_t skipChars(const char * chars, int16_t start=0){
-        int16_t pos = start;
-        while(pos >= 0 && pos <= m_end && strchr(chars,m_data[pos]) != NULL) {
-            pos += 1;
-        }
-        return pos;
-    }
-
-    int16_t skipPast(char ch, int16_t start = 0) {
-        int16_t pos = skipTo(ch,start);
-        if (pos >=0) {
-            pos += 1;
-        }
-        return pos;
-    }
-
-    int16_t skipTo(char ch,int16_t start=0){
-        m_logger->debug("skipTo %c.  %d-%d.  %.20s",ch,start,m_end,m_data+start);
-        if (start <0 || start > m_end) {
-            return -1;
-        }
-        int16_t pos = start;
-        while(pos >=0 && pos <= m_end && m_data[pos] != ch){
-            m_logger->debug(" %c at %.5s",ch, m_data+pos);
-            if (m_data[pos] != ch){
-                if (m_data[pos] == '\\'){
-                    pos++;
-                }
-                if (m_data[pos] == '"') {
-                    pos = skipTo('"',pos+1);
-                    m_logger->debug("\tskipped string");
-                }
-                if (m_data[pos] == '[') {
-                    pos = skipTo(']',pos+1);
-                    m_logger->debug("\tskipped array");
-                }
-                if (m_data[pos] == '{') {
-                    pos = skipTo('}',pos+1);
-                    m_logger->debug("\tskipped object");
-                }
-
-                pos++;
             }
+            return false;
         }
-        if (pos > m_end) {
-            m_logger->debug("\tchar not found");
-            return -1;
+
+        bool skipNumber() {
+
+            while(*m_pos == '.' || isdigit(*m_pos)){
+                m_pos++;
+            }
+            return true;
         }
-        return pos;
-    }
 
-    int16_t skipName(const char * name,int16_t start=0){
-        snprintf(skipBuf,100,"\"%s\"",name);
-        int16_t pos = search(skipBuf,start);
-        if (pos > 0) {
-            pos += strlen(skipBuf);
+        bool nextString(const char *& start, size_t& len) {
+
+            skipWhite();
+            start = NULL;
+            len = 0;
+            if (m_pos[0] != '"'){
+                return false;
+            }
+            m_tokPos = m_pos;
+            m_token = TOK_STRING;
+            m_pos += 1;
+            start = m_pos;
+            while(m_pos[len] != '"' && m_pos[len] != 0){
+                if (m_pos[len] == '\\'){
+                    len += 2;
+                } else {
+                    len += 1;
+                }
+            }
+            m_pos += len;
+            if (m_pos[0] == '"') {
+                m_pos+= 1;
+                return true;
+            }
+            return false;
         }
-        return pos;
-    }
 
-    int16_t search(const char * what,int16_t from) {
-        int16_t len = strlen(what);
-        while(from <= m_end && memcmp(what,m_data+from,len)!= 0) {
-            from += 1;
-        }
-        if (from <= m_end) {
-            return from;
-        }
-        return -1;
-    }
-
-    bool isValidPos(int16_t start, int16_t end) {
-        return start>=0 && start <= end && end <= m_end;
-    }
-
-    void setData(const char * data) {
-        setData(data,0,strlen(data));
-    }
-
-    void setData(const char * data, int16_t start, int16_t end) {
-        m_data = data+start;
-        m_start = 0;
-        m_end = end-start;
-        m_pos = 0;
-    }
-
-    void trim(const char *  ignore) {
-        m_logger->never("trim ~~%s~~ from ~~%.50s~~",ignore,m_data+m_start);
-        trimStart(ignore);
-        m_logger->never("trimed start  ~~%.50s~~  %d",m_data+m_start,(int)m_data[m_start]);
-        trimEnd(ignore);
-        m_logger->never("trimed end  %d-%d  %d",m_start,m_end,m_pos);
-    }
-
-    void trimStart(const char *  ignore) {
-        while(m_start >= 0 && m_start <= m_end && strchr(ignore,m_data[m_start]) != NULL){
-            m_logger->never("strim %d '%c'",m_start,m_data[m_start]);
-            m_start += 1;
-        }
-        if (m_pos < m_start) {
-            m_pos = m_start;
-        }
-    }
-
-
-    void trimEnd(const char *  ignore) {
-        while(m_end > 0 && m_start <= m_end && strchr(ignore,m_data[m_end-1]) != NULL){
-            m_logger->debug("etrim %d '%c'",m_end,m_data[m_end]);
-            m_end -= 1;
-        }
-        m_logger->debug("etrim stopp '%c'",m_data[m_end-1]);
-        if (m_pos > m_end) {
-            m_pos = m_end;
-        }
-    }
-
-    virtual void setPos(int16_t pos) {
-        m_pos = pos;
-    }
-
-    void dump(Logger*logger) {
-        if (logger != NULL) {
-            logger->never("Parser start=%d end=%d pos=%d ~~~%.*s~~~",m_start,m_end,m_pos,getLen(),m_data+m_start);
-        }
-    }
-
-    const char * getData() { return m_data;}
-    int16_t getStart() { return m_start;}
-    int16_t getEnd() { return m_end;}
-    int16_t getPos() { return m_pos;}
-    int16_t getLen() { int16_t l = m_end-m_start+1;  return l<0 ? 0 : l;};
-
-protected:
-    const char * m_data;
-    int16_t m_start;     
-    int16_t m_end;
-    int16_t m_pos;
-
-    Logger * m_logger;
+        const char * getPos() { return m_pos;}
+        const char * getTokPos() { return m_tokPos;}
+    private: 
+        const char * m_data;
+        const char * m_pos;
+        const char * m_tokPos;
+        TokenType           m_token;
+        const char *    m_errorMessage;
 };
 
-class ObjectParser : public Parser{
+class JsonParser : public ParseGen {
 public:
-    ObjectParser(const char * data=NULL) : Parser(data) {
+    JsonParser() {
+        m_logger = &ParserLogger;
+        m_errorMessage = NULL;
+        m_hasError = false;
+        m_root = NULL;
+    }    
 
-    }   
-};
-
-class ArrayParser : public Parser{
-public:
-    ArrayParser(const char * data=NULL) : Parser(data) {
-        m_logger = parserLogger;// new Logger("ArrayParser",40);
-    }   
-
-    bool nextElement(Parser* parser) {
-        m_logger->never("next element %.20s",m_data+m_pos);
-        dump(m_logger);
-        if (m_pos == -1 || m_pos >= m_end) {
-            m_logger->never("\tno next element");
-            return false;
-        }
-        int16_t start = skipWhite(m_pos);
-        
-        int16_t comma = skipTo(',',m_pos);
-        int16_t bracket = skipTo(']',m_pos);
-            m_logger->never("comma and bracket%d %d",comma, bracket);
-        if (comma == -1 && bracket == -1) {
-            comma = m_end;
-            m_pos = m_end;
-        } else if (comma >=0 && (bracket == -1 || comma < bracket)) {
-            m_logger->never("found comma %d ~~~%.40s~~~",comma,m_data+comma-1);
-            m_pos = comma-1;
-        } else if (bracket > 0) {
-            m_logger->never("found bracket %d",comma);
-            m_pos = bracket-1;
-        } else {
-            parser->setData(m_data,start,start);
-            return false;
-        }
-        m_logger->never("got element %d-%d ~~~%.*s~~~",start,m_pos,m_pos-start,m_data+start);
-        if (m_pos > 0 && m_pos >start && m_pos <= m_end) {
-            parser->setData(m_data,start,m_pos);
-            m_pos += 2;
-            return true;
-        } else {
-            parser->setData(m_data,start,m_pos);
-            return false;
-        }
+    ~JsonParser() { 
     }
 
 
-    bool nextObject(Parser* parser) {
-        m_logger->never("next object %.120s",m_data+m_pos);
-        if (nextElement(parser)) {
-           parser->trim(" \t\n\r,{}[]");
-           char first = m_data[m_start];
-           char last = m_data[m_end];
-           m_logger->never("first/last %c/%c   %d - %d",first,last,m_start,m_end);
-           if ((first == '{' && last == '}') || (first == '[' && last == ']')) {
-               m_start += 1;
-               m_end -= 1;
-               m_pos = m_pos < m_start ? m_start : m_pos;
-               m_pos = m_pos > m_end ? m_end : m_pos;
-           }
+    JsonRoot* read(const char * data) {
+        m_logger->debug("parsing %.50s...",data);
+        m_errorMessage = NULL;
+        m_hasError = false;
+        JsonRoot * root = new JsonRoot();
+        m_root = root;
+        m_logger->debug("created root");
+
+        if (data == NULL) {
+            return root;
+        }
+        
+        TokenParser tokParser(data);
+        m_logger->debug("created TokenParser");
+        JsonElement * json = parseNext(tokParser);
+        if (json != NULL) {
+            root->add(json);
+        }
+        
+        m_logger->debug("parse complete");
+        m_root = NULL;
+        return root;
+    }
+
+    JsonElement* parseNext(TokenParser&tok) {
+        TokenType next = tok.peek();
+        m_logger->debug("next token %d",next);
+
+        JsonElement* elem = NULL;
+        if (next == TOK_OBJECT_START) {
+            elem = parseObject(tok);
+        } else if (next == TOK_ARRAY_START) {
+            elem = parseArray(tok);
+        } else if (next == TOK_STRING) {
+            elem = parseString(tok);
+        }  else if (next == TOK_INT) {
+            elem = parseInt(tok);
+        }  else if (next == TOK_FLOAT) {
+            elem = parseFloat(tok);
+        } 
+        return elem;
+    }
+
+    bool skipToken(TokenParser&tok, TokenType type) {
+        TokenType next = tok.next();
+        if (next != type) {
+            m_hasError = true;
+            m_logger->error("expected token type %d but got %d",(int)type,(int)next);
+            m_logger->error("\ttoken pos %.20s",tok.getTokPos());
+            m_logger->error("\ttokenparser pos %.20s",tok.getPos());
+            return false;
+        }
+        return true;
+    }
+
+    
+    bool skipOptional(TokenParser&tok, TokenType type) {
+        TokenType next = tok.peek();
+        if (next == type) {
+            tok.next();
             return true;
         }
-        m_logger->never("\t not found");
-        
         return false;
-
     }
 
-    int16_t readInts(int * values,int16_t max=20) {
-        m_logger->error("readInts not implemented");
-        return 0;
+    JsonValue* parseString(TokenParser& tok) {
+        const char * nameStart;
+        size_t nameLen;
+        if(tok.nextString(nameStart,nameLen)){
+            if (nameLen>4 && strncmp(nameStart,"var(",4)==0){
+                return new JsonVariable(*m_root,nameStart,nameLen);
+            } else {
+                return new JsonString(*m_root,nameStart,nameLen);
+            }
+        }
+        return NULL;
     }
+    JsonValue* parseInt(TokenParser& tok) {
+        int val=0;
+        if(tok.nextInt(val)){
+            return new JsonInt(*m_root,val);
+        }
+        return NULL;
+    }
+
+    JsonValue* parseFloat(TokenParser& tok) {
+        double val=0;
+        if(tok.nextFloat(val)){
+            return new JsonFloat(*m_root,val);
+        }
+        return NULL;
+    }
+
+    JsonObject* parseObject(TokenParser& tok) {
+        m_logger->debug("parseObject");
+        if (!skipToken(tok,TOK_OBJECT_START)) {
+            m_logger->debug("\t{ not found");
+            return NULL;
+        }
+        JsonObject* obj = new JsonObject(*m_root);
+        const char * nameStart;
+        size_t nameLen;
+        m_logger->debug("\tread string");
+
+        while(tok.nextString(nameStart,nameLen)){
+            m_logger->debug("\tgot string");
+            m_logger->debug("\t\t len=%d",nameLen);
+            if (nameStart != NULL) {
+                m_logger->debug("\t\tchar %c",nameStart[0]);
+            } else {
+                m_logger->debug("\t\t nameStart is null");
+            }
+            m_logger->debug("\ttokenparser pos ~%.20s",tok.getPos());
+
+            if (!skipToken(tok,TOK_COLON)) {
+                delete obj;
+                return NULL;
+            }
+            m_logger->debug("got colon");
+            JsonElement* val = parseNext(tok);
+            if (val == NULL) {
+                delete obj;
+                return NULL;
+            }
+            m_logger->debug("got val");
+            obj->add(nameStart,nameLen,val);
+            skipOptional(tok,TOK_COMMA);
+        }
+
+
+        if (!skipToken(tok,TOK_OBJECT_END)) {
+            delete obj;
+            return NULL;
+        }
+        return obj;
+    }
+
+    JsonArray* parseArray(TokenParser& tok) {
+        if (!skipToken(tok,TOK_ARRAY_START)) {
+            return NULL;
+        }
+        JsonArray* arr = new JsonArray(*m_root);
+        TokenType peek = tok.peek();
+        if (peek == TOK_ARRAY_END) {
+            // empty array
+            m_logger->info("empty array");
+            tok.next();
+            return arr;
+        }
+        JsonElement * next = parseNext(tok);
+        while(next != NULL){
+            arr->addItem(next);
+            skipOptional(tok,TOK_COMMA);
+            peek = tok.peek();
+            if (peek == TOK_ARRAY_END) {
+                next = NULL;
+            } else {
+                next = parseNext(tok);
+            }
+        }
+        if (!skipToken(tok,TOK_ARRAY_END)) {
+            m_logger->error("Array end ] not found");
+            delete arr;
+            return NULL;
+        }
+        return arr;
+    }
+
+    bool hasError() { return m_hasError;}
+    const char * errorMessage() { return m_errorMessage;}
+    private:
+        Logger * m_logger;
+        const char * m_errorMessage;
+        bool        m_hasError;
+        JsonRoot* m_root;
+
 };
 
+JsonRoot::~JsonRoot() { 
+
+    delete m_value; 
+    mem.destruct("JsonRoot",this);
+}
+
+
+JsonProperty* JsonObject::add(const char *name,bool value){
+    JsonBool* jval = new JsonBool(*getRoot(),value);
+    return add(name,jval);
+
+}
+
+JsonProperty* JsonObject::add(const char *name,int value) {
+    JsonInt* jval = new JsonInt(*getRoot(),value);
+    return add(name,jval);
+};
+
+JsonProperty* JsonObject::add(const char *name,const char *value) {
+    JsonString* jval = new JsonString(*getRoot(),value);
+    return add(name,jval);
+};
+
+JsonProperty* JsonObject::add(const char *name,double value) {
+    JsonFloat* jval = new JsonFloat(*getRoot(),value);
+    return add(name,jval);
+};
+
+void MemLogger::construct(const char * type, JsonBase* object) {
+    m_logger->info("++++construct: %s [%d]",type,object->getJsonId());
+}
+
+void MemLogger::destruct(const char * type, JsonBase* object) {
+    m_logger->info("----destruct: %s [%d]",type,object->getJsonId());
+}
+
+void MemLogger::construct(const char * type, const char * name, JsonBase* object) {
+    m_logger->info("++++construct: %s--%s",type,name);
+}
+
+void MemLogger::destruct(const char * type, const char * name,JsonBase* object) {
+    m_logger->info("----destruct: %s--%s [%d]",type,name,object->getJsonId());
+}
+
+void MemLogger::allocString(const char * type, size_t len, JsonBase* object){
+    m_logger->info("++++alloc string: %s, len=%d [%d]",type,len,object->getJsonId());
+}
+
+void MemLogger::freeString(const char * type,JsonBase* object){
+    m_logger->info("----free string: %s [%d]",type,object->getJsonId());
+}
 
 }
 #endif

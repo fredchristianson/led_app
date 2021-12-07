@@ -7,11 +7,17 @@
 
 namespace DevRelief {
     const char * DEFAULT_CONFIG = R"config({ 
-        "name": CONFIG_HOSTNAME,
+        "name": "CONFIG_HOSTNAME",
         "addr": "unset",
         "scripts": [],
         "strips": [],
-        "brightness": 40
+        "brightness": 40,
+        "test": [
+            { "a":1,"b":"foo"},
+            "bar",
+            1,
+            1.4
+        ]
     })config";
 
     class Config {
@@ -27,7 +33,8 @@ namespace DevRelief {
                 scriptCount = 0;
             }
 
-            bool read(ObjectParser parser){
+            bool read(JsonParser parser){
+                /*
                 size_t idx;
                 ArrayParser stripArray;
                 ObjectParser obj;
@@ -45,10 +52,12 @@ namespace DevRelief {
                 }
                 parser.readIntValue("brightness",&brightness);
                 m_logger->debug("config read success");
-                return true;
+                return true;*/
+                return false;
             }
 
             void write(Generator& gen) {
+                /*
                 gen.startObject();
                 gen.writeNameValue("name",name);
                 gen.writeNameValue("startup_script",startupScript);
@@ -85,6 +94,7 @@ namespace DevRelief {
 
 
                 gen.endObject();
+                */
             }
 
             void setAddr(const char * ip){

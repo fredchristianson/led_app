@@ -28,6 +28,8 @@ enum LogLevel {
 #define MAX_MESSAGE_SIZE 1024
 char messageBuffer[MAX_MESSAGE_SIZE+1];
 String padding("                                   ");
+const char * TABS = "\t\t\t\t\t\t";
+int MAX_TAB_COUNT = 5;
 char lastErrorMessage[100];
 long lastErrorTime=0;
 
@@ -35,15 +37,38 @@ class Logger {
 public:
     Logger(const char * name, int level = 100) {
         initializeWriter();
-        m_name = name + padding;
-        m_name = m_name.substring(0, padding.length());
-        
+        setModuleName(name);
+        m_indent = 0;
         m_periodicTimer = 0;
         m_level = level;
+        this->always("create Logger %s",name);
+    }
+
+    virtual ~Logger() {
+        this->always("destroy Logger %s",m_name.c_str());
+    }
+
+    void setModuleName(const char * name) {
+        m_name = name + padding;
+        m_name = m_name.substring(0, padding.length());
+
     }
 
     void setLevel(int l) { m_level = l;}
+    int getLevel() { return m_level;}
     bool isDebug() { return m_level==100;}
+
+    void indent() {
+        if (m_indent < MAX_TAB_COUNT) {
+            m_indent++;
+        }
+    }
+
+    void outdent() {
+        if (m_indent>0) {
+            m_indent--;
+        }
+    }
     void restart() {
         this->info("restarting serial");
         Serial.begin(115200);
@@ -63,7 +88,9 @@ public:
         now = now % 3600;
         int minutes = now/60;
         int seconds = now % 60;
-        Serial.printf("%s/%d - %02d:%02d:%02d - %s: ",getLevelName(level),m_level,hours,minutes,seconds,m_name.c_str());
+        const char * tabs = m_indent<=0 ? "" : (TABS + MAX_TAB_COUNT-m_indent);
+        Serial.printf("%s/%3d - %02d:%02d:%02d - %s: %s ",
+            getLevelName(level),m_level,hours,minutes,seconds,m_name.c_str(),tabs);
         Serial.println(messageBuffer);
     }
 
@@ -180,8 +207,8 @@ public:
         
     }
 
-    void showMemory() {
-        write("Memory: stack=%d,  heap=%d",ESP.getFreeContStack(),ESP.getFreeHeap());
+    void showMemory(const char * label="Memory") {
+        write("%s: stack=%d,  heap=%d",label,ESP.getFreeContStack(),ESP.getFreeHeap());
 
     }
 
@@ -189,6 +216,7 @@ private:
     String m_name;
     int m_level;
     long m_periodicTimer;
+    int m_indent;
 };
 
 #endif

@@ -35,11 +35,16 @@ class Logger {
 public:
     Logger(const char * name, int level = 100) {
         initializeWriter();
-        m_name = name + padding;
-        m_name = m_name.substring(0, padding.length());
+        setModuleName(name);
         
         m_periodicTimer = 0;
         m_level = level;
+    }
+
+    void setModuleName(const char * name) {
+        m_name = name + padding;
+        m_name = m_name.substring(0, padding.length());
+
     }
 
     void setLevel(int l) { m_level = l;}

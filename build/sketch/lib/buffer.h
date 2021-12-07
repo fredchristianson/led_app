@@ -15,7 +15,7 @@ public:
         m_maxLength = 0;
         m_length = length;
         reserve(m_length);
-        m_logger = new Logger("DRBuffer",60);
+        m_logger = new Logger("DRBuffer",WARN_LEVEL);
     }
 
     ~DRBuffer() {
@@ -83,11 +83,71 @@ public:
         m_logger->info("get length.  length=%d, maxLength=%d",m_length,m_maxLength);
         return m_length;
     }
+
+
+    size_t getMaxLength() { return m_maxLength;}
+protected:
+    Logger* m_logger;
+
 private:
     uint8_t * m_data;
     size_t m_maxLength;
     size_t m_length;
-    Logger* m_logger;
+};
+
+class DRStringBuffer : public DRBuffer{
+    public:
+    DRStringBuffer() : DRBuffer(32) {
+        m_logger->setModuleName("DRStringBuffer");
+        m_logger->setLevel(DEBUG_LEVEL);
+    }
+
+    const char * nextMatch(const char* data,const char* seperators){
+        const char *match = data;
+        while(*match != 0) {
+            match++;
+            const char*s=seperators;
+            while(*s != 0 && *s!=*match){
+                s++;
+            }
+            if (*s != 0) {
+                return match;
+            }
+        }
+        return NULL;
+    }
+    const char ** split(const char* data,const char* seperators) {
+        m_logger->debug("split %s ~~ %s",data,seperators);
+        const char * pos = data;
+        size_t len = strlen(data)+1;
+        size_t count = 1;
+        const char * match;
+        while((match=nextMatch(pos,seperators)) != NULL) {
+            count += 1;
+            pos = match+1;
+        }
+        m_logger->debug("\tcount: %d",count);
+        
+        size_t alignBytes = 4-(len%4);
+        char * strings = (char*)reserve(len+(count+1)*sizeof(char*)+alignBytes);
+        const char ** array = (const char**)(strings+len+alignBytes);
+        const char ** result = array;
+        *array = strings;
+        match = data;
+        while(match-data<len) {
+            const char * end = nextMatch(match,seperators);
+            memcpy(strings,match,end-match);
+            strings[end-match] = 0;
+            m_logger->debug("\tfound: %s",strings);
+            *array = match;
+            array++;
+            strings += (end-match)+1;
+            match = end+1;
+        }
+        m_logger->debug("\tdone");
+        *array = NULL;
+        return result;
+    }
 };
 
 }

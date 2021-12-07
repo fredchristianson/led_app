@@ -19,7 +19,7 @@ namespace DevRelief {
         }
     protected:
         DRWiFi() {
-            m_logger = new Logger("wifi",80);
+            m_logger = new Logger("wifi",WARN_LEVEL);
             m_logger->debug("wifi created");
         }
 

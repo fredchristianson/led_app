@@ -2,6 +2,7 @@
 #define STANDARD_VALS_H
 
 namespace DevRelief {
+    /*
     const char * STD_HOME = R"home(
         <html>
         <style>
@@ -144,6 +145,7 @@ namespace DevRelief {
            
     }
     )std";
+    */
 }
 
 #endif
