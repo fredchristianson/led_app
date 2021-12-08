@@ -1,0 +1,2 @@
+to see global .bss va_start
+V:\tmp\arduino_build_90>C:\Users\fredc\AppData\Local\Arduino15\packages\esp8266\tools\xtensa-lx106-elf-gcc\3.0.4-gcc10.3-1757bed\xtensa-lx106-elf\bin\objdump  -t -j .bss -s  basic_controller.ino.elf > v:\tmp\t.bss

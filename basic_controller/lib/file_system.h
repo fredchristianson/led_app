@@ -10,6 +10,13 @@
 
 namespace DevRelief {
 
+typedef enum FileType {
+    FILE_TEXT = 1,
+    FILE_JSON = 2,
+
+    FILE_UNKNOWN_TYPE=999
+};
+
 class DRPath {
 public:
     DRPath() {};
@@ -50,7 +57,9 @@ public:
 
 bool drFileSystemInitialized=false;
 
+
 class DRFileSystem {
+
 
 public:
     DRFileSystem() {
@@ -62,6 +71,21 @@ public:
             drFileSystemInitialized = true;
         }
         m_logger->debug("DRFileSystem open");
+    }
+
+    const char * getExtension(const char * name) {
+        auto dot = strrchr(name,'.');
+        return dot == NULL ? name : dot;
+    }
+    FileType getFileType(const char * name) {
+        auto dot = strrchr(name,'.');
+        if (dot == NULL || strcmp(dot,".txt")==0) {
+            return FILE_TEXT;
+        } else if (strcmp(dot,".json")==0) {
+            return FILE_JSON;
+        } else {
+            return FILE_UNKNOWN_TYPE;
+        }
     }
 
     const char * getFullPath(const char * path){

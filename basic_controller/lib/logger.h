@@ -32,20 +32,21 @@ const char * TABS = "\t\t\t\t\t\t";
 int MAX_TAB_COUNT = 5;
 char lastErrorMessage[100];
 long lastErrorTime=0;
+int loggerIndent;
 
 class Logger {
 public:
     Logger(const char * name, int level = 100) {
         initializeWriter();
         setModuleName(name);
-        m_indent = 0;
+        loggerIndent = 0;
         m_periodicTimer = 0;
         m_level = level;
-        this->always("create Logger %s",name);
+        //this->always("create Logger %s",name);
     }
 
     virtual ~Logger() {
-        this->always("destroy Logger %s",m_name.c_str());
+        //this->always("destroy Logger %s",m_name.c_str());
     }
 
     void setModuleName(const char * name) {
@@ -59,14 +60,14 @@ public:
     bool isDebug() { return m_level==100;}
 
     void indent() {
-        if (m_indent < MAX_TAB_COUNT) {
-            m_indent++;
+        if (loggerIndent < MAX_TAB_COUNT) {
+            loggerIndent++;
         }
     }
 
     void outdent() {
-        if (m_indent>0) {
-            m_indent--;
+        if (loggerIndent>0) {
+            loggerIndent--;
         }
     }
     void restart() {
@@ -88,7 +89,7 @@ public:
         now = now % 3600;
         int minutes = now/60;
         int seconds = now % 60;
-        const char * tabs = m_indent<=0 ? "" : (TABS + MAX_TAB_COUNT-m_indent);
+        const char * tabs = loggerIndent<=0 ? "" : (TABS + MAX_TAB_COUNT-loggerIndent);
         Serial.printf("%s/%3d - %02d:%02d:%02d - %s: %s ",
             getLevelName(level),m_level,hours,minutes,seconds,m_name.c_str(),tabs);
         Serial.println(messageBuffer);
@@ -216,7 +217,7 @@ private:
     String m_name;
     int m_level;
     long m_periodicTimer;
-    int m_indent;
+
 };
 
 #endif

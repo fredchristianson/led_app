@@ -364,7 +364,7 @@ class JsonObject : public JsonElement {
         JsonProperty* add(const char *name,bool value);
         JsonProperty* add(const char *name,int value);
         JsonProperty* add(const char *name,const char *value);
-        JsonProperty* add(const char *name,double);
+        JsonProperty* add(const char *name,double value);
 
         JsonProperty * getProperty(const char * name) {
             m_logger->debug("get property %s",name);
@@ -488,7 +488,8 @@ class JsonString : public JsonValue {
             mem.construct("JsonString",this);
         }
 
-        virtual ~JsonString() { getRoot()->freeString(m_value);
+        virtual ~JsonString() { 
+            getRoot()->freeString(m_value);
             mem.destruct("JsonString",this);
         }
         
@@ -762,7 +763,20 @@ public:
     }
     
     void writeString(JsonString* element) {
-        writeText(element->getText());
+        writeText("\"");
+        const char * txt = element->getText();
+        const char * end = strchr(txt,'\"');
+        while(end != NULL) {
+            size_t len = end-txt+1;
+            char* pos = m_buf.increaseLength(len+1);
+            memcpy(pos,txt,len);
+            pos[len] = '\\';
+            pos[len+1] = '\"';
+            txt = end+1;
+            end = strchr(txt,'\"');
+        }
+        writeText(txt);
+        writeText("\"");
     }
     
         

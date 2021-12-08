@@ -1,3 +1,4 @@
+#line 1 "d:\\dev\\arduino\\led_app\\basic_controller\\lib\\parse_gen.h"
 #ifndef PARSE_GEN_H
 #define PARSE_GEN_H
 
@@ -11,36 +12,28 @@ namespace DevRelief {
 char skipBuf[100];
 char intValBuff[32];
 
+class JsonBase;
+
+
 class MemLogger {
     public:
     MemLogger() {
-        m_logger = new Logger("Memory",ERROR_LEVEL);
+        m_logger = new Logger("Memory",WARN_LEVEL);
 
     }
 
-    void construct(const char * type, void * object) {
-        m_logger->info("++++construct: %s",type);
-    }
+    void construct(const char * type, JsonBase* object);
 
-    void destruct(const char * type, void * object) {
-        m_logger->info("----destruct: %s",type);
-    }
+    void destruct(const char * type, JsonBase* object);
 
-    void construct(const char * type, const char * name, void * object) {
-        m_logger->info("++++construct: %s--%s",type,name);
-    }
+    void construct(const char * type, const char * name, JsonBase* object);
+    
 
-    void destruct(const char * type, const char * name,void * object) {
-        m_logger->info("----destruct: %s--%s",type,name);
-    }
+    void destruct(const char * type, const char * name,JsonBase* object) ;
 
-    void allocString(const char * type, size_t len, void * object){
-        m_logger->info("++++alloc string: %s, len=%d",type,len);
-    }
+    void allocString(const char * type, size_t len, JsonBase* object);
 
-    void freeString(const char * type,void * object){
-        m_logger->info("----free string: %s",type);
-    }
+    void freeString(const char * type,JsonBase* object);
 
     private:
     Logger* m_logger;
@@ -54,12 +47,13 @@ class PGLogger: public Logger {
     PGLogger(const char * module, int level) : Logger(module,level) {
         strcpy(skipBuf,"Logger ");
         strcat(skipBuf,module);
-        mem.construct(skipBuf,this);
     }
 };
 
-Logger* genLogger = new PGLogger("Gen",INFO_LEVEL);
-Logger* parserLogger = new PGLogger("Parse",INFO_LEVEL);
+Logger JSONLogger("Json",WARN_LEVEL);
+Logger ParserLogger("JsonParser",WARN_LEVEL);
+Logger GeneratorLogger("JsonGenerator",WARN_LEVEL);
+
 
 typedef enum TokenType {
     TOK_EOD=1000,
@@ -78,6 +72,7 @@ typedef enum TokenType {
 
 typedef enum JsonType {
     JSON_UNKNOWN=999,
+    JSON_NULL=998,
     JSON_INTEGER=100,
     JSON_FLOAT=101,
     JSON_STRING=102,
@@ -87,8 +82,7 @@ typedef enum JsonType {
     JSON_ARRAY=6,
     JSON_ROOT=7,
     JSON_PROPERTY=8,
-    JSON_ARRAY_ITEM=9,
-    JSON_BOOL
+    JSON_ARRAY_ITEM=9
 };
 
 class JsonRoot;
@@ -100,6 +94,7 @@ class JsonBase {
     public:
         JsonBase() {
             mem.construct("JsonBase",this);
+            m_jsonId = -1;
         }
         virtual ~JsonBase() {
             mem.destruct("JsonBase",this);
@@ -125,6 +120,11 @@ class JsonBase {
             return false;
         }
 
+        virtual bool getBoolValue(bool & value, bool defaultValue) {
+            value = defaultValue;
+            return false;
+        }
+
         virtual int getStringValue(char * value, size_t maxLen,const char* defaultValue=NULL) {
             if (defaultValue != NULL) {
                 strncpy(value,defaultValue,maxLen);
@@ -133,15 +133,27 @@ class JsonBase {
             }
             return false;
         }
+
+        int getJsonId() { return m_jsonId;}
+        void setJsonId(int id) { m_jsonId = id;}
+    private:
+        int m_jsonId;
 };
 
 class JsonRoot : public JsonBase {
     public:
         JsonRoot() : JsonBase() {
             m_value = NULL;
-            m_logger = new PGLogger("JsonRoot",WARN_LEVEL);
+            m_logger = &JSONLogger;
             mem.construct("JsonRoot",this);
+            m_nextJsonId = 1;
+            setJsonId(this);
         }
+
+        void setJsonId(JsonBase* element) {
+            element->setJsonId(m_nextJsonId++);
+        }
+
         virtual ~JsonRoot();
         virtual JsonType getType() { return JSON_ROOT;}
         char * allocString(const char * val, size_t len) {
@@ -160,6 +172,7 @@ class JsonRoot : public JsonBase {
         }
 
         virtual JsonRoot* getRoot() { return this;}
+
         virtual bool add(JsonElement* child) { 
             if (m_value != NULL) { 
                 m_logger->error("adding multiple children to JsonRoot is not allowed");
@@ -169,12 +182,20 @@ class JsonRoot : public JsonBase {
             return true;
         }
 
+        void forget(JsonElement* child) {
+            if (child != m_value) {
+                m_logger->error("forget() called with wrong child");
+            }
+            m_value = NULL;
+        }
+
         JsonElement* getValue(){
             return m_value;
         }
 
         virtual Logger* getLogger() { return m_logger;}
     protected:
+        int m_nextJsonId;
         JsonElement * m_value;
         Logger* m_logger;
 };
@@ -183,6 +204,7 @@ class JsonElement : public JsonBase {
     public:
         JsonElement(JsonRoot& root,JsonType t) :m_root(root) {
             m_type = t;
+            root.setJsonId(this);
             m_logger = m_root.getLogger();
             mem.construct("JsonElement",this);
 
@@ -209,23 +231,22 @@ class JsonElement : public JsonBase {
 
 class JsonProperty : public JsonElement {
     public:
-        JsonProperty(JsonRoot& root, const char * name,size_t nameLength,JsonElement* value, JsonProperty* next) : JsonElement(root,JSON_PROPERTY) {
+        JsonProperty(JsonRoot& root, const char * name,size_t nameLength,JsonElement* value) : JsonElement(root,JSON_PROPERTY) {
             m_name = root.allocString(name,nameLength);
             m_value = value;
-            m_next = next;
-            m_logger->debug("JsonProperty for type %d",m_value->getType());
+            m_next = NULL;
+            m_logger->info("JsonProperty for type %d",m_value->getType());
             mem.construct("JsonProperty",name,this);
         }
         
-        JsonProperty(JsonRoot& root, const char * name,JsonElement* value, JsonProperty* next) : JsonElement(root,JSON_PROPERTY) {
-            m_logger->always("construct property %d %s",name,name);
+        JsonProperty(JsonRoot& root, const char * name,JsonElement* value) : JsonElement(root,JSON_PROPERTY) {
+            m_logger->info("construct property %s",name);
+            m_logger->info("\tvalue type %d",(value == NULL ? JSON_NULL : value->getType()));
             size_t nameLength = strlen(name)+1;
-            m_logger->always("\tallocate %d chars string %s ",nameLength,name);
             m_name = root.allocString(name,nameLength);
-            m_logger->always("\talloced %s into %s",name,m_name);
             m_value = value;
-            m_next = next;
-            m_logger->always("\tconstrcted JsonProperty %s for type %d",m_name,m_value->getType());
+            m_next = NULL;
+            m_logger->info("\tconstrcted JsonProperty %s for type %d",m_name,(m_value == NULL ? JSON_NULL :m_value->getType()));
             mem.construct("JsonProperty",name,this);
         }
         virtual ~JsonProperty() { 
@@ -244,6 +265,23 @@ class JsonProperty : public JsonElement {
             return idx==0 ? m_value : m_next == NULL ? NULL :m_next->getAt(idx-1);
         }
 
+        void setNext(JsonProperty*  next) {
+            m_logger->info("setNext property [%d]-->[%d]",getJsonId(),(next == NULL ? -1 : next->getJsonId()));
+            if (m_next != NULL) {
+                delete m_next;
+            }
+            m_next = next;
+        }
+
+        void addEnd(JsonProperty* next) {
+            if (m_next == NULL) {
+                m_logger->info("addEnd last [%d]-->[%d]",getJsonId(),(next == NULL ? -1 : next->getJsonId()));
+                m_next = next;
+            } else {
+                m_logger->info("addEnd middle [%d]-->[%d]",getJsonId(),(next == NULL ? -1 : next->getJsonId()));
+                m_next->addEnd(next);
+            }
+        }
 
         void setValue(JsonElement*val) {
             delete m_value;
@@ -267,6 +305,7 @@ class JsonObject : public JsonElement {
             m_logger->debug("create JsonObject ");
             m_firstProperty = NULL;
             mem.construct("JsonObject",this);
+            add("jsonId",getJsonId());
         }
         virtual ~JsonObject() {
             delete m_firstProperty;
@@ -280,25 +319,45 @@ class JsonObject : public JsonElement {
             return false;
         }
 
+        JsonProperty* add(JsonProperty* prop){
+            if (m_firstProperty == NULL) {
+                m_logger->info("set firstProperty of [%d]",getJsonId());
+                m_firstProperty = prop;
+            } else {
+                m_logger->info("add property  [%d] (count=%d)",getJsonId(),getCount());
+                JsonProperty * end = m_firstProperty;
+                while(end->getNext() != NULL) {
+                    end = end->getNext();
+                }
+                end->setNext(prop);
+                m_logger->info("\tadded property  [%d] (count=%d)",getJsonId(),getCount());
+                for(JsonProperty*p=m_firstProperty;p!=NULL;p=p->getNext()){
+                    m_logger->info("\t\tprop [%d] %d",p->getJsonId(),p->getType());
+                }                
+            }
+            return prop;
+        }
+
         JsonProperty* add(const char *nameStart,size_t nameLen,JsonElement * value){
-            JsonProperty* prop = new JsonProperty(m_root,nameStart,nameLen,value,m_firstProperty);
-            m_firstProperty = prop;
+            JsonProperty* prop = new JsonProperty(m_root,nameStart,nameLen,value);
+            add(prop);
             return prop;
         }
 
         
         JsonProperty* add(const char *name,JsonElement * value){
-            m_logger->always("add property %s",name);
+            m_logger->info("add property [%d] %s",getJsonId(),name,(value == NULL ? -1 : value->getType()));
             JsonProperty*prop = getProperty(name);
             if (prop != NULL) {
-                m_logger->always("\tproperty exists.  replacing value for %s",name);
+                m_logger->info("\tproperty exists.  replacing value for %s",name);
                 prop->setValue(value);
             } else {
-                m_logger->always("\tcreate new property %d %s",name,name);
+                m_logger->info("\tcreate new property %s",name);
 
-                prop = new JsonProperty(m_root,name,value,m_firstProperty);
-                m_logger->always("\t\tcreated property %s",name);
-                m_firstProperty = prop;
+                prop = new JsonProperty(m_root,name,value);
+                add(prop);
+                m_logger->info("\t\tcreated property %s",name);
+              
             }
             return prop;
         }
@@ -306,12 +365,12 @@ class JsonObject : public JsonElement {
         JsonProperty* add(const char *name,bool value);
         JsonProperty* add(const char *name,int value);
         JsonProperty* add(const char *name,const char *value);
-        JsonProperty* add(const char *name,double);
+        JsonProperty* add(const char *name,double value);
 
         JsonProperty * getProperty(const char * name) {
-            m_logger->always("get property %s",name);
+            m_logger->debug("get property %s",name);
             for(JsonProperty*prop=m_firstProperty;prop!=NULL;prop=prop->getNext()){
-                m_logger->always("\tcheck%s",prop->getName());
+                m_logger->debug("\tcheck%s",prop->getName());
                 if (strcmp(prop->getName(),name)==0) {
                     return prop;
                 }
@@ -362,7 +421,8 @@ class JsonArrayItem : public JsonElement {
             return idx==0 ? m_value : m_next == NULL ? NULL :m_next->getAt(idx-1);
         }
 
-
+        JsonArrayItem* getNext() { return m_next;}
+        JsonElement* getValue() { return m_value;}
         
     protected:
         JsonElement* m_value;
@@ -396,6 +456,9 @@ class JsonArray : public JsonElement {
         JsonElement* getAt(size_t idx) {
             return m_firstItem == NULL ? NULL : m_firstItem->getAt(idx);
         }
+        JsonArrayItem* getFirstItem() {
+            return m_firstItem;
+        }
     protected: 
         JsonArrayItem * m_firstItem;
 };
@@ -426,7 +489,8 @@ class JsonString : public JsonValue {
             mem.construct("JsonString",this);
         }
 
-        virtual ~JsonString() { getRoot()->freeString(m_value);
+        virtual ~JsonString() { 
+            getRoot()->freeString(m_value);
             mem.destruct("JsonString",this);
         }
         
@@ -434,6 +498,8 @@ class JsonString : public JsonValue {
             strncpy(value,m_value,maxLen);
             return true;
         }
+
+        const char * getText() { return m_value;}
     protected:
         char* m_value;
 };
@@ -486,7 +552,7 @@ class JsonFloat : public  JsonValue {
 
 class JsonBool : public  JsonValue {
     public:
-        JsonBool(JsonRoot& root, bool value) : JsonValue(root,JSON_BOOL) {
+        JsonBool(JsonRoot& root, bool value) : JsonValue(root,JSON_BOOLEAN) {
             m_logger->debug("create JsonFloat %s ",value?"true":"false");
 
             m_value = value;
@@ -498,7 +564,7 @@ class JsonBool : public  JsonValue {
             mem.destruct("JsonBool",this);
         }
 
-        virtual bool getBoolValue(double& value,bool defaultValue) {
+        virtual bool getBoolValue(bool& value,bool defaultValue) {
             value = m_value;
             return true;
         }
@@ -519,6 +585,8 @@ class JsonVariable : public JsonValue {
         virtual ~JsonVariable() { delete m_value;
             mem.destruct("JsonVariable",this);
          }
+
+         const char* getText() { return m_value;}
     protected:
         char * m_value;
 };
@@ -527,121 +595,246 @@ class ParseGen {
 
 };
 
-class Generator : public ParseGen {
-private:
-    Generator(DRBuffer* buffer) {
+class JsonGenerator : public ParseGen {
+public:
+    JsonGenerator(DRBuffer& buffer) : m_buf(buffer) {
         m_buf = buffer;
-        depth = 0;
-        pos = 0;
-        m_buf->reserve(1)[0] = 0;  
-        m_logger = genLogger;
+        m_depth = 0;
+        m_pos = 0;
+        m_logger = &GeneratorLogger;
     }
 
-    void startObject() {
-        write("{\n",true);
-        depth += 1;
-        m_logger->debug("start obj: %.20s",m_buf->text());
+    ~JsonGenerator() {
+        
     }
-    void endObject() {
-        char *  data = (char *) m_buf->text();
-        int16_t comma = pos;
 
-        while(comma > 0 && data[comma] != ',') {
-            data[comma] = ' ';
-            comma -= 1;
+    bool generate(JsonBase* element) {
+        m_logger->debug("Generate JSON %d",element->getType());
+        m_pos = 0;
+        m_depth = 0;
+        m_buf.clear();
+        if (element->getType() == JSON_ROOT){
+            writeElement(((JsonRoot*)element)->getValue());
+        } else {
+            writeElement((JsonElement*)element);
         }
-        if (comma > 0) {
-            data[comma] = '\n';
-        }
-        depth -= 1;
-        write("}",true);
-        m_logger->debug("end obj: %.500s",m_buf->text());
+        return true;
     }
 
+    void writeElement(JsonElement* element){
+        if (element == NULL) {
+            writeText("null");
+            writeNewline();
+            return;
+        }
+        int type = element->getType();
+        m_logger->debug("write element type %d",type);
+        switch(type) {
+            case JSON_UNKNOWN:
+                writeText("unknown element type");
+                writeInt(type);
+                writeNewline();
+                break;
+            case JSON_NULL:
+                writeText("null");
+                writeInt(type);
+                writeNewline();
+                break;
+            case JSON_INTEGER:
+                writeInteger((JsonInt*)element);
+                break;
+            case JSON_FLOAT:
+                writeFloat((JsonFloat*)element);
+                break;
+            case JSON_STRING:
+                writeString((JsonString*)element);
+                break;
+            case JSON_BOOLEAN:
+                writeBool((JsonBool*)element);
+                break;
+            case JSON_VARIABLE:
+                writeVariable((JsonVariable*)element);
+                break;
+            case JSON_OBJECT:
+                writeObject((JsonObject*)element);
+                break;
+            case JSON_ARRAY:
+                writeArray((JsonArray*)element);
+                break;
+            case JSON_ROOT:
+                writeElement(((JsonRoot*)element)->getValue());
+                break;
+            case JSON_PROPERTY:
+                writeProperty((JsonProperty*)element);
+                break;
+            case JSON_ARRAY_ITEM:
+                writeArrayItem((JsonArrayItem*)element);
+                break;
+            default:
+                writeText("unknown type: ");
+                writeInt(type);
+                writeNewline();
+                break;
+        }
+    }
+
+    void writeObject(JsonObject * object) {
+        writeText("{");
+        m_depth += 1;
+        m_logger->info("write object [%d] count=%d",object->getJsonId(),object->getCount());
+        for(JsonProperty*prop=object->getFirstProperty();prop!=NULL;prop=prop->getNext()){
+            m_logger->info("\tprop %s [%d]",(prop == NULL ? "no prop":prop->getName()),prop->getJsonId());
+            writeNewline();
+
+            writeProperty(prop);
+
+            if (prop->getNext() != NULL) {
+                writeText(",");
+            }
+        }
+        m_logger->debug("\twrote properties");
+        m_depth -= 1;
+        writeNewline();
+        writeText("}");
+    }
+
+    void writeProperty(JsonProperty * prop) {
+        if (prop == NULL) {
+            m_logger->error("writeProperty got null");
+        }
+        m_logger->debug("write property %s",prop->getName());
+        writeString(prop->getName());
+        m_logger->debug("\twrote name %s",prop->getName());
+        
+        writeText(": ");
+        m_logger->debug("\twrote colon");
+        JsonElement* val = prop->getValue();
+        m_logger->debug("\twrite element %d",val);
+        writeElement(val);
+        m_logger->debug("\twrote value");
+    }
+
+    void writeArray(JsonArray* array) {
+        writeText("[");
+        m_depth += 1;
+        for(JsonArrayItem* item=array->getFirstItem();item!= NULL;item=item->getNext()){
+            writeNewline();
+            writeArrayItem(item);
+            if (item->getNext() != NULL) {
+                writeText(",");
+                writeNewline();
+            }
+        }
+        m_depth -= 1;
+        writeNewline();
+        writeText("]");
+    }
+
+    void writeArrayItem(JsonArrayItem* item) {
+        writeElement(item->getValue());
+    }
+  
+    void writeInteger(JsonInt* element) {
+        int i;
+        if (element->getIntValue(i,0)) {
+            writeInt(i);
+        } else {
+            writeText("null");
+        }
+    }
     
-    void startArray() {
-        write("[\n",true);
-        depth += 1;
-        m_logger->debug("start array: %.500s",m_buf->text());
-    }
-    void endArray() {
-        depth -= 1;
-        char *  data = (char *) m_buf->text();
-        int16_t comma = pos;
-
-        while(comma > 0 && data[comma] != ',') {
-            data[comma] = ' ';
-            comma -= 1;
+    void writeFloat(JsonFloat* element) {
+        double f;
+        if (element->getFloatValue(f,0)) {
+            writeFloat(f);
+        } else {
+            writeText("null");
         }
-        if (comma > 0) {
-            data[comma] = '\n';
-        }
-        write("]",true);
-        m_logger->debug("end array: %.500s",m_buf->text());
     }
-
-    void startProperty() {
-
-    }
-
-    void endProperty() {
-        write(",\n");
-    }
-
-    void writeName(const char * name) {
-        write("\"",true);
-        write(name);
-        write("\": ");
-    }
-
-    void writeArrayValue(const char * val) {
-        write("\"",true);
-        write(val);
-        write("\", ");
-    }
-
-    void writeNameValue(const char * name,const char* string) {
-        writeName(name);
-        write("\"");
-        write(string);
-        write("\",\n");
-        m_logger->debug("add name/str: %s:%s : %.500s",name,string,m_buf->text());
-    }
-
-
-
-    void writeNameValue(const char * name,int val) {
-        sprintf(intValBuff,"%d",val);
-        writeName(name);
-        write(intValBuff);
-        write(",\n");
-    }
-
     
-    void writeNameValue(const char * name,bool val) {
-        writeName(name);
-        write(val ? "true":"false");
-        write(",\n");
+   
+        
+    void writeBool(JsonBool* element) {
+        bool b;
+        if (element->getBoolValue(b,false)) {
+            writeText(b ? "true":"false");
+        } else {
+            writeText("null");
+        }
+    }
+    
+    void writeString(JsonString* element) {
+        writeText("\"");
+        const char * txt = element->getText();
+        const char * end = strchr(txt,'\"');
+        while(end != NULL) {
+            size_t len = end-txt+1;
+            char* pos = m_buf.increaseLength(len+1);
+            memcpy(pos,txt,len);
+            pos[len] = '\\';
+            pos[len+1] = '\"';
+            txt = end+1;
+            end = strchr(txt,'\"');
+        }
+        writeText(txt);
+        writeText("\"");
+    }
+    
+        
+    void writeVariable(JsonVariable* element) {
+        writeText(element->getText());
+    }
+    
+    void writeText(const char * text) {
+        if (text == NULL) {
+            return;
+        }
+        size_t len = strlen(text);
+        if (len == 0) {
+            return;
+        }
+        m_logger->never("writeText %d %s",len,text);
+        char *pos = m_buf.increaseLength(len);
+        m_logger->never("\t ptr %d.  buf %d",pos,m_buf.data());
+        memcpy(pos,text,len);
+        m_logger->never("\tcopied");
+        pos[len] = 0;
+        m_logger->never("\tterminated");
     }
 
-    void write(const char * data,bool indent=false) {
-        if (indent) {
-            uint8_t * spaces = m_buf->reserve(pos+depth*2)+pos;
-            memset(spaces,' ',depth*2);
-            pos += depth*2;
+    void writeString(const char * text) {
+        writeText("\"");
+        writeText(text);
+        writeText("\"");
+    }
+
+    void writeInt(int i) {
+        snprintf(m_tmp,32,"%d",i);
+        writeText(m_tmp);
+    }
+
+    void writeFloat(double f) {
+        snprintf(m_tmp,32,"%f",f);
+        writeText(m_tmp);
+    }
+
+    void writeNewline() {
+        writeText("\n");
+        writeTabs();
+    }
+
+    void writeTabs(){
+        int cnt = m_depth;
+        while(cnt-- > 0) {
+            writeText("\t");
         }
-        size_t len = strlen(data);
-        uint8_t  * to =  m_buf->reserve(pos+len+1)+pos;
-        memcpy(to,data,len);
-        pos += len;
-        m_buf->setLength(pos);
-        to[len] = '~';
     }
 
 protected:
-    DRBuffer* m_buf;    
-    int depth;
-    size_t pos;
+    char m_tmp[32];
+    DRBuffer& m_buf;    
+    int m_depth;
+    size_t m_pos;
     Logger * m_logger;
 };
 
@@ -784,14 +977,13 @@ class TokenParser {
 class JsonParser : public ParseGen {
 public:
     JsonParser() {
-        m_logger = new PGLogger("Parser",WARN_LEVEL);
+        m_logger = &ParserLogger;
         m_errorMessage = NULL;
         m_hasError = false;
         m_root = NULL;
     }    
 
     ~JsonParser() { 
-        delete m_logger;
     }
 
 
@@ -974,11 +1166,8 @@ public:
 };
 
 JsonRoot::~JsonRoot() { 
-    if (m_value == NULL) {
-        m_logger->warn("deleting JsonRoot without m_value");
-    }
+
     delete m_value; 
-    delete m_logger; 
     mem.destruct("JsonRoot",this);
 }
 
@@ -1004,6 +1193,29 @@ JsonProperty* JsonObject::add(const char *name,double value) {
     return add(name,jval);
 };
 
+void MemLogger::construct(const char * type, JsonBase* object) {
+    m_logger->info("++++construct: %s [%d]",type,object->getJsonId());
+}
+
+void MemLogger::destruct(const char * type, JsonBase* object) {
+    m_logger->info("----destruct: %s [%d]",type,object->getJsonId());
+}
+
+void MemLogger::construct(const char * type, const char * name, JsonBase* object) {
+    m_logger->info("++++construct: %s--%s",type,name);
+}
+
+void MemLogger::destruct(const char * type, const char * name,JsonBase* object) {
+    m_logger->info("----destruct: %s--%s [%d]",type,name,object->getJsonId());
+}
+
+void MemLogger::allocString(const char * type, size_t len, JsonBase* object){
+    m_logger->info("++++alloc string: %s, len=%d [%d]",type,len,object->getJsonId());
+}
+
+void MemLogger::freeString(const char * type,JsonBase* object){
+    m_logger->info("----free string: %s [%d]",type,object->getJsonId());
+}
 
 }
 #endif

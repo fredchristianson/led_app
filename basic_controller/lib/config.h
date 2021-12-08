@@ -13,14 +13,13 @@ namespace DevRelief {
         "addr": "unset",
         "scripts": [],
         "strips": [],
-        "brightness": 40,
-        "test": [
-            { "a":1,"b":"foo"},
-            "bar",
-            1,
-            1.4
+        "brightness": 40
         ]
     })config";
+
+    class ConfigPin {
+
+    };
 
     class Config : Data {
         public:

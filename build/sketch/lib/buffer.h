@@ -1,3 +1,4 @@
+#line 1 "d:\\dev\\arduino\\led_app\\basic_controller\\lib\\buffer.h"
 #ifndef DR_BUFFER_H
 #define DR_BUFFER_H
 
@@ -7,28 +8,29 @@
 
 namespace DevRelief {
 
+Logger DRBufferLogger("DRBuffer",WARN_LEVEL);
 
 class DRBuffer {
 public:
     DRBuffer(size_t length=0){
+        m_logger = &DRBufferLogger;
         m_data = NULL;
         m_maxLength = 0;
         m_length = length;
         reserve(m_length);
-        m_logger = new Logger("DRBuffer",WARN_LEVEL);
     }
 
-    ~DRBuffer() {
+    virtual ~DRBuffer() {
         if (m_data) {
             m_logger->info("delete DRBuffer data");
             if (m_data != NULL){
                 free(m_data);
             }
         }
+        
     }
     uint8_t* data() {
         m_logger->debug("return data.  length=%d, maxLength=%d",m_length,m_maxLength);
-        m_logger->debug("first byte: %2",m_data[0]);
         return m_data;
     }
 
@@ -57,21 +59,35 @@ public:
             m_logger->info("increase buffer length. old length=%d, new length=%d",m_maxLength,length);
             uint8_t* newData = (uint8_t*)malloc(length+1);
             m_logger->info("allocated buffer");
-            newData[0] = 2;
-            m_logger->debug("set first value");
-            m_logger->info("first byte: %d",newData[0]);
             if (m_data != NULL) {
                 if (length > 0) {
                     memcpy(newData,m_data,length);
                 }
                 free(m_data);
 
+            } else {
+                memset(newData,0,length);
             }
             m_data = newData;
             m_maxLength = length;
             m_logger->info("first byte of m_data: %d",m_data[0]);
         }
         return m_data;
+    }
+
+    void clear() {
+        m_length = 0;
+        m_logger->info("cleared.  length=%d, maxLength=%d",m_length,m_maxLength);
+    }
+
+    char * increaseLength(size_t length) {
+        m_logger->info("incread length.  length=%d+=>%d, maxLength=%d",m_length,length,m_maxLength);
+        size_t oldLength = m_length;
+        m_length += length;
+        reserve(m_length+length+1);
+        m_data[m_length] = 0;
+        m_logger->info("\tdone length=%d, maxLength=%d",m_length,m_maxLength);
+        return (char*) m_data+oldLength;
     }
 
     void setLength(size_t length) {
@@ -97,10 +113,15 @@ private:
 
 class DRStringBuffer : public DRBuffer{
     public:
-    DRStringBuffer() : DRBuffer(32) {
+    DRStringBuffer() : DRBuffer() {
+        m_values = NULL;
+        m_count = 0;
         m_logger->setModuleName("DRStringBuffer");
-        m_logger->setLevel(DEBUG_LEVEL);
+        
+        //m_logger->setLevel(DEBUG_LEVEL);
+        reserve(128);
     }
+
 
     const char * nextMatch(const char* data,const char* seperators){
         const char *match = data;
@@ -117,6 +138,7 @@ class DRStringBuffer : public DRBuffer{
         return NULL;
     }
     const char ** split(const char* data,const char* seperators) {
+        m_count = 0;
         m_logger->debug("split %s ~~ %s",data,seperators);
         const char * pos = data;
         size_t len = strlen(data)+1;
@@ -130,24 +152,46 @@ class DRStringBuffer : public DRBuffer{
         
         size_t alignBytes = 4-(len%4);
         char * strings = (char*)reserve(len+(count+1)*sizeof(char*)+alignBytes);
+        memcpy(strings,data,len);
+        strings[len] = 0;
         const char ** array = (const char**)(strings+len+alignBytes);
         const char ** result = array;
         *array = strings;
-        match = data;
-        while(match-data<len) {
-            const char * end = nextMatch(match,seperators);
-            memcpy(strings,match,end-match);
-            strings[end-match] = 0;
-            m_logger->debug("\tfound: %s",strings);
+        match = strings;
+        bool done = false;
+        m_values = result;
+        m_count = 0;
+        while(!done) {
+            char * end = (char *) nextMatch(match,seperators);
+            if (end == NULL) {
+                m_logger->debug("found end");
+                done = true;
+            } else {
+                *end = 0;
+            }
+            m_logger->debug("\tfound: %s",match);
             *array = match;
+            m_logger->debug("\t\tadded pointer");
             array++;
-            strings += (end-match)+1;
-            match = end+1;
+            m_count++;
+            m_logger->debug("\t\tarray++");
+            match = done ? NULL : end+1;
         }
         m_logger->debug("\tdone");
         *array = NULL;
         return result;
     }
+
+    size_t count() { return m_count;}
+    const char * getAt(size_t idx) {
+        if (idx<0 || idx>= m_count) {
+            return NULL;
+        }
+        return m_values[idx];
+    }
+    private:
+        size_t m_count;
+        const char ** m_values;
 };
 
 }

@@ -1,3 +1,4 @@
+#line 1 "d:\\dev\\arduino\\led_app\\basic_controller\\lib\\wifi.h"
 #ifndef DRWIFIF_H
 #define DRWIFIF_H
 #include "./logger.h"

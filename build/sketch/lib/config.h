@@ -1,11 +1,14 @@
+#line 1 "d:\\dev\\arduino\\led_app\\basic_controller\\lib\\config.h"
 #ifndef CONFIG_H
 #define CONFIG_H
 #define CONFIG_HOSTNAME  "Lanai"
 
 #include "./parse_gen.h";
 #include "./logger.h";
+#include "./data.h";
 
 namespace DevRelief {
+    Logger ConfigLogger("Config",WARN_LEVEL);
     const char * DEFAULT_CONFIG = R"config({ 
         "name": "CONFIG_HOSTNAME",
         "addr": "unset",
@@ -20,10 +23,10 @@ namespace DevRelief {
         ]
     })config";
 
-    class Config {
+    class Config : Data {
         public:
             Config() {
-                m_logger = new Logger("Config",80);
+                m_logger = &ConfigLogger;
                 strcpy(name,CONFIG_HOSTNAME);
                 for(auto i=0;i<3;i++) {
                     stripPins[i] = -1;
@@ -33,70 +36,7 @@ namespace DevRelief {
                 scriptCount = 0;
             }
 
-            bool read(JsonParser parser){
-                /*
-                size_t idx;
-                ArrayParser stripArray;
-                ObjectParser obj;
-                bool result = parser.readStringValue("name",name);
-                parser.readStringValue("startup_script",startupScript);
-                stripCount = 0;
-                parser.getArray("strips",stripArray);
-                
-                while(stripArray.nextObject(&obj)){
-                    obj.readIntValue("pin",&stripPins[stripCount]);
-                    obj.readIntValue("leds",&stripLeds[stripCount]);
-                    obj.readBoolValue("reverse",&stripReverse[stripCount],false);
-                    m_logger->debug("reverse %d %s",stripCount,stripReverse[stripCount] ? "reverse" : "forward");
-                    stripCount++;
-                }
-                parser.readIntValue("brightness",&brightness);
-                m_logger->debug("config read success");
-                return true;*/
-                return false;
-            }
-
-            void write(Generator& gen) {
-                /*
-                gen.startObject();
-                gen.writeNameValue("name",name);
-                gen.writeNameValue("startup_script",startupScript);
-                gen.writeNameValue("addr",addr);
-                gen.writeNameValue("stripCount",(int)stripCount);
-                gen.writeNameValue("brightness",brightness);
-
-                gen.writeName("strips");
-                gen.startProperty();
-                gen.startArray();
-                for(int i=0;i<stripCount;i++) {
-                    gen.startProperty();
-                    gen.startObject();
-                    gen.writeNameValue("pin",stripPins[i]);
-                    gen.writeNameValue("leds",stripLeds[i]);
-                    gen.writeNameValue("reverse",stripReverse[i]);
-                    gen.endObject();
-                    gen.endProperty();
-                }
-                gen.endArray();
-                gen.endProperty();
-
-                
-                gen.writeName("scripts");
-                gen.startProperty();
-                gen.startArray();
-                auto script = scriptNames.text();
-                for(int i=0;i< scriptCount;i++) {
-                    gen.writeArrayValue(script);
-                    script += strlen(script)+1;
-                }
-                gen.endArray();
-                gen.endProperty();
-
-
-                gen.endObject();
-                */
-            }
-
+          
             void setAddr(const char * ip){
                 strcpy(addr,ip);
             }

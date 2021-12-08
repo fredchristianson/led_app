@@ -1,3 +1,4 @@
+#line 1 "d:\\dev\\arduino\\led_app\\basic_controller\\lib\\color.h"
 #ifndef DRCOLOR_H
 #define DRCOLOR_H
 #include <math.h>

@@ -1,3 +1,4 @@
+#line 1 "d:\\dev\\arduino\\led_app\\basic_controller\\lib\\data.h"
 #ifndef DR_DATA_H
 #define DR_DATA_H
 
@@ -8,186 +9,209 @@
 
 namespace DevRelief {
 
+Logger PathLogger("JsonPath",DEBUG_LEVEL);
+Logger DataLogger("Data",DEBUG_LEVEL);
 class JsonPath {
     public:
-        JsonPath(JsonElement*start, const char * name) {
-            m_firstElement = new JsonProperty(*(start->getRoot()),name,start,NULL);
-            parse(start, name);
-        }
-        ~JsonPath() {
-            JsonProperty *del = m_firstElement;
-            while(del == NULL) {
-                del->forgetValue();
-                del = del->getNext();
-            }
-            delete m_firstElement;
+        JsonPath() {
+           m_logger = &PathLogger;
         }
 
-        bool parse(JsonElement*root, const char * name){
-            const char ** parts = buffer.split("/",name);
-            return parts != NULL && parts[0] != NULL;
+        ~JsonPath() {
+            
         }
+
+
+        bool getParent(JsonElement&top, const char * path,JsonObject*& parent,const char*&name) {
+            m_logger->debug("Create property %s",path);
+            parent = top.asObject();
+            const char** parts = strings.split(path,"/");
+            name = path;
+            while(parent != NULL && *parts != NULL) {
+                name = *parts;
+                JsonProperty* childProp = parent->getProperty(*parts);
+                JsonElement*child = (childProp==NULL) ? NULL : childProp->getValue();
+                parts++;
+                if (*parts != NULL) {
+                    if (childProp == NULL || childProp->getValue()==NULL || childProp->getValue()->asObject() == NULL) {
+                        child = new JsonObject(*(top.getRoot()));
+                        parent->add(name,child);
+                        parent = child->asObject();
+                    } else {
+                        parent = child->asObject();
+                    }
+                }
+            }
+            
+            return *parts == NULL;
+        }
+
+        JsonElement* getPropertyValue(JsonElement&top, const char * path) {
+            m_logger->debug("get property %s",path);
+            const char** parts = strings.split(path,"/");
+            JsonObject* parent = top.asObject();
+            JsonElement* result = &top;
+            while(parent != NULL && *parts != NULL) {
+                JsonProperty* childProp = parent->getProperty(*parts);
+                result = (childProp==NULL) ? NULL : childProp->getValue();
+                parts++;
+                if (*parts != NULL) {
+                    parent = result->asObject();
+                }
+            }
+            
+            return result;
+        }
+
+    
     private:
-    DRStringBuffer buffer;
-    JsonProperty* m_firstElement;
+    Logger * m_logger;
+    DRStringBuffer strings;
+
 };
 
 
 class Data : public JsonRoot {
 public:
-    Data() : obj(*this) {
-        m_logger = new Logger("Data",DEBUG_LEVEL);
+    Data() : m_obj(*this) {
+        m_logger = &DataLogger;
+        m_logger->debug("Data is JSON type %d -- %d",this->getType(),m_obj.getType());
+        add(&m_obj);
     }
-    virtual ~Data() {}
+    virtual ~Data() {
+        forget(&m_obj);
+    }
 
-    bool addProperty(const char * name,bool b) { 
-        JsonObject* parent = getJsonParentByName(name, true);
-        if (parent != NULL) {
-            obj.add(name,b);
+
+    bool addProperty(const char * path,bool b) { 
+       m_logger->debug("add int prop %s %d",path,b);
+        JsonPath jsonPath;
+        JsonObject* parent;
+        const char * name;
+        if (jsonPath.getParent(m_obj,path,parent,name)) {
+            parent->add(name,b);
             return true;
         }
         return false;
     }
-    bool addProperty(const char * name,int b) { 
-        JsonObject* parent = getJsonParentByName(name, true);
-        if (parent != NULL) {
-            m_logger->debug("got parent.  write int to name %s",name);
-            JsonProperty* prop = parent->add(name,b);
-            if (prop == NULL) {
-                m_logger->error("failed to write property %s",name);
-            } else {
-                m_logger->debug("wrote property %s",name);
-                return true;
-            }
-        }
-        return false;
-    }
-    bool addProperty(const char * name,double b) { 
-        JsonObject* parent = getJsonParentByName(name, true);
-        if (parent != NULL) {
-            obj.add(name,b);
+
+    bool addProperty(const char * path,int b) { 
+        m_logger->debug("add bool prop %s %d",path,b);
+        JsonPath jsonPath;
+        JsonObject* parent;
+        const char * name;
+        if (jsonPath.getParent(m_obj,path,parent,name)) {
+            parent->add(name,b);
             return true;
         }
         return false;
     }
-    bool addProperty(const char * name,const char * b) { 
-        JsonObject* parent = getJsonParentByName(name, true);
-        if (parent != NULL) {
-            obj.add(name,b);
+    
+    bool addProperty(const char * path,double b) { 
+        m_logger->debug("add float prop %s %f",path,b);
+
+        JsonPath jsonPath;
+        JsonObject* parent;
+        const char * name;
+        if (jsonPath.getParent(m_obj,path,parent,name)) {
+            parent->add(name,b);
             return true;
         }
-        return false;        
+        return false;
     }
-
-    JsonObject* getJsonParentByName(const char * &name,bool createPath) {
-        m_logger->debug("getJsonParentByName %s",name);
-        JsonObject* probe = &obj;
-        JsonObject* parent = probe;
-        DRBuffer buf;
-        size_t len = strlen(name);
-        char* part = (char*)buf.reserve(len+1);
-        strcpy(part,name);
-        char* end = part+len;
-
-        while(probe != NULL && part < end) {
-            char* sep = strchr(part,'/');
-            parent = probe;
-            if (sep != NULL) {
-                *sep = 0;
-                m_logger->debug("\tget property %s",part);
-                JsonProperty * prop = probe->getProperty(part);
-                if (prop == NULL){
-                    if (createPath) {
-                        m_logger->debug("\tcreate path JsonObject %s",part);
-                        JsonObject * child = new JsonObject(*(probe->getRoot()));
-                        probe->add(part,child);
-                        probe = child;
-                        parent = child;
-                    } else {
-                        m_logger->debug("\tproperty not found and not created");
-                        probe = NULL;
-                        parent = NULL;
-                    }
-                } else {
-                    probe = prop->getValue()->asObject();
-                    if (probe == NULL) {
-                        m_logger->error("path part %s is not a JsonObject",part);
-                    }
-                }
-                part = sep+1;
-
-            } else {
-                m_logger->debug("\tat last path name %s",part);
-                parent = probe;
-                probe = NULL;
-                name = name + (part-(const char *)buf.data());
-            }
+    bool addProperty(const char * path,const char * b) { 
+        m_logger->debug("add string prop %s %d",path,b);
+        JsonPath jsonPath;
+        JsonObject* parent;
+        const char * name;
+        if (jsonPath.getParent(m_obj,path,parent,name)) {
+            parent->add(name,b);
+            return true;
         }
-        m_logger->debug("%s parent", (parent == NULL ? "no" : "found"));
-        return parent;
-    }
-
-    JsonElement* getJsonElementByName(const char * name) {
-        m_logger->debug("getJsonElementByName %s",name);
-        JsonObject* probe = &obj;
-        JsonElement* result = NULL;
-        DRBuffer buf;
-        size_t len = strlen(name);
-        char* part = (char*)buf.reserve(len+1);
-        strcpy(part,name);
-        char* end = part+len;
-
-        while(probe != NULL && part < end) {
-            char* sep = strchr(part,'/');
-            if (sep != NULL) {
-                *sep = 0;
-            }
-            m_logger->debug("\tget property %s",part);
-            JsonProperty* prop = probe->getProperty(part);
-            result = prop == NULL ? NULL : prop->getValue();
-            if (result == NULL){
-                m_logger->warn("\tno property for %s",part);
-            }
-            probe = result == NULL ? NULL : result->asObject();
-            if (probe == NULL) {
-                m_logger->info("\tpart %s is not a JsonObject",part);
-            }
-            part = sep+1;
-        }
-        if (part>= end && result != NULL) {
-            m_logger->debug("found element %s of type %d",name,result->getType());
-            return result;
-        } else {
-            m_logger->warn("\tpath part missing %s",part);
-            return NULL;
-        }
-
+        return false;      
     }
 
 
-    int getInt(const char * name, int defaultValue=0) {
-        int val = defaultValue;
-        JsonElement* value = getJsonElementByName(name);
-        if (value != NULL) {
-            m_logger->debug("got JsonElement to get int %d",value->getType());
-            value->getIntValue(val,defaultValue);
-        } else {
-            m_logger->warn("JsonElement %s not found",name);
+    int getInt(const char * path, int defaultValue=0) {
+        m_logger->debug("get int prop %s",path);
+        JsonPath jsonPath;
+        JsonElement* element = jsonPath.getPropertyValue(m_obj,path);
+        int val=defaultValue;
+        if (element != NULL) {
+            m_logger->debug("\tgot property");
+            element->getIntValue(val,defaultValue);
         }
+
         return val;
     }
+
+
+    bool getBool(const char * path, bool defaultValue=0) {
+        m_logger->debug("get int prop %s %d",path);
+        JsonPath jsonPath;
+        JsonElement* element = jsonPath.getPropertyValue(m_obj,path);
+        bool val=defaultValue;
+        if (element != NULL) {
+            m_logger->debug("\tgot property");
+            element->getBoolValue(val,defaultValue);
+        }
+
+        return val;
+    }
+
+
+    double getFloat(const char * path, double defaultValue=0) {
+        m_logger->debug("get int prop %s ",path);
+        JsonPath jsonPath;
+        JsonElement* element = jsonPath.getPropertyValue(m_obj,path);
+        double val=defaultValue;
+        if (element != NULL) {
+            m_logger->debug("\tgot property");
+            element->getFloatValue(val,defaultValue);
+        }
+
+        return val;
+    }
+
+    
+    const char * getString(const char * path,char * buffer, size_t maxLen,const char * defaultValue="") {
+        m_logger->debug("get string prop %s ",path);
+        JsonPath jsonPath;
+        JsonElement* element = jsonPath.getPropertyValue(m_obj,path);
+        if (element != NULL) {
+            m_logger->debug("\tgot property");
+            element->getStringValue(buffer,maxLen,defaultValue);
+        } else {
+            strncpy(buffer,defaultValue,maxLen);
+        }
+
+        return buffer;
+    }
+    
+    void dump() {
+        if (m_logger->getLevel() < DEBUG_LEVEL) {
+            return;
+        }
+        DRBuffer buf;
+        JsonGenerator gen(buf);
+        gen.generate(this);
+        m_logger->debug("JSON:");
+        m_logger->debug(buf.text());
+    }
 protected:
+
+
     Logger * m_logger;
 private:
-    JsonObject obj;
+    JsonObject m_obj;
 };
 
 class ApiResult : public Data {
     public:
         ApiResult(bool success=true) {
+            addProperty("code",success ? 200:500);
             addProperty("success",true);
             addProperty("message","success");
-            addProperty("code",success ? 200:500);
         }
         ApiResult(bool success, const char * msg, ...) {
             va_list args;

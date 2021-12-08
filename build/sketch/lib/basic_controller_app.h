@@ -1,3 +1,4 @@
+#line 1 "d:\\dev\\arduino\\led_app\\basic_controller\\lib\\basic_controller_app.h"
 
 #include <math.h>
 #include <time.h>
@@ -13,6 +14,7 @@
 #include "./script_executor.h"
 #include "./standard.h"
 #include "./data.h"
+#include "./tests.h"
 
 extern EspClass ESP;
 
@@ -31,11 +33,9 @@ namespace DevRelief {
             m_logger = new Logger("BasicControllerApplication",DEBUG_LEVEL);
 
             m_logger->showMemory();
-testStringBuffer();
-            m_logger->showMemory();
-testStringBuffer();
-            m_logger->showMemory();
-//testData();
+            if (!Tests::Run()) {
+                return;
+            }
             m_logger->showMemory();
             m_httpServer = new HttpServer();
             m_fileSystem = new DRFileSystem();
@@ -192,38 +192,7 @@ testStringBuffer();
             
         }
 
-        void testStringBuffer() {
-            m_logger->debug("test DRStringBuffer");
-            DRStringBuffer buf;
-            m_logger->debug("\tsplit");
-            const char ** strs = buf.split("a/b/c/d","/");
-            m_logger->debug("\tsplit done");
-            while(*strs != NULL) {
-                m_logger->debug("\tgot %s",*strs);
-                strs++;
-            }
-            m_logger->debug("\ttest done");
-        }
 
-        void testData() {
-            ApiResult api;
-            api.addProperty("top",1);
-            int i = api.getInt("top");
-            m_logger->debug("top should be 1.  it is: %d",i);
-            api.addProperty("a/b",2);
-            i = api.getInt("a/b");
-            m_logger->debug("a/b should be 2.  it is: %d",i);
-            api.addProperty("a/c/d",3);
-            i = api.getInt("a/c/d");
-            m_logger->debug("a/c/d should be d.  it is: %d",i);
-            api.addProperty("a/c/e",4);
-            i = api.getInt("a/c/e");
-            m_logger->debug("a/c/e should be 4.  it is: %d",i);
-
-            api.addProperty("abc/def/xyz",5);
-            i = api.getInt("abc/def/xyz");
-            m_logger->debug("abc/def/xyz should be 5.  it is: %d",i);
-        }
     private: 
         Logger * m_logger;
         DRFileSystem * m_fileSystem;

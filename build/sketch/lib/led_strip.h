@@ -1,3 +1,4 @@
+#line 1 "d:\\dev\\arduino\\led_app\\basic_controller\\lib\\led_strip.h"
 #ifndef DRLED_STRIP_H
 #define DRLED_STRIP_H
 #include <Adafruit_NeoPixel.h>

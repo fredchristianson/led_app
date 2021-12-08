@@ -1,3 +1,4 @@
+#line 1 "d:\\dev\\arduino\\led_app\\basic_controller\\lib\\script.h"
 #ifndef DRSCRIPT_H
 #define DRSCRIPT_H
 
