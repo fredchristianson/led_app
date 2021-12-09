@@ -5,7 +5,7 @@
 
 namespace DevRelief {
 
-Logger ListLogger("List",DEBUG_LEVEL);
+Logger ListLogger("List",WARN_LEVEL);
 
 template<class T>
 struct ListNode
@@ -29,12 +29,15 @@ public:
 
 	virtual bool add(T);
     virtual T get(int index);
-    virtual void remove(int index);
+    virtual void removeAt(int index);
+    virtual void removeFirst(T t);
+    virtual void removeAll(T t);
+    virtual int firstIndexOf(T t,int start=0);
     virtual T last();
     virtual void clear();
-    T& operator[](int index); 
-	T& operator[](size_t& i) { return this->get(i); }
-  	const T& operator[](const size_t& i) const { return this->get(i); }
+    T operator[](int index) { return this->get(index); }
+	T operator[](size_t& i) { return this->get(i); }
+  	const T operator[](const size_t& i) const { return this->get(i); }
 protected:
     virtual void deleteNode(ListNode<T>* node);
     virtual ListNode<T>* getNode(int index);
@@ -80,12 +83,16 @@ T LinkedList<T>::get(int index){
     if (node != NULL) {
         return node->data;
     }
+    m_logger->info("LinkedList get index %d returned NULL",index);
     return NULL;
 }
 
 template<typename T>
 ListNode<T>* LinkedList<T>::getNode(int index){
     m_logger->debug("getNode %d (size=%d)",index,m_size);
+    if (index < 0 || index >= size()){
+        return NULL;
+    }
 	int pos = 0;
 	ListNode<T>* current = m_root;
 
@@ -126,6 +133,10 @@ bool LinkedList<T>::insertAt(int index, T item){
     } else {
         m_logger->debug("\t get prev node");
         ListNode<T>* prev = getNode(index-1);
+        if (prev == NULL) {
+            prev = getNode(m_size-1);
+            m_logger->debug("\tinsert past end.  use last");
+        }
         m_logger->debug("\t got prev node");
         tmp->next = prev->next;
         prev->next = tmp;
@@ -180,18 +191,54 @@ void LinkedList<T>::clear(){
 }
 
 template<typename T>
-void LinkedList<T>::remove(int index){
+void LinkedList<T>::removeAt(int index){
 	if (index < 0 || index >= m_size)
 	{
 		return;
 	}
+    if (index == 0) {
+        ListNode<T>*next = m_root->next;
+        deleteNode(m_root);
+        m_root = next;
+        m_size--;
+        return;
+    }
 
 
 	ListNode<T>*prev = getNode(index-1);
     ListNode<T>*tmp = prev->next;
     prev->next = tmp->next;
-    deleteNode(tmp);
     m_size --;
+    deleteNode(tmp);
+}
+
+template<typename T>
+void LinkedList<T>::removeFirst(T t) {
+    removeAt(firstIndexOf(t));
+}
+
+template<typename T>
+void LinkedList<T>::removeAll(T t){
+    m_logger->debug("removeAll %d",t);
+    int idx = firstIndexOf(t);
+    while(idx>=0) {
+        m_logger->debug("\t index %d",idx);
+        LinkedList<T>::removeAt(idx);
+        idx = firstIndexOf(t);
+    }
+}
+
+template<typename T>
+int LinkedList<T>::firstIndexOf(T t,int start){
+    m_logger->debug("firstIndexOf %d after %d",t,start);
+    int idx = start;
+    ListNode<T>*node = m_root;
+    while(idx<m_size&&node != NULL && node->data != t) {
+        node = node->next;
+        idx++;
+    }
+    
+    return node != NULL ? idx : -1;
 }
 
 template<typename T>

@@ -95,6 +95,12 @@ public:
         Serial.println(messageBuffer);
     }
 
+    void write(int level, const char * message,...) {
+        va_list args;
+        va_start(args,message);
+        write(level,message,args);
+    }
+
     // void debug(String message,...) {
     //     va_list args;
     //     va_start(args,message);
@@ -104,7 +110,7 @@ public:
     void debug(const char * message,...) {
         va_list args;
         va_start(args,message);
-        write(100,message,args);
+        write(DEBUG_LEVEL,message,args);
     }
 
 
@@ -118,7 +124,7 @@ public:
     void info(const char * message,...) {
         va_list args;
         va_start(args,message);
-        write(80,message,args);
+        write(INFO_LEVEL,message,args);
     }
 
 
@@ -131,7 +137,7 @@ public:
     void warn(const char * message,...) {
         va_list args;
         va_start(args,message);
-        write(40,message,args);
+        write(WARN_LEVEL,message,args);
     }
 
 
@@ -144,7 +150,7 @@ public:
     void error(const char * message,...) {
         va_list args;
         va_start(args,message);
-        write(20,message,args);
+        write(ERROR_LEVEL,message,args);
     }
 
     // mainly for new messages during development.  don't need to turn debug level on and get old debug messages.
@@ -209,7 +215,7 @@ public:
     }
 
     void showMemory(const char * label="Memory") {
-        write("%s: stack=%d,  heap=%d",label,ESP.getFreeContStack(),ESP.getFreeHeap());
+        write(INFO_LEVEL,"%s: stack=%d,  heap=%d",label,ESP.getFreeContStack(),ESP.getFreeHeap());
 
     }
 

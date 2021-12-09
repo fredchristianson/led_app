@@ -10,6 +10,11 @@
 #include "./list.h";
 
 namespace DevRelief {
+    int nextTestObjectId=100;
+    const char * SUCCEEDED = "succeeded";
+    const char * FAILED = "failed";
+    const char * UNKNOWN_TEST="-???-";
+
     class TestResult {
         public:
             TestResult(Logger * logger) { 
@@ -17,23 +22,70 @@ namespace DevRelief {
                 m_logger = logger;    
             }
 
-            void fail(const char * msg = NULL) { 
-                if (msg == NULL) {
-                    msg = "assertEqual failed";
+            void fail(const char * msg = UNKNOWN_TEST) { 
+                if (msg != NULL) {
+                    m_logger->error("test failed: %s",msg);
                 }
-                m_logger->error(msg);
                 m_success = false;
             }
             
+            void addResult(bool success,const char * msg) {
+                if (!success) {
+                    fail(msg);
+                }
+            }
+
             bool isSuccess() { return m_success;}
 
-            bool assertEqual(int a, int b,const char * msg = NULL) {
-                if (a != b) {
-                    fail();
-                    return false;
-                }
-                return true;
+            bool assertEqual(int a, int b,const char * msg=UNKNOWN_TEST) {
+                bool result = (a == b);
+                addResult(result,msg);
+                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertEqual %s [ %s]:  %d == %d",(result ? SUCCEEDED : FAILED), msg,a,b);
+                return result;
             }
+
+            bool assertEqual(void* a,void * b,const char * msg=UNKNOWN_TEST) {
+                bool result = (a == b);
+                addResult(result,msg);
+                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertEqual %s [ %s]:  %d == %d",(result ? SUCCEEDED : FAILED), msg,a,b);
+                return result;
+            }
+
+            bool assertNotEqual(void* a,void* b,const char * msg=UNKNOWN_TEST) {
+                bool result = (a != b);
+                addResult(result,msg);
+                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertNotEqual %s [ %s]:  %d != %d",(result ? SUCCEEDED : FAILED), msg,a,b);
+                return result;
+            }
+
+            bool assertNull(void*a,const char * msg=UNKNOWN_TEST) {
+                bool result = (a == NULL);
+                addResult(result,msg);
+                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertNull %s [ %s]:  %d",(result ? SUCCEEDED : FAILED), msg,a);
+                return result;
+            }
+
+            bool assertNotNull(void*a,const char * msg=UNKNOWN_TEST) {
+                bool result = (a != NULL);
+                addResult(result,msg);
+                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertNotNull %s [ %s]:  %d",(result ? SUCCEEDED : FAILED), msg,a);
+                return result;
+            }
+
+            bool assertTrue(bool a,const char * msg=UNKNOWN_TEST) {
+                bool result = a;
+                addResult(result,msg);
+                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertTrue %s [ %s]:  %d",(result ? SUCCEEDED : FAILED), msg,a);
+                return result;
+            }
+
+            bool assertFalse(bool a,const char * msg=UNKNOWN_TEST) {
+                bool result = !a;
+                addResult(result,msg);
+                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertFalse %s [ %s]:  %d",(result ? SUCCEEDED : FAILED), msg,a);
+                return result;
+            }
+
         private:
             Logger* m_logger;
             bool m_success;
@@ -41,14 +93,18 @@ namespace DevRelief {
 
     class TestObject {
         public:
-        static int nextId;
         TestObject(){
-            id = TestObject::nextId++;
+            id = nextTestObjectId++;
+            value = 0;
+        }
+        TestObject(int v){
+            id = nextTestObjectId++;
+            value = v;
         }
 
         int id;
+        int value;
     };
-    int TestObject::nextId=100;
 
     class Tests {
         typedef void (Tests::*TestFn)(TestResult &);
@@ -99,7 +155,9 @@ namespace DevRelief {
             m_logger->info("Run test: %s",name);
             m_logger->indent();
             m_logger->showMemory("memory before test");
+
             (this->*test)(result);
+            m_logger->debug("test complete");
             int endMem = ESP.getFreeHeap();
             m_logger->showMemory("memory after test");
             if (endMem != mem) {
@@ -196,24 +254,81 @@ namespace DevRelief {
             result.assertEqual(4,list.size());
             m_logger->debug("get item 0");
             result.assertEqual(1,list.get(0));
+            result.assertEqual(1,list[0],"index 0");
             result.assertEqual(2,list.get(1));
+            result.assertEqual(1,list[1],"index 1");
             result.assertEqual(3,list.get(2));
             result.assertEqual(4,list.get(3));
-            list.remove(1);
+            list.removeAt(1);
             result.assertEqual(1,list.get(0));
             result.assertEqual(3,list.get(1));
             result.assertEqual(4,list.get(2));
+            result.assertEqual(3,list.size(),"list size 3");
+            list.add(5);
+            list.add(5);
+            list.insertAt(0,5);
+            list.insertAt(1,5);
+            list.insertAt(2,5);
+            result.assertEqual(8,list.size(),"list size 8");
+            list.removeAll(5);
+            result.assertEqual(3,list.size(),"list size 3");
             
         } 
 
         void testPtrList(TestResult& result) {
+            
             PtrList<TestObject*> list;
-            list.add(new TestObject());
-            list.add(new TestObject());
-            list.insertAt(1,new TestObject());
-            list.add(new TestObject()),
-            result.assertEqual(4,list.size());
-            list.remove(1);
+            TestObject* t0=new TestObject(0);
+            TestObject* t1=new TestObject(1);
+            TestObject* t2=new TestObject(2);
+            TestObject* t3=new TestObject(3);
+            TestObject* t4=new TestObject(4);
+            TestObject* t5=new TestObject(5);
+            TestObject* t6=new TestObject(6);
+            TestObject* t7=new TestObject(7);
+
+            list.add(t1);
+            list.add(t2);
+            list.add(t3);
+            list.add(t4);
+
+            result.assertEqual(list.get(0)->value,t1->value,"get(0)");
+            result.assertEqual(list.get(1),t2,"get(1)");
+            result.assertEqual(list.get(2),t3,"get(2)");
+            result.assertEqual(list.get(3),t4,"get(3)");
+
+            list.insertAt(0,t0);
+            list.insertAt(3,t6);
+            list.insertAt(10,t7);
+/**/
+            result.assertEqual(list.get(0),t0,"insert then get(0)");
+            result.assertEqual(list.get(3),t6,"insert then get(3)");
+            result.assertEqual(list.last(),t7,"insert then last()");
+
+
+            list.insertAt(4,t5);
+            result.assertEqual(list.firstIndexOf(t5),4,"firstIndexOf");
+/*            */
+            list.removeAt(3);
+            result.assertEqual(list.get(3),t5);
+
+            list.removeFirst(t5);
+            result.assertNotEqual(list.get(3),t5);
+
+            list.clear();
+            result.assertEqual(list.size(),0,"no items after clear()");            
+/**/
+            TestObject* tA = new TestObject();
+            TestObject* tB = new TestObject();
+            TestObject* tC = new TestObject();
+            list.add(tA);
+            list.add(tB);
+            list.add(tC);
+            result.assertEqual(list[0],tA,"index[0]");
+            result.assertEqual(list[1],tB,"index[1]");
+            result.assertEqual(list[2],tC,"index[2]");
+            result.assertNull(list[3],"index at end of list");
+            result.assertNull(list[-1],"negative index");
             
         } 
         private:
