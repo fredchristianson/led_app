@@ -23,24 +23,26 @@ public:
 	virtual ~LinkedList();
 
 
-	virtual int size();
+	virtual int size() const;
 
 	virtual bool insertAt(int index, T);
 
 	virtual bool add(T);
-    virtual T get(int index);
+    virtual T get(int index) const;
     virtual void removeAt(int index);
     virtual void removeFirst(T t);
     virtual void removeAll(T t);
-    virtual int firstIndexOf(T t,int start=0);
-    virtual T last();
+    virtual int firstIndexOf(T t,int start=0) const;
+    virtual T last() const;
     virtual void clear();
-    T operator[](int index) { return this->get(index); }
-	T operator[](size_t& i) { return this->get(i); }
-  	const T operator[](const size_t& i) const { return this->get(i); }
+    T operator[](int index) const  { return this->get(index); }
+	//T operator[](size_t& i)  const { return this->get(i); }
+  	//const T operator[](const size_t& i) const { return this->get(i); }
+
+    void each(auto&& lambda) const;
 protected:
     virtual void deleteNode(ListNode<T>* node);
-    virtual ListNode<T>* getNode(int index);
+    virtual ListNode<T>* getNode(int index) const;
 	int m_size;
 	ListNode<T> *m_root;
 	ListNode<T>	*m_last;
@@ -78,7 +80,16 @@ LinkedList<T>::~LinkedList()
 }
 
 template<typename T>
-T LinkedList<T>::get(int index){
+void LinkedList<T>::each(auto&& lambda) const {
+  ListNode<T>* node = m_root;
+  while(node != NULL) {
+      lambda(node->data);
+      node = node->next;
+  }  
+}
+
+template<typename T>
+T LinkedList<T>::get(int index) const{
     ListNode<T>* node = getNode(index);
     if (node != NULL) {
         return node->data;
@@ -88,7 +99,7 @@ T LinkedList<T>::get(int index){
 }
 
 template<typename T>
-ListNode<T>* LinkedList<T>::getNode(int index){
+ListNode<T>* LinkedList<T>::getNode(int index) const{
     m_logger->debug("getNode %d (size=%d)",index,m_size);
     if (index < 0 || index >= size()){
         return NULL;
@@ -111,7 +122,7 @@ ListNode<T>* LinkedList<T>::getNode(int index){
 }
 
 template<typename T>
-int LinkedList<T>::size(){
+int LinkedList<T>::size() const{
 	return m_size;
 }
 
@@ -169,7 +180,7 @@ bool LinkedList<T>::add(T item){
 }
 
 template<typename T>
-T LinkedList<T>::last(){
+T LinkedList<T>::last() const{
     if (m_root == NULL) {
         return T();
     }
@@ -229,7 +240,7 @@ void LinkedList<T>::removeAll(T t){
 }
 
 template<typename T>
-int LinkedList<T>::firstIndexOf(T t,int start){
+int LinkedList<T>::firstIndexOf(T t,int start) const{
     m_logger->debug("firstIndexOf %d after %d",t,start);
     int idx = start;
     ListNode<T>*node = m_root;
@@ -243,6 +254,7 @@ int LinkedList<T>::firstIndexOf(T t,int start){
 
 template<typename T>
 void LinkedList<T>::deleteNode(ListNode<T>* t){
+    m_logger->debug("primitive deleteNode");
     delete t;
 }
 

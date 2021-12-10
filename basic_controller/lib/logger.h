@@ -50,8 +50,7 @@ public:
     }
 
     void setModuleName(const char * name) {
-        m_name = name + padding;
-        m_name = m_name.substring(0, padding.length());
+        m_name = name;
 
     }
 
@@ -90,7 +89,7 @@ public:
         int minutes = now/60;
         int seconds = now % 60;
         const char * tabs = loggerIndent<=0 ? "" : (TABS + MAX_TAB_COUNT-loggerIndent);
-        Serial.printf("%s/%3d - %02d:%02d:%02d - %s: %s ",
+        Serial.printf("%6s/%3d - %02d:%02d:%02d - %20s: %s ",
             getLevelName(level),m_level,hours,minutes,seconds,m_name.c_str(),tabs);
         Serial.println(messageBuffer);
     }

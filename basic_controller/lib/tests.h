@@ -44,6 +44,20 @@ namespace DevRelief {
                 return result;
             }
 
+            bool assertEqual(const char * a, const char * b,const char * msg=UNKNOWN_TEST) {
+                bool result = true;
+                if (a==b) {
+                    result = true;
+                } else if ((a==NULL&&b!=NULL) || (a!=NULL&&b==NULL)){
+                    result = false;
+                } else {
+                    result = strcmp(a,b) == 0;
+                }
+                addResult(result,msg);
+                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertEqual strings %s [ %s]:  %d == %d",(result ? SUCCEEDED : FAILED), msg,a,b);
+                return result;
+            }
+
             bool assertEqual(void* a,void * b,const char * msg=UNKNOWN_TEST) {
                 bool result = (a == b);
                 addResult(result,msg);
@@ -132,9 +146,11 @@ namespace DevRelief {
             bool success = true;
             //success = runTest("testStringBuffer",&Tests::testStringBuffer) && success;
             //success = runTest("testData",&Tests::testData) && success;
-            //success = runTest("testConfigLoader",&Tests::testConfigLoader) && success;
-            success = runTest("testList",&Tests::testList) && success;
-            success = runTest("testPtrList",&Tests::testPtrList) && success;
+            //success = runTest("testSharedPtr",&Tests::testSharedPtr) && success;
+            //success = runTest("testDRString",&Tests::testDRString) && success;
+            success = runTest("testConfigLoader",&Tests::testConfigLoader) && success;
+            //success = runTest("testList",&Tests::testList) && success;
+            //success = runTest("testPtrList",&Tests::testPtrList) && success;
             int endHeap = ESP.getFreeHeap();
   
             if (endHeap != startHeap) {
@@ -162,19 +178,90 @@ namespace DevRelief {
             m_logger->showMemory("memory after test");
             if (endMem != mem) {
                 m_logger->error("Memory Leak: %d bytes",endMem-mem);
-                result.fail();
+                result.fail("memory leak");
             }
             m_logger->outdent();
             return result.isSuccess();
         }
 
-        void testConfigLoader(TestResult& result) {
-            Config config;
-            ConfigDataLoader loader;
-            loader.initialize(config);
-            if (loader.loadConfig(config)){
 
+        void testDRString(TestResult& result) {
+            DRString s1;
+            DRString s2("foo");
+            DRString s3(s2);
+            result.assertEqual(s3.get(),s2.get(),"copy constructor");
+
+            s1 = s3;
+            result.assertEqual(s3.get(),s2.get(),"assignment to other DRString");
+            s2 = "abc";
+            result.assertEqual("abc",s2.get(),"assignment to const char *");
+            
+            m_logger->debug("set a= DRString");
+            const char * a = s2;
+            m_logger->debug("assignment done");
+            result.assertEqual(a,s2.get(),"cast operator");
+
+        }
+
+
+        void testSharedPtr(TestResult& result) {
+            SharedPtr<TestObject> p1 = new TestObject(123);
+            SharedPtr<TestObject> p2 = p1;
+            SharedPtr<TestObject> p3 = p2;
+            p1.freeData();
+            p2.freeData();
+            if (true) {
+                SharedPtr<TestObject> p4 = p3;
+                result.assertEqual(p4->value,123,"4th shared ptr");
             }
+            result.assertEqual(p3->value,123,"3rd shared ptr");
+            SharedPtr<TestObject> p5 = p3;
+        }
+
+        void testConfigLoader(TestResult& result) {
+            m_logger->debug("create Config");
+            Config config;
+
+            m_logger->debug("test scripts");
+            config.addScript("s1");
+            config.addScript("s2");
+            config.addScript("last script");
+            result.assertEqual(config.getScripts().size(),3,"3 scripts added");
+            result.assertEqual((const char*)(config.getScripts()[1]),"s2","index 1 script is 's2'");
+
+            m_logger->debug("\ttest pins");
+            config.addPin(2,150);
+            config.addPin(3,75);
+            config.addPin(4,75);
+            result.assertEqual(config.getPin(1)->number,3,"pin number");
+            result.assertEqual(config.getPin(1)->ledCount,75,"led count");
+            result.assertEqual(config.getPin(1)->reverse,false,"reverse");
+            result.assertEqual(config.getPinCount(),3,"pin count");
+
+            config.setBrightness(10);
+            config.setMaxBrightness(20);
+            config.setHostname("config name");
+            config.setAddr("1.2.3.4");
+
+            ConfigDataLoader loader;
+            result.assertTrue(loader.saveConfig(config,"/config.test.json"),"saveConfig");
+            
+            config.clearScripts();
+            result.assertEqual(config.getScripts().size(),0,"scripts cleared");
+
+            config.clearPins();
+            result.assertEqual(config.getPins().size(),0,"pins cleared");
+            
+
+            result.assertTrue(loader.loadConfig(config,"/config.test.json"),"load config");
+
+            result.assertEqual(config.getPin(1)->number,3,"pin number");
+            result.assertEqual(config.getPin(1)->ledCount,75,"led count");
+            result.assertEqual(config.getPin(1)->reverse,false,"reverse");
+            result.assertEqual(config.getPinCount(),3,"pin count");
+             result.assertEqual(config.getScripts().size(),3,"3 scripts added");
+            result.assertEqual((const char*)(config.getScripts()[1]),"s2","index 1 script is 's2'");
+
         }
 
         void testStringBuffer(TestResult& result) {

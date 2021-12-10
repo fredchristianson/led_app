@@ -136,63 +136,6 @@ namespace DevRelief {
 
       
 
-        void testParser() {
-            JsonParser parser;
-            m_logger->debug("read DEFAULT_CONFIG");
-            m_logger->showMemory();
-            JsonRoot* root = parser.read(DEFAULT_CONFIG);
-            if (root == NULL) {
-                m_logger->error("no JSON root");
-                return;
-            }
-            m_logger->debug("got JsonRoot");
-            JsonElement * elem = root->getValue();
-            m_logger->debug("got JsonElement");
-            if (elem == NULL) {
-                m_logger->error("JSON root has no value");
-            } else if (elem->getType() == JSON_OBJECT) {
-                JsonObject*obj = (JsonObject*)elem;
-                JsonProperty*prop = obj->getFirstProperty();
-                while(prop != NULL) {
-                    m_logger->debug("property %s is type %d",prop->getName(),prop->getValue()->getType());
-                    prop = prop->getNext();
-                }
-                JsonElement* value = obj->getPropertyValue("name");
-                m_logger->debug("got JSON value type %d",(int)(value?value->getType():-1));
-                value = obj->getPropertyValue("brightness");
-                m_logger->debug("got JSON brightness type %d",(int)(value?value->getType():-1));
-                if (value != NULL) {
-                    int val;
-                    value->getIntValue(val,123);
-                    m_logger->debug("\t%d",val);
-                }
-                value = obj->getPropertyValue("test");
-                if (value != NULL && value->isArray()) {
-                    m_logger->debug("got array");
-                    JsonArray* arr = (JsonArray*)value;
-                    size_t cnt = arr->getCount();
-                    m_logger->debug("\tsize %d",cnt);
-                    for(size_t idx=0;idx<cnt;idx++) {
-                        JsonElement* item = arr->getAt(idx);
-                        m_logger->debug("\titem %d type %d",idx,(int)item->getType());
-                    }
-                }
-            } else if (elem->getType() == JSON_ARRAY) {
-                m_logger->debug("got JSON array");
-            } else {
-                m_logger->debug("JSON error. type=%d",(int)elem->getType());
-            }
-            
-            m_logger->debug("deleting root");
-            m_logger->showMemory();
-
-            delete root;
-            m_logger->debug("deleted root");
-            m_logger->showMemory();
-            
-        }
-
-
     private: 
         Logger * m_logger;
         DRFileSystem * m_fileSystem;

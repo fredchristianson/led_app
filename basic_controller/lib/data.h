@@ -34,7 +34,7 @@ class JsonPath {
                 if (*parts != NULL) {
                     if (childProp == NULL || childProp->getValue()==NULL || childProp->getValue()->asObject() == NULL) {
                         child = new JsonObject(*(top.getRoot()));
-                        parent->add(name,child);
+                        parent->set(name,child);
                         parent = child->asObject();
                     } else {
                         parent = child->asObject();
@@ -74,11 +74,23 @@ class Data : public JsonRoot {
 public:
     Data() : m_obj(*this) {
         m_logger = &DataLogger;
-        m_logger->debug("Data is JSON type %d -- %d",this->getType(),m_obj.getType());
         add(&m_obj);
     }
     virtual ~Data() {
         forget(&m_obj);
+    }
+
+
+    bool addProperty(const char * path,JsonElement * child) { 
+       m_logger->debug("add JsonElement prop %s %d",path);
+        JsonPath jsonPath;
+        JsonObject* parent;
+        const char * name;
+        if (jsonPath.getParent(m_obj,path,parent,name)) {
+            parent->set(name,child);
+            return true;
+        }
+        return false;
     }
 
 
@@ -88,7 +100,7 @@ public:
         JsonObject* parent;
         const char * name;
         if (jsonPath.getParent(m_obj,path,parent,name)) {
-            parent->add(name,b);
+            parent->set(name,b);
             return true;
         }
         return false;
@@ -100,7 +112,7 @@ public:
         JsonObject* parent;
         const char * name;
         if (jsonPath.getParent(m_obj,path,parent,name)) {
-            parent->add(name,b);
+            parent->set(name,b);
             return true;
         }
         return false;
@@ -113,7 +125,7 @@ public:
         JsonObject* parent;
         const char * name;
         if (jsonPath.getParent(m_obj,path,parent,name)) {
-            parent->add(name,b);
+            parent->set(name,b);
             return true;
         }
         return false;
@@ -124,7 +136,7 @@ public:
         JsonObject* parent;
         const char * name;
         if (jsonPath.getParent(m_obj,path,parent,name)) {
-            parent->add(name,b);
+            parent->set(name,b);
             return true;
         }
         return false;      

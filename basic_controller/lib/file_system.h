@@ -202,11 +202,18 @@ public:
     bool write(const char *  path, const char * data) {
         auto fullPath = getFullPath(path);
         File file = LittleFS.open(fullPath,"w");
-        file.write(data,strlen(data));
+        size_t len = strlen(data);
+        size_t resultLen = file.write(data,len);
         file.close();
-        return true;
+        return resultLen == len;
     }
     
+    
+    bool write(const char *  path, const DRBuffer& buffer) {
+        const char * data = (const char *)buffer.data();
+        return write(path,data);
+    }
+
     bool writeBinary(const char * path, const byte * data,size_t length) {
         auto fullPath = getFullPath(path);
         File file = LittleFS.open(fullPath,"w");

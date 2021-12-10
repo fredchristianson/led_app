@@ -28,7 +28,7 @@ public:
         }
         
     }
-    uint8_t* data() {
+    const uint8_t* data() const {
         m_logger->debug("return data.  length=%d, maxLength=%d",m_length,m_maxLength);
         return m_data;
     }

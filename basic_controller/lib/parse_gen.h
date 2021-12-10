@@ -3,7 +3,7 @@
 
 #include "./logger.h";
 #include "./buffer.h";
-
+#include "./util.h";
 
 
 namespace DevRelief {
@@ -58,6 +58,7 @@ typedef enum TokenType {
     TOK_EOD=1000,
     TOK_ERROR=1001,
     TOK_START=1002,
+    TOK_NULL=1003,
     TOK_OBJECT_START=1,
     TOK_OBJECT_END=2,
     TOK_ARRAY_START=3,
@@ -66,7 +67,9 @@ typedef enum TokenType {
     TOK_INT=6,
     TOK_FLOAT=7,
     TOK_COLON=8,
-    TOK_COMMA=9
+    TOK_COMMA=9,
+    TOK_TRUE,
+    TOK_FALSE
 };
 
 typedef enum JsonType {
@@ -124,7 +127,12 @@ class JsonBase {
             return false;
         }
 
-        virtual int getStringValue(char * value, size_t maxLen,const char* defaultValue=NULL) {
+        virtual bool getDRStringValue(DRString& val) {
+            val = "";
+            return false;
+        }
+
+        virtual bool getStringValue(char * value, size_t maxLen,const char* defaultValue=NULL) {
             if (defaultValue != NULL) {
                 strncpy(value,defaultValue,maxLen);
             } else {
@@ -135,9 +143,13 @@ class JsonBase {
 
         int getJsonId() { return m_jsonId;}
         void setJsonId(int id) { m_jsonId = id;}
+        DRString toJsonString();
     private:
         int m_jsonId;
 };
+
+class JsonObject;
+class JsonArray;
 
 class JsonRoot : public JsonBase {
     public:
@@ -156,6 +168,9 @@ class JsonRoot : public JsonBase {
         virtual ~JsonRoot();
         virtual JsonType getType() { return JSON_ROOT;}
         char * allocString(const char * val, size_t len) {
+            if (len == 0) {
+                return NULL;
+            }
             char * str = (char*)malloc(len+1);
             strncpy(str,val,len+1);
             str[len] = 0;
@@ -188,8 +203,15 @@ class JsonRoot : public JsonBase {
             m_value = NULL;
         }
 
-        JsonElement* getValue(){
+        JsonObject* createObject();
+        JsonArray* createArray();
+
+        JsonElement* getTopElement(){
             return m_value;
+        }
+        
+        void setTopElement(JsonElement*top){
+            m_value = top;
         }
 
         virtual Logger* getLogger() { return m_logger;}
@@ -220,8 +242,11 @@ class JsonElement : public JsonBase {
 
         virtual JsonType getType() { return m_type;}
 
-        JsonRoot& m_root;
+        JsonObject* createObjectElement();
+        JsonArray* createArrayElement();
+
     protected:
+        JsonRoot& m_root;
         Logger * m_logger;
         JsonType m_type;
 };
@@ -292,6 +317,13 @@ class JsonProperty : public JsonElement {
         void forgetValue() {
             m_value = NULL;
         }
+
+        bool get(bool defaultValue);
+        int get(int defaultValue);
+        DRString get(const char *defaultValue);
+        double get(double defaultValue);
+
+
     private:
         char* m_name;
         JsonElement* m_value;
@@ -304,7 +336,7 @@ class JsonObject : public JsonElement {
             m_logger->debug("create JsonObject ");
             m_firstProperty = NULL;
             mem.construct("JsonObject",this);
-            add("jsonId",getJsonId());
+            set("jsonId",getJsonId());
         }
         virtual ~JsonObject() {
             delete m_firstProperty;
@@ -337,14 +369,14 @@ class JsonObject : public JsonElement {
             return prop;
         }
 
-        JsonProperty* add(const char *nameStart,size_t nameLen,JsonElement * value){
+        JsonProperty* set(const char *nameStart,size_t nameLen,JsonElement * value){
             JsonProperty* prop = new JsonProperty(m_root,nameStart,nameLen,value);
             add(prop);
             return prop;
         }
 
         
-        JsonProperty* add(const char *name,JsonElement * value){
+        JsonProperty* set(const char *name,JsonElement * value){
             m_logger->info("add property [%d] %s",getJsonId(),name,(value == NULL ? -1 : value->getType()));
             JsonProperty*prop = getProperty(name);
             if (prop != NULL) {
@@ -361,10 +393,17 @@ class JsonObject : public JsonElement {
             return prop;
         }
 
-        JsonProperty* add(const char *name,bool value);
-        JsonProperty* add(const char *name,int value);
-        JsonProperty* add(const char *name,const char *value);
-        JsonProperty* add(const char *name,double value);
+        JsonProperty* set(const char *name,bool value);
+        JsonProperty* set(const char *name,int value);
+        JsonProperty* set(const char *name,const char *value);
+        JsonProperty* set(const char *name,double value);
+
+        bool get(const char *name,bool defaultValue);
+        int get(const char *name,int defaultValue);
+        DRString get(const char *name,const char *defaultValue);
+        double get(const char *name,double defaultValue);
+        JsonArray* getArray(const char * name);
+        JsonObject* getChild(const char * name);
 
         JsonProperty * getProperty(const char * name) {
             m_logger->debug("get property %s",name);
@@ -398,11 +437,11 @@ class JsonObject : public JsonElement {
 
 class JsonArrayItem : public JsonElement {
     public:
-        JsonArrayItem(JsonRoot& root, JsonElement * value,JsonArrayItem* next) :JsonElement(root,JSON_ARRAY_ITEM) {
+        JsonArrayItem(JsonRoot& root, JsonElement * value) :JsonElement(root,JSON_ARRAY_ITEM) {
             m_logger->debug("create JsonArray item for type %d",value->getType());
 
             m_value = value;
-            m_next = next;
+            m_next = NULL;
             mem.construct("JsonArrayItem",this);
 
         }
@@ -422,7 +461,16 @@ class JsonArrayItem : public JsonElement {
 
         JsonArrayItem* getNext() { return m_next;}
         JsonElement* getValue() { return m_value;}
-        
+
+        void add(JsonArrayItem *last) {
+            if (m_next != NULL) {
+                m_next->add(last);
+            } else {
+                m_next = last;
+            }
+        }
+
+
     protected:
         JsonElement* m_value;
         JsonArrayItem* m_next;
@@ -446,10 +494,19 @@ class JsonArray : public JsonElement {
         virtual JsonArray* asArray() { return this;}
 
         JsonArrayItem* addItem(JsonElement * value){
-            JsonArrayItem* item = new JsonArrayItem(m_root,value,m_firstItem);
-            m_firstItem = item;
+            JsonArrayItem* item = new JsonArrayItem(m_root,value);
+            if (m_firstItem == NULL) {
+                m_firstItem = item;
+            } else {
+                m_firstItem->add(item);
+            }
             return item;
         }
+
+        JsonArrayItem* add(const char * val);
+        JsonArrayItem* add(int val);
+        JsonArrayItem* add(double val);
+        JsonArrayItem* add(bool val);
 
         int getCount() { return m_firstItem == NULL ? 0 : m_firstItem->getCount();}
         JsonElement* getAt(size_t idx) {
@@ -457,6 +514,15 @@ class JsonArray : public JsonElement {
         }
         JsonArrayItem* getFirstItem() {
             return m_firstItem;
+        }
+
+        void each(auto&& lambda) const {
+            JsonArrayItem*item = m_firstItem;
+            while(item != NULL) {
+                JsonElement* value = item->getValue();
+                lambda(value);
+                item = item->getNext();
+            }
         }
     protected: 
         JsonArrayItem * m_firstItem;
@@ -477,9 +543,9 @@ class JsonValue : public JsonElement {
 class JsonString : public JsonValue {
     public:
         JsonString(JsonRoot& root, const char * value) : JsonValue(root,JSON_STRING) {
-            size_t len = strlen(value);
+            size_t len = value == NULL ? 0 : strlen(value);
             m_value = root.allocString(value,len);
-            m_logger->debug("create JsonString ~%s~ ",m_value);
+            m_logger->debug("create JsonString ~%s~ ",m_value ? m_value : "NULL");
             mem.construct("JsonString",this);
         }
         JsonString(JsonRoot& root, const char * value, size_t len) : JsonValue(root,JSON_STRING) {
@@ -492,8 +558,13 @@ class JsonString : public JsonValue {
             getRoot()->freeString(m_value);
             mem.destruct("JsonString",this);
         }
+
+        virtual bool  getDRStringValue(DRString& val) {
+            val = getText();
+            return val;
+        }
         
-        virtual int getStringValue(char * value, size_t maxLen,const char* defaultValue=NULL) {
+        virtual bool getStringValue(char * value, size_t maxLen,const char* defaultValue=NULL) {
             strncpy(value,m_value,maxLen);
             return true;
         }
@@ -590,6 +661,13 @@ class JsonVariable : public JsonValue {
         char * m_value;
 };
 
+class JsonNull : public JsonElement {
+    public:
+        JsonNull(JsonRoot& root) : JsonElement(root,JSON_NULL){
+
+        }
+};
+
 class ParseGen {
 
 };
@@ -613,7 +691,7 @@ public:
         m_depth = 0;
         m_buf.clear();
         if (element->getType() == JSON_ROOT){
-            writeElement(((JsonRoot*)element)->getValue());
+            writeElement(((JsonRoot*)element)->getTopElement());
         } else {
             writeElement((JsonElement*)element);
         }
@@ -661,7 +739,7 @@ public:
                 writeArray((JsonArray*)element);
                 break;
             case JSON_ROOT:
-                writeElement(((JsonRoot*)element)->getValue());
+                writeElement(((JsonRoot*)element)->getTopElement());
                 break;
             case JSON_PROPERTY:
                 writeProperty((JsonProperty*)element);
@@ -682,13 +760,15 @@ public:
         m_depth += 1;
         m_logger->info("write object [%d] count=%d",object->getJsonId(),object->getCount());
         for(JsonProperty*prop=object->getFirstProperty();prop!=NULL;prop=prop->getNext()){
-            m_logger->info("\tprop %s [%d]",(prop == NULL ? "no prop":prop->getName()),prop->getJsonId());
-            writeNewline();
+            if (strcmp(prop->getName(),"jsonId")!=0) {
+                m_logger->info("\tprop %s [%d]",(prop == NULL ? "no prop":prop->getName()),prop->getJsonId());
+                writeNewline();
 
-            writeProperty(prop);
+                writeProperty(prop);
 
-            if (prop->getNext() != NULL) {
-                writeText(",");
+                if (prop->getNext() != NULL) {
+                    writeText(",");
+                }
             }
         }
         m_logger->debug("\twrote properties");
@@ -721,7 +801,6 @@ public:
             writeArrayItem(item);
             if (item->getNext() != NULL) {
                 writeText(",");
-                writeNewline();
             }
         }
         m_depth -= 1;
@@ -763,8 +842,12 @@ public:
     }
     
     void writeString(JsonString* element) {
-        writeText("\"");
         const char * txt = element->getText();
+        if (txt == NULL) {        
+            writeText("null");
+            return;
+        }
+        writeText("\"");
         const char * end = strchr(txt,'\"');
         while(end != NULL) {
             size_t len = end-txt+1;
@@ -890,7 +973,17 @@ class TokenParser {
                 m_token = TOK_COLON;
             }  else if (c == ','){
                 m_token = TOK_COMMA;
+            }  else if (c == 'n' && strncmp(m_pos,"ull",3)==0){
+                m_token = TOK_NULL;
+                m_pos+=3;
+            }  else if (c == 't' && strncmp(m_pos,"rue",3)==0){
+                m_token = TOK_TRUE;
+                m_pos+=3;
+            }  else if (c == 'f' && strncmp(m_pos,"alse",4)==0){
+                m_token = TOK_FALSE;
+                m_pos+=4;
             }  else {
+                ParserLogger.error("token error: ~%.10s~ in (%.30s)",m_pos,m_pos-15);
                 m_token = TOK_ERROR;
             }
             return m_token;
@@ -965,6 +1058,64 @@ class TokenParser {
 
         const char * getPos() { return m_pos;}
         const char * getTokPos() { return m_tokPos;}
+
+        int getCurrentPos(){
+            int p = m_pos - m_data;
+            return p;
+        }
+        int getCharacterCount(){
+            if (m_pos[0] == 0) {
+                return m_pos-m_data;
+            }
+            int len = strlen(m_pos);
+            return m_pos-m_data+len;
+        }
+        int getCurrentLine(){
+            char * nl = strchr(m_data,'\n');
+            int p = 1;
+            while(nl > 0 && nl <= m_pos)  {
+                nl = strchr(nl+1,'\n');
+                p++;
+            }
+            return p;
+        }
+
+        int getLineCount(){
+            const char * nl = strchr(m_data,'\n');
+            int p = 1;
+            while(nl > 0)  {
+                nl = strchr(nl+1,'\n');
+                p++;
+            }
+            return p;
+        }
+
+        int getLinePos(){
+            const char * pos = m_pos;
+            while(pos > m_data && pos[0] != '\n'){
+                pos--;
+            }
+            return m_pos-pos;
+        }
+        int getLineCharacterCount(){
+            const char * pos = m_pos;
+            while(pos[0] != 0 && pos[0] != '\n'){
+                pos++;
+            }
+            return getLinePos()+pos- m_pos;
+        }
+
+        DRString getCurrentLineText(){
+            const char * start = m_pos;
+            while(start > m_data && start[-1] != '\n'){
+                start--;
+            }
+            const char * end = m_pos;
+            while(end[0] != 0 && end[0] != '\n'){
+                end++;
+            }
+            return DRString(start,(size_t)(end-start));
+        }
     private: 
         const char * m_data;
         const char * m_pos;
@@ -987,7 +1138,8 @@ public:
 
 
     JsonRoot* read(const char * data) {
-        m_logger->debug("parsing %.50s...",data);
+        m_logger->debug("parsing %s",data);
+        
         m_errorMessage = NULL;
         m_hasError = false;
         JsonRoot * root = new JsonRoot();
@@ -1002,7 +1154,20 @@ public:
         m_logger->debug("created TokenParser");
         JsonElement * json = parseNext(tokParser);
         if (json != NULL) {
-            root->add(json);
+            m_logger->debug("got top");
+            root->setTopElement(json);
+        } else {
+            m_logger->debug("no top element found");
+
+            m_logger->debug("\tpos %d/%d.  line%d/%d.  char %d/%d",
+                tokParser.getCurrentPos(),
+                tokParser.getCharacterCount(),
+                tokParser.getCurrentLine(),
+                tokParser.getLineCount(),
+                tokParser.getLinePos(),
+                tokParser.getLineCharacterCount()
+                );
+            
         }
         
         m_logger->debug("parse complete");
@@ -1025,7 +1190,24 @@ public:
             elem = parseInt(tok);
         }  else if (next == TOK_FLOAT) {
             elem = parseFloat(tok);
-        } 
+        } else if (next == TOK_NULL) {
+            elem = new JsonNull(*m_root);
+            skipToken(tok,TOK_NULL);
+        } else if (next == TOK_TRUE) {
+            elem = new JsonBool(*m_root,true);
+            skipToken(tok,TOK_TRUE);
+        } else if (next == TOK_FALSE) {
+            elem = new JsonBool(*m_root,false);
+            skipToken(tok,TOK_FALSE);
+        }
+        if (elem == NULL) {
+            DRString errLine = tok.getCurrentLineText();
+            m_logger->error("Parse error:");
+            m_logger->error(errLine.get());
+            DRString pos('-',tok.getLinePos());
+            pos += "^";
+            m_logger->error(pos.get());
+        }
         return elem;
     }
 
@@ -1111,7 +1293,7 @@ public:
                 return NULL;
             }
             m_logger->debug("got val");
-            obj->add(nameStart,nameLen,val);
+            obj->set(nameStart,nameLen,val);
             skipOptional(tok,TOK_COMMA);
         }
 
@@ -1164,32 +1346,58 @@ public:
 
 };
 
+JsonObject* JsonRoot::createObject(){
+    if (m_value != NULL) {
+        m_logger->error("creating JsonObject in root but top element exists");
+        delete m_value;
+    }
+    m_value = new JsonObject(*this);
+    return m_value->asObject();
+}
+
+JsonArray* JsonRoot::createArray(){
+    if (m_value != NULL) {
+        m_logger->error("creating JsonArray in root but top element exists");
+        delete m_value;
+    }
+    m_value = new JsonObject(*this);
+    return m_value->asArray();
+
+}
+
 JsonRoot::~JsonRoot() { 
 
     delete m_value; 
     mem.destruct("JsonRoot",this);
 }
 
+JsonObject* JsonElement::createObjectElement() {
+    return new JsonObject(*getRoot());
+}
 
-JsonProperty* JsonObject::add(const char *name,bool value){
+JsonArray* JsonElement::createArrayElement() {
+    return new JsonArray(*getRoot());
+}
+
+JsonProperty* JsonObject::set(const char *name,bool value){
     JsonBool* jval = new JsonBool(*getRoot(),value);
-    return add(name,jval);
+    return set(name,jval);
 
 }
 
-JsonProperty* JsonObject::add(const char *name,int value) {
+JsonProperty* JsonObject::set(const char *name,int value) {
     JsonInt* jval = new JsonInt(*getRoot(),value);
-    return add(name,jval);
+    return set(name,jval);
 };
 
-JsonProperty* JsonObject::add(const char *name,const char *value) {
+JsonProperty* JsonObject::set(const char *name,const char *value) {
     JsonString* jval = new JsonString(*getRoot(),value);
-    return add(name,jval);
+    return set(name,jval);
 };
 
-JsonProperty* JsonObject::add(const char *name,double value) {
+JsonProperty* JsonObject::set(const char *name,double value) {
     JsonFloat* jval = new JsonFloat(*getRoot(),value);
-    return add(name,jval);
+    return set(name,jval);
 };
 
 void MemLogger::construct(const char * type, JsonBase* object) {
@@ -1214,6 +1422,141 @@ void MemLogger::allocString(const char * type, size_t len, JsonBase* object){
 
 void MemLogger::freeString(const char * type,JsonBase* object){
     m_logger->info("----free string: %s [%d]",type,object->getJsonId());
+}
+
+JsonArrayItem* JsonArray::add(const char * val) {
+    JsonString * value = new JsonString(*getRoot(),val);
+    JsonArrayItem* item = new JsonArrayItem(m_root,value);
+    addItem(item);
+    return item;
+}
+
+JsonArrayItem* JsonArray::add(int val) {
+    JsonInt * value = new JsonInt(*getRoot(),val);
+    JsonArrayItem* item = new JsonArrayItem(m_root,value);
+    addItem(item);
+    return item;
+}
+
+JsonArrayItem* JsonArray::add(double val) {
+    JsonFloat * value = new JsonFloat(*getRoot(),val);
+    JsonArrayItem* item = new JsonArrayItem(m_root,value);
+    addItem(item);
+    return item;
+}
+
+JsonArrayItem* JsonArray::add(bool val) {
+    JsonBool * value = new JsonBool(*getRoot(),val);
+    JsonArrayItem* item = new JsonArrayItem(m_root,value);
+    addItem(item);
+    return item;
+}
+
+bool JsonObject::get(const char *name,bool defaultValue){
+    m_logger->always("get bool value for %s",name);
+
+    bool val = defaultValue;
+    JsonProperty*prop = getProperty(name);
+    if (prop) {
+        prop->get(defaultValue);
+    }
+    return val;
+}
+int JsonObject::get(const char *name,int defaultValue){
+    m_logger->always("get int value for %s",name);
+    int val = defaultValue;
+    JsonProperty*prop = getProperty(name);
+    if (prop) {
+        prop->get(defaultValue);
+    }
+    return val;
+}
+
+DRString JsonObject::get(const char *name,const char *defaultValue){
+    m_logger->always("get string value for %s",name);
+    DRString val;
+    JsonProperty*prop = getProperty(name);
+    if (prop) {
+        val = prop->get(defaultValue);
+    } else {
+        val = defaultValue;
+    }
+    return val;
+}
+
+
+double JsonObject::get(const char *name,double defaultValue){
+    m_logger->always("get float value for %s",name);
+
+    double val = defaultValue;
+    JsonProperty*prop = getProperty(name);
+    if (prop) {
+        prop->get(defaultValue);
+    }
+    return val;
+}
+
+JsonArray* JsonObject::getArray(const char * name){
+    m_logger->always("get array value for %s",name);
+
+    JsonProperty * prop = getProperty(name);
+    if (prop) {
+        JsonElement* elem = prop->getValue();
+        return elem ? elem->asArray() : NULL;
+    }
+    return NULL;
+}
+
+JsonObject* JsonObject::getChild(const char * name){
+    JsonProperty * prop = getProperty(name);
+    if (prop) {
+        JsonElement* elem = prop->getValue();
+        return elem ? elem->asObject() : NULL;
+    }
+    return NULL;
+}
+
+bool JsonProperty::get(bool defaultValue){
+    bool val = defaultValue;
+    if (m_value) {
+        m_value->getBoolValue(val,defaultValue);
+    }
+    return val;
+}
+
+int JsonProperty::get(int defaultValue){
+    int val = defaultValue;
+    if (m_value) {
+        m_value->getIntValue(val,defaultValue);
+    }
+    return val;
+}
+
+DRString JsonProperty::get(const char * defaultValue){
+    DRString result;
+    if (m_value) {
+        if (!m_value->getDRStringValue(result)) {
+            result = defaultValue;
+        }
+    } else {
+        result = defaultValue;
+    }
+    return result;
+}
+
+double JsonProperty::get(double defaultValue){
+    double val = defaultValue;
+    if (m_value) {
+        m_value->getFloatValue(val,defaultValue);
+    }
+    return val;
+}
+
+DRBuffer JsonBase::toJsonString(){
+    DRBuffer dr;
+    JsonGenerator gen(dr);
+    gen.generate(this);
+    return dr;
 }
 
 }

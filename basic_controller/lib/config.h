@@ -5,9 +5,11 @@
 #include "./parse_gen.h";
 #include "./logger.h";
 #include "./data.h";
+#include "./list.h";
+#include "./util.h";
 
 namespace DevRelief {
-    Logger ConfigLogger("Config",WARN_LEVEL);
+    Logger ConfigLogger("Config",DEBUG_LEVEL);
     const char * DEFAULT_CONFIG = R"config({ 
         "name": "CONFIG_HOSTNAME",
         "addr": "unset",
@@ -17,63 +19,110 @@ namespace DevRelief {
         ]
     })config";
 
-    class ConfigPin {
+    class LedPin {
+        public:
+        LedPin(int n, int c, bool r) {
+            ConfigLogger.debug("create LedPin");
+            number=n;
+            ledCount=c;
+            reverse=r;
+        }
 
+        ~LedPin() {
+            ConfigLogger.debug("destroy LedPin");
+        }
+
+        int number;
+        int ledCount;
+        bool reverse;
     };
 
-    class Config : Data {
+
+
+    class Config {
         public:
+            static const Config* instance;
+            static void setInstance(Config*cfg) { Config::instance = cfg;}
+
             Config() {
                 m_logger = &ConfigLogger;
-                strcpy(name,CONFIG_HOSTNAME);
-                for(auto i=0;i<3;i++) {
-                    stripPins[i] = -1;
-                    stripLeds[0] = 0;
-                }
+                m_logger->debug("create Config");
+                m_logger->debug("\tset hostName");
+                hostName = CONFIG_HOSTNAME;
+                m_logger->debug("\tset runningScript");
+                runningScript = NULL;
+                m_logger->debug("\tset runningParameters");
+                runningParameters = NULL;
                 brightness = 40;
-                scriptCount = 0;
+                maxBrightness = 100;
             }
 
           
             void setAddr(const char * ip){
-                strcpy(addr,ip);
+                ipAddress = ip;
             }
 
-            void setScripts(String* scripts, int count) {
-                int pos = 0;
-                uint8_t* data = scriptNames.reserve(count*20); // estimate 20 chars per name.  may be extended
-                scriptCount = count;
-                for(int i=0;i<count;i++) {
-                    auto name = scripts[i].c_str();
-                    m_logger->debug("add script: %s",name);
-                    auto len = strlen(name);
-                    data = scriptNames.reserve(pos+len+1);
-                    memcpy(data+pos,name,len);
-                    pos += len;
-                    data[pos] = 0;
-                    pos += 1;
-                    scriptNames.setLength(pos);
+            
+            const DRString& getAddr() { return ipAddress;}
+
+            void clearPins() {
+                pins.clear();
+            }
+
+
+            void addPin(int number,int ledCount,bool reverse=false) {
+                m_logger->debug("addPin %d %d %d",number,ledCount,reverse);
+                pins.add(new LedPin(number,ledCount,reverse));
+            }
+            const LedPin* getPin(size_t idx) { return pins[idx];}
+            size_t getPinCount() { return pins.size();}
+            const LinkedList<LedPin*>& getPins() { return pins;}
+
+            int getBrightness() { return brightness;}
+            void setBrightness(int b) { brightness = b;}
+            int getMaxBrightness() { return maxBrightness;}
+            void setMaxBrightness(int b) { maxBrightness = b;}
+
+            void clearScripts() {
+                scripts.clear();
+            }
+
+            size_t getScriptCount() { return scripts.size();}
+            
+            bool addScript(const char * name) {
+                m_logger->debug("add script %s",name);
+                if (name == NULL || strlen(name) == 0) {
+                    m_logger->warn("addScript requires a name");
+                    return false;
                 }
-                data[pos] = 0;
-               // m_logger->debug("script names: %s",data);
-               // m_logger->debug("script names: %s",scriptNames.text());
+                
+                scripts.add(DRString(name));
+                m_logger->debug("\tadded");
+                return true;
             }
+            const LinkedList<DRString>& getScripts() { return scripts;}
 
-            size_t getStripCount() { return stripCount;}
-            int getPin(size_t idx) { return stripPins[idx];}
-            int getLedCount(size_t idx) { return stripLeds[idx];}
-            bool isReversed(size_t idx) { return stripReverse[idx];}
-            char     name[50];
-            char     startupScript[50];
-            char     addr[32];
-            size_t stripCount;
-            int  stripPins[4];
-            int  stripLeds[4];
-            bool stripReverse[4];
+            const DRString& getHostname() { return hostName;}
+            void setHostname(const char * name) {
+                hostName = name;
+            }
+            void setRunningScript(const char * name) {
+                runningScript = name;
+            }
+            const DRString& getRunningScript() { return runningScript;}
+    private:            
+            DRString     hostName;
+            DRString     ipAddress;
+            PtrList<LedPin*>  pins;
+            LinkedList<DRString>   scripts;
+            DRString runningScript;
+            JsonElement * runningParameters;
             int  brightness;
-            int scriptCount;
-            DRBuffer scriptNames;
+            int  maxBrightness;
             Logger * m_logger;
     };
+    const Config* Config::instance;
 }
+
+
 #endif
