@@ -5,6 +5,8 @@
 #include <LittleFS.h>
 #include "./logger.h"
 #include "./buffer.h"
+#include "./list.h"
+#include "./util.h"
 
 #define MAX_PATH 100
 
@@ -104,20 +106,25 @@ public:
         return LittleFS.exists(fullPath);
     }
 
+    bool deleteFile(const char * path) {
+        auto fullPath = getFullPath(path);
+        return LittleFS.remove(fullPath);
+    }
+
     File open(const char *  path) {
         auto fullPath = getFullPath(path);
         return LittleFS.open(fullPath,"r");
     }
 
-    int listFiles(const char *  path, String* results, int maxResults) {
+    bool listFiles(const char *  path, LinkedList<DRString>& files) {
         m_logger->debug("listFiles: %s",path);
         Dir dir = LittleFS.openDir(path);
         int count = 0;
         while (dir.next()) {
             m_logger->debug("found file: %s",dir.fileName());
-            results[count++] = dir.fileName();
+            files.add(dir.fileName().c_str());
         }
-        return count;
+        return true;
     }
 
     File openFile(const char * path) {

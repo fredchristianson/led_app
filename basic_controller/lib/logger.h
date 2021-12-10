@@ -107,9 +107,11 @@ public:
     // }
 
     void debug(const char * message,...) {
+#ifdef ENV_DEV
         va_list args;
         va_start(args,message);
         write(DEBUG_LEVEL,message,args);
+#endif        
     }
 
 
@@ -121,9 +123,11 @@ public:
     // }
 
     void info(const char * message,...) {
+#ifdef ENV_DEV
         va_list args;
         va_start(args,message);
         write(INFO_LEVEL,message,args);
+#endif        
     }
 
 

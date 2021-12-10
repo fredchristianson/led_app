@@ -31,7 +31,14 @@ namespace DevRelief {
                 m_logger->info("waiting for wifi connection");
                 delay(500);
             }
-            WiFi.hostname(CONFIG_HOSTNAME);
+            Config *config = Config::getInstance();
+            const char * hostname = config->getHostname();
+            if (hostname != NULL) {
+                WiFi.hostname(hostname);
+            }
+            if (config) {
+                config->setAddr(WiFi.localIP().toString().c_str());
+            }
             m_logger->info("WiFi connected %s",WiFi.localIP().toString().c_str());
         }
 

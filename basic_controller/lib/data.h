@@ -9,7 +9,7 @@
 namespace DevRelief {
 
 Logger PathLogger("JsonPath",DEBUG_LEVEL);
-Logger DataLogger("Data",DEBUG_LEVEL);
+Logger DataLogger("Data",DATA_LOGGER_LEVEL);
 class JsonPath {
     public:
         JsonPath() {
@@ -82,7 +82,7 @@ public:
 
 
     bool addProperty(const char * path,JsonElement * child) { 
-       m_logger->debug("add JsonElement prop %s %d",path);
+       m_logger->debug("add JsonElement prop %s",path);
         JsonPath jsonPath;
         JsonObject* parent;
         const char * name;
@@ -219,10 +219,19 @@ private:
 
 class ApiResult : public Data {
     public:
+        ApiResult(JsonElement *json) {
+            addProperty("code",200);
+            addProperty("success",true);
+            addProperty("message","success");
+            addProperty("data",json);
+            mimeType = "text/json";
+        }
+
         ApiResult(bool success=true) {
             addProperty("code",success ? 200:500);
             addProperty("success",true);
             addProperty("message","success");
+
         }
         ApiResult(bool success, const char * msg, ...) {
             va_list args;
@@ -231,7 +240,13 @@ class ApiResult : public Data {
             addProperty("code",success ? 200:500);
             setMessage(msg,args);
         }
-
+        
+        bool toText(DRString& apiText){
+            JsonGenerator gen(apiText);
+            bool result = gen.generate(this);
+            m_logger->debug("generated JSON: %s",apiText.text());
+            return result;
+        }
         void setCode(int code) {
             addProperty("code",code);
         }
@@ -264,6 +279,7 @@ class ApiResult : public Data {
             addProperty("code",code);
         }
     private:
+        DRString mimeType;
         
 };
 };

@@ -12,7 +12,7 @@
 namespace DevRelief {
 const char * ERROR_NO_REQUEST = "Nothing has been loaded";
 
-Logger DataLoaderLogger("DataLoader",WARN_LEVEL);
+Logger DataLoaderLogger("DataLoader",DATA_LOADER_LOGGER_LEVEL);
 
 
 
@@ -115,8 +115,8 @@ protected:
 
 
     Logger * m_logger;
-private:
     static DRFileSystem m_fileSystem;
+private:
 
 };
 
@@ -128,24 +128,50 @@ class ConfigDataLoader : public DataLoader {
             
         }
 
-        
+        bool addScripts(Config&config) {
+            LinkedList<DRString> files;
+            if (m_fileSystem.listFiles("/script",files)){
+                config.setScripts(files);
+            }
+            return true;
+        }
+
         bool initialize(Config& config) {
             config.clearScripts();
             config.clearPins();
             config.setBrightness(40);
             config.setMaxBrightness(100);
+            addScripts(config);
             return true;
         }
 
+        bool deleteConfig(const char * path = "/config.json") {
+            m_fileSystem.deleteFile(path);
+        }
         bool saveConfig(Config& config, const char * path = "/config.json"){
-            JsonRoot root;
-            JsonObject * json = root.createObject();
-            json->set("hostName",config.getHostname());
+            SharedPtr<JsonRoot> jsonRoot = toJson(config);
+            return writeJsonFile(path,jsonRoot->getTopElement());
+        }
+
+        bool toJsonString(Config&config,DRString& result) {
+            SharedPtr<JsonRoot> jsonRoot = toJson(config);
+            JsonGenerator gen(result);
+            return gen.generate(jsonRoot.get());
+            
+        }
+        SharedPtr<JsonRoot> toJson(Config&config) {
+            JsonRoot* root=new JsonRoot;  
+            JsonObject * json = root->createObject();
+            json->set("buildVersion",config.getBuildVersion());
+            json->set("buildDate",config.getBuildDate());
+            json->set("buildTime",config.getBuildTime());
+            json->set("hostname",config.getHostname());
+
             json->set("ipAddress",config.getAddr());
             json->set("brightness",config.getBrightness());
             json->set("maxBrightness",config.getMaxBrightness());
             json->set("runningScript",config.getRunningScript());
-            JsonArray* pins = new JsonArray(root);
+            JsonArray* pins = root->createArray();
             json->set("pins",pins);
             config.getPins().each( [&](LedPin* &pin) {
                 m_logger->debug("handle pin %d",pin->number); 
@@ -157,7 +183,7 @@ class ConfigDataLoader : public DataLoader {
             });
             m_logger->debug("pins done");
 
-            JsonArray* scripts = new JsonArray(root);
+            JsonArray* scripts = root->createArray();
             json->set("scripts",scripts);
             config.getScripts().each( [&](DRString &script) {
                 m_logger->debug("handle script %s",script.get()); 
@@ -166,13 +192,13 @@ class ConfigDataLoader : public DataLoader {
             });
             m_logger->debug("scripts done");
 
-            return writeJsonFile(path,json);
+            return root;
         }
 
         bool loadConfig(Config& config, const char * path = "/config.json"){
             LoadResult result;
             m_logger->debug("initialize config");
-            initialize(config);
+            
             m_logger->debug("load file");
             if (loadFile(path,result)){
                 m_logger->debug("process json");
@@ -184,6 +210,7 @@ class ConfigDataLoader : public DataLoader {
             } else {
                 m_logger->error("Config json not found");
             }
+            addScripts(config);
             return result.isSuccess();
         }
 

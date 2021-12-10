@@ -14,6 +14,7 @@
 #include "./standard.h"
 #include "./data.h"
 #include "./tests.h"
+#include "./util.h"
 
 extern EspClass ESP;
 
@@ -29,31 +30,50 @@ namespace DevRelief {
    
    
         BasicControllerApplication() {
-            m_logger = new Logger("BasicControllerApplication",DEBUG_LEVEL);
+            m_logger = new Logger("BasicControllerApplication",APP_LOGGER_LEVEL);
 
             m_logger->showMemory();
             if (!Tests::Run()) {
                 return;
             }
             m_logger->showMemory();
-            m_httpServer = new HttpServer();
-            m_fileSystem = new DRFileSystem();
-            setupRoutes();        
-            m_httpServer->begin();
-            
-            m_executor = new ScriptExecutor();
-            
-            m_logger->debug("Running BasicControllerApplication configured: %s",VERSION);
-            m_initialized = true;
+            initialize();
         }
 
+
+
+    protected:       
         void loop() {
             if (!m_initialized) {
                 return;
             }
             m_httpServer->handleClient();
         }
-    protected:       
+
+        void initialize() {
+            ConfigDataLoader configDataLoader;
+            if (!configDataLoader.loadConfig(m_config)) {
+                m_logger->error("Load failed.  Using default.");
+                configDataLoader.initialize(m_config);
+                configDataLoader.saveConfig(m_config);
+            } else {
+                m_logger->info("Loaded config.json");
+            }
+            m_logger->debug("set config instance");
+            m_config.setInstance(&m_config);
+            m_logger->debug("create httpserver");
+            m_httpServer = new HttpServer();
+            m_logger->debug("setup routes");
+            setupRoutes();        
+            m_logger->debug("begin http server");
+            m_httpServer->begin();
+            
+            m_logger->debug("show build version");
+            
+            m_logger->debug("Running BasicControllerApplication configured: %s",m_config.getBuildVersion().text());
+            m_initialized = true;
+        }
+
         void setupRoutes() {
             m_httpServer->route("/",[this](Request* req, Response* resp){
                 resp->send(200,"text/html","home not defined");
@@ -62,7 +82,18 @@ namespace DevRelief {
 
             m_httpServer->routeBracesGet( "/api/config",[this](Request* req, Response* resp){
                 m_logger->debug("get /api/config");
-                resp->send(200,"text/json","not implemented");
+                ConfigDataLoader configDataLoader;
+                SharedPtr<JsonRoot> jsonRoot = configDataLoader.toJson(m_config);
+                JsonElement*json = jsonRoot->getTopElement();
+                ApiResult api(json);
+                DRString apiText;
+                
+                api.toText(apiText);
+                const char * text = apiText.text();
+                m_logger->debug("sending response");
+                m_logger->debug("%s",text);
+                
+                resp->send(200,"text/json",text);
             });
 
 
@@ -96,6 +127,8 @@ namespace DevRelief {
         }
 
     protected:
+
+
         void apiRequest(const char * api,Request * req,Response * resp) {
             m_logger->debug("handle API %s",api);
             int code=200;
@@ -137,12 +170,8 @@ namespace DevRelief {
 
     private: 
         Logger * m_logger;
-        DRFileSystem * m_fileSystem;
-        DRPath path;
         HttpServer * m_httpServer;
-        Script* m_currentScript;
-        Config* m_config;
-        ScriptExecutor* m_executor;
+        Config m_config;
         bool m_initialized;
     };
 

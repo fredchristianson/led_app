@@ -50,8 +50,8 @@ class PGLogger: public Logger {
 };
 
 Logger JSONLogger("Json",WARN_LEVEL);
-Logger ParserLogger("JsonParser",WARN_LEVEL);
-Logger GeneratorLogger("JsonGenerator",WARN_LEVEL);
+Logger ParserLogger("JsonParser",PARSER_LOGGER_LEVEL);
+Logger GeneratorLogger("JsonGenerator",GENERATOR_LOGGER_LEVEL);
 
 
 typedef enum TokenType {
@@ -111,6 +111,7 @@ class JsonBase {
         
         virtual JsonArray* asArray() { return NULL;}
         virtual JsonObject* asObject() { return NULL;}
+        virtual JsonElement* asElement() { return NULL;}
 
         virtual bool getIntValue(int& value,int defaultValue) {
             value = defaultValue;
@@ -186,7 +187,7 @@ class JsonRoot : public JsonBase {
         }
 
         virtual JsonRoot* getRoot() { return this;}
-
+        virtual JsonElement* asElement() { return m_value;}
         virtual bool add(JsonElement* child) { 
             if (m_value != NULL) { 
                 m_logger->error("adding multiple children to JsonRoot is not allowed");
@@ -234,6 +235,7 @@ class JsonElement : public JsonBase {
             mem.destruct("JsonElement",this);
          }
 
+        virtual JsonElement* asElement() { return this;}
         virtual JsonRoot* getRoot() { return & m_root;}
         virtual Logger* getLogger() { return m_root.getLogger();}
         virtual bool add(JsonElement* child) { 
@@ -276,7 +278,9 @@ class JsonProperty : public JsonElement {
         virtual ~JsonProperty() { 
             delete m_next;
             m_root.freeString(m_name); 
-            delete m_value;
+            if (m_value && m_value->getRoot() == getRoot()){
+                delete m_value;
+            }
             mem.destruct("JsonProperty",m_name,this);
         }
 
@@ -447,7 +451,9 @@ class JsonArrayItem : public JsonElement {
         }
 
         virtual ~JsonArrayItem() {
-            delete m_value;
+            if (m_value && m_value->getRoot() == getRoot()){
+                delete m_value;
+            }
             delete m_next;
             mem.destruct("JsonArrayItem",this);
         }
@@ -704,6 +710,7 @@ public:
             m_logger->debug("write self");
             writeElement((JsonElement*)element);
         }
+        m_logger->debug("generated: %s",m_buf.text());
         return true;
     }
 
@@ -888,7 +895,7 @@ public:
         char *pos = m_buf.increaseLength(len);
         memcpy(pos,text,len);
         pos[len] = 0;
-        m_logger->debug("\tJSON: %d %.300s", m_buf.getLength(),m_buf.text());
+        m_logger->never("\tJSON: %d %.300s", m_buf.getLength(),m_buf.text());
     }
 
     void writeString(const char * text) {
@@ -1355,22 +1362,20 @@ public:
 };
 
 JsonObject* JsonRoot::createObject(){
-    if (m_value != NULL) {
-        m_logger->error("creating JsonObject in root but top element exists");
-        delete m_value;
+    
+    JsonObject* obj = new JsonObject(*this);
+    if (m_value == NULL) {
+        m_value = obj;
     }
-    m_value = new JsonObject(*this);
-    return m_value->asObject();
+    return obj;
 }
 
 JsonArray* JsonRoot::createArray(){
-    if (m_value != NULL) {
-        m_logger->error("creating JsonArray in root but top element exists");
-        delete m_value;
+    JsonArray* arr = new JsonArray(*this);
+    if (m_value == NULL) {
+        m_value = arr;
     }
-    m_value = new JsonObject(*this);
-    return m_value->asArray();
-
+    return arr;
 }
 
 JsonRoot::~JsonRoot() { 

@@ -1,7 +1,7 @@
 #ifndef TESTS_H
 #define TESTS_H
 
-#define TESTS_ON 
+
 #include "./parse_gen.h";
 #include "./logger.h";
 #include "./config.h";
@@ -10,6 +10,17 @@
 #include "./list.h";
 
 namespace DevRelief {
+
+#if RUN_TESTS!=1
+    class Tests {
+        public:
+        static bool Run() {
+            return true;
+        }
+
+
+    };
+#else    
     int nextTestObjectId=100;
     const char * SUCCEEDED = "succeeded";
     const char * FAILED = "failed";
@@ -124,15 +135,13 @@ namespace DevRelief {
         typedef void (Tests::*TestFn)(TestResult &);
         public:
         static bool Run() {
-#ifdef TESTS_ON
+
             Tests* tests = new Tests();
             bool result = tests->run();
             delete tests;
             return true; //result;
-#endif            
         }
 
-#ifdef TESTS_ON
         Tests() {
 
         }
@@ -446,7 +455,7 @@ namespace DevRelief {
         } 
         private:
             Logger* m_logger;        
-#endif                   
     };
+#endif                   
 }
 #endif
