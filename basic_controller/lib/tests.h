@@ -144,10 +144,11 @@ namespace DevRelief {
             m_logger->info("Running testStringBuffer");
             m_logger->showMemory();
             bool success = true;
-            //success = runTest("testStringBuffer",&Tests::testStringBuffer) && success;
-            //success = runTest("testData",&Tests::testData) && success;
             //success = runTest("testSharedPtr",&Tests::testSharedPtr) && success;
+            //success = runTest("testStringBuffer",&Tests::testStringBuffer) && success;
             //success = runTest("testDRString",&Tests::testDRString) && success;
+            //success = runTest("testDRStringCopy",&Tests::testDRStringCopy) && success;
+            //success = runTest("testData",&Tests::testData) && success;
             success = runTest("testConfigLoader",&Tests::testConfigLoader) && success;
             //success = runTest("testList",&Tests::testList) && success;
             //success = runTest("testPtrList",&Tests::testPtrList) && success;
@@ -188,6 +189,7 @@ namespace DevRelief {
         void testDRString(TestResult& result) {
             DRString s1;
             DRString s2("foo");
+            m_logger->debug("call copy constructor");
             DRString s3(s2);
             result.assertEqual(s3.get(),s2.get(),"copy constructor");
 
@@ -201,6 +203,27 @@ namespace DevRelief {
             m_logger->debug("assignment done");
             result.assertEqual(a,s2.get(),"cast operator");
 
+            DRString length;
+            strcpy(length.increaseLength(4),"abcd");
+            result.assertEqual("abcd",length,"increase length from 0");
+            strcpy(length.increaseLength(20),"additional text");
+            result.assertEqual("abcdadditional text",length,"increase length from 4");
+            strcpy(length.increaseLength(5),"XYZ");
+            result.assertEqual("abcdadditional textXYZ",length,"increase length from 24");
+            m_logger->debug("length test value: %s",length.text());
+        }
+
+        void testDRStringCopy(TestResult& result) {
+            DRString s1;
+            DRString s2("foo");
+            DRString s3(s2);
+            result.assertEqual(s3.get(),s2.get(),"copy constructor");
+            if (true) {
+                DRString s4("abcd");
+                s1 = s4;
+            }
+            result.assertEqual(s1.get(),"abcd","orig left scope");
+           
         }
 
 
@@ -245,7 +268,7 @@ namespace DevRelief {
 
             ConfigDataLoader loader;
             result.assertTrue(loader.saveConfig(config,"/config.test.json"),"saveConfig");
-            
+          
             config.clearScripts();
             result.assertEqual(config.getScripts().size(),0,"scripts cleared");
 
@@ -260,6 +283,7 @@ namespace DevRelief {
             result.assertEqual(config.getPin(1)->reverse,false,"reverse");
             result.assertEqual(config.getPinCount(),3,"pin count");
              result.assertEqual(config.getScripts().size(),3,"3 scripts added");
+
             result.assertEqual((const char*)(config.getScripts()[1]),"s2","index 1 script is 's2'");
 
         }
@@ -267,6 +291,7 @@ namespace DevRelief {
         void testStringBuffer(TestResult& result) {
             m_logger->debug("test DRStringBuffer");
             DRStringBuffer buf;
+            
             m_logger->debug("\tsplit");
             const char ** strs = buf.split("a/b/c/d","/");
             m_logger->debug("\tsplit done");
@@ -281,6 +306,7 @@ namespace DevRelief {
                 m_logger->debug("\tgot %s",*strs);
                 strs++;
             }
+            
             m_logger->debug("\ttest done");
         }
 

@@ -213,6 +213,11 @@ public:
         const char * data = (const char *)buffer.data();
         return write(path,data);
     }
+    
+    bool write(const char *  path, const DRString& buffer) {
+        const char * data = (const char *)buffer.text();
+        return write(path,data);
+    }
 
     bool writeBinary(const char * path, const byte * data,size_t length) {
         auto fullPath = getFullPath(path);

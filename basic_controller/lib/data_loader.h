@@ -12,7 +12,7 @@
 namespace DevRelief {
 const char * ERROR_NO_REQUEST = "Nothing has been loaded";
 
-Logger DataLoaderLogger("DataLoader",DEBUG_LEVEL);
+Logger DataLoaderLogger("DataLoader",WARN_LEVEL);
 
 
 
@@ -29,7 +29,7 @@ class LoadResult {
     }
 
     ~LoadResult() {
-        delete m_json;
+        delete m_jsonRoot;
     }
 
     DRFileBuffer& getBuffer() { return m_buffer;}
@@ -74,10 +74,13 @@ public:
     }
 
     bool writeJsonFile(const char * path,JsonElement* json) {
-        DRBuffer buffer;
+        m_logger->debug("write JSON file %s",path);
+        DRString buffer;
+        m_logger->debug("\tgen JSON");
         JsonGenerator gen(buffer);
         gen.generate(json);
-        return m_fileSystem.write(path,buffer);
+        m_logger->debug("\twrite JSON: %s",buffer.text());
+        return m_fileSystem.write(path,buffer.text());
     }
 
     bool loadFile(const char * path,LoadResult & result) {
@@ -93,7 +96,7 @@ public:
                 m_logger->debug("got json file");
 
                 JsonParser parser;
-                m_logger->debug("\tparse file");
+                m_logger->debug("\tparse file %s",result.getBuffer().text());
                 JsonRoot* root = parser.read(result.getBuffer().text());
                 m_logger->debug("\tset root %s",(root == NULL ? "NULL" : "found"));
                 result.setJsonRoot(root);
@@ -161,7 +164,7 @@ class ConfigDataLoader : public DataLoader {
                 
                 scripts->add(script.get());
             });
-            m_logger->always("scripts done");
+            m_logger->debug("scripts done");
 
             return writeJsonFile(path,json);
         }
@@ -173,6 +176,7 @@ class ConfigDataLoader : public DataLoader {
             m_logger->debug("load file");
             if (loadFile(path,result)){
                 m_logger->debug("process json");
+
                 if (!readJson(config,result)) {
                     result.setSuccess(false);
                 }
@@ -185,6 +189,7 @@ class ConfigDataLoader : public DataLoader {
 
         bool readJson(Config& config, LoadResult& result) {
             m_logger->debug("readJson.  getJson object");
+           
             JsonRoot * root = result.getJsonRoot();
 
             m_logger->debug("\tgot root %s",(root?"yes":"no"));
@@ -216,12 +221,12 @@ class ConfigDataLoader : public DataLoader {
             m_logger->debug("get pins");
 
             JsonArray* pins = object->getArray("pins");
-            m_logger->always("pins: %s",pins->toJsonString());
             if (pins) {
+                m_logger->debug("pins: %s",pins->toJsonString().get());
                 pins->each([&](JsonElement*&item) {
                     m_logger->debug("got pin");
                     JsonObject* pin = item->asObject();
-                    m_logger->always("\tpin: %s",pin->toJsonString());
+                    m_logger->debug("\tpin: %s",pin->toJsonString().get());
                     if (pin){
                         m_logger->debug("add pin %d",pin->get("number",-1));
                         config.addPin(pin->get("number",-1),pin->get("ledCount",0),pin->get("reverse",false)); 

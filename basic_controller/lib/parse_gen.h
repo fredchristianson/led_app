@@ -674,7 +674,7 @@ class ParseGen {
 
 class JsonGenerator : public ParseGen {
 public:
-    JsonGenerator(DRBuffer& buffer) : m_buf(buffer) {
+    JsonGenerator(DRString& buffer) : m_buf(buffer) {
         m_buf = buffer;
         m_depth = 0;
         m_pos = 0;
@@ -688,11 +688,20 @@ public:
     bool generate(JsonBase* element) {
         m_logger->debug("Generate JSON %d",element->getType());
         m_pos = 0;
-        m_depth = 0;
+        m_depth = 0; 
+        m_logger->debug("clear buffer");
+        
         m_buf.clear();
+        m_logger->debug("\tcleared buffer");
+        if (element == NULL) {
+            m_logger->error("\telement is NULL");
+            return false;
+        }
         if (element->getType() == JSON_ROOT){
+            m_logger->debug("write top element");
             writeElement(((JsonRoot*)element)->getTopElement());
         } else {
+            m_logger->debug("write self");
             writeElement((JsonElement*)element);
         }
         return true;
@@ -875,13 +884,11 @@ public:
         if (len == 0) {
             return;
         }
-        m_logger->never("writeText %d %s",len,text);
+        m_logger->debug("writeText %d %d ~%.15s~",len,m_buf.getLength(),text);
         char *pos = m_buf.increaseLength(len);
-        m_logger->never("\t ptr %d.  buf %d",pos,m_buf.data());
         memcpy(pos,text,len);
-        m_logger->never("\tcopied");
         pos[len] = 0;
-        m_logger->never("\tterminated");
+        m_logger->debug("\tJSON: %d %.300s", m_buf.getLength(),m_buf.text());
     }
 
     void writeString(const char * text) {
@@ -914,7 +921,7 @@ public:
 
 protected:
     char m_tmp[32];
-    DRBuffer& m_buf;    
+    DRString& m_buf;    
     int m_depth;
     size_t m_pos;
     Logger * m_logger;
@@ -983,7 +990,8 @@ class TokenParser {
                 m_token = TOK_FALSE;
                 m_pos+=4;
             }  else {
-                ParserLogger.error("token error: ~%.10s~ in (%.30s)",m_pos,m_pos-15);
+
+                ParserLogger.error("token error");
                 m_token = TOK_ERROR;
             }
             return m_token;
@@ -1453,7 +1461,7 @@ JsonArrayItem* JsonArray::add(bool val) {
 }
 
 bool JsonObject::get(const char *name,bool defaultValue){
-    m_logger->always("get bool value for %s",name);
+    m_logger->debug("get bool value for %s",name);
 
     bool val = defaultValue;
     JsonProperty*prop = getProperty(name);
@@ -1463,17 +1471,19 @@ bool JsonObject::get(const char *name,bool defaultValue){
     return val;
 }
 int JsonObject::get(const char *name,int defaultValue){
-    m_logger->always("get int value for %s",name);
+    m_logger->debug("get int value for %s",name);
     int val = defaultValue;
     JsonProperty*prop = getProperty(name);
     if (prop) {
-        prop->get(defaultValue);
+        val = prop->get(defaultValue);
+    } else {
+        m_logger->debug("\tprop not found");
     }
     return val;
 }
 
 DRString JsonObject::get(const char *name,const char *defaultValue){
-    m_logger->always("get string value for %s",name);
+    m_logger->debug("get string value for %s",name);
     DRString val;
     JsonProperty*prop = getProperty(name);
     if (prop) {
@@ -1486,18 +1496,18 @@ DRString JsonObject::get(const char *name,const char *defaultValue){
 
 
 double JsonObject::get(const char *name,double defaultValue){
-    m_logger->always("get float value for %s",name);
+    m_logger->debug("get float value for %s",name);
 
     double val = defaultValue;
     JsonProperty*prop = getProperty(name);
     if (prop) {
-        prop->get(defaultValue);
+        val = prop->get(defaultValue);
     }
     return val;
 }
 
 JsonArray* JsonObject::getArray(const char * name){
-    m_logger->always("get array value for %s",name);
+    m_logger->debug("get array value for %s",name);
 
     JsonProperty * prop = getProperty(name);
     if (prop) {
@@ -1552,8 +1562,8 @@ double JsonProperty::get(double defaultValue){
     return val;
 }
 
-DRBuffer JsonBase::toJsonString(){
-    DRBuffer dr;
+DRString JsonBase::toJsonString(){
+    DRString dr;
     JsonGenerator gen(dr);
     gen.generate(this);
     return dr;

@@ -115,7 +115,7 @@ class DRStringBuffer : public DRBuffer{
     DRStringBuffer() : DRBuffer() {
         m_values = NULL;
         m_count = 0;
-        m_logger->setModuleName("DRStringBuffer");
+        //m_logger->setModuleName("DRStringBuffer");
         
         //m_logger->setLevel(DEBUG_LEVEL);
         reserve(128);

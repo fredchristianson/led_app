@@ -203,7 +203,7 @@ public:
         if (m_logger->getLevel() < DEBUG_LEVEL) {
             return;
         }
-        DRBuffer buf;
+        DRString buf;
         JsonGenerator gen(buf);
         gen.generate(this);
         m_logger->debug("JSON:");
