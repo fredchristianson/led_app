@@ -81,9 +81,12 @@ LinkedList<T>::~LinkedList()
 
 template<typename T>
 void LinkedList<T>::each(auto&& lambda) const {
+    m_logger->always("iterate list");
   ListNode<T>* node = m_root;
   while(node != NULL) {
+      m_logger->always("\thandle item 0x%04X  --> 0x%04X",node,node->next);
       lambda(node->data);
+      m_logger->always("\tdone");
       node = node->next;
   }  
 }

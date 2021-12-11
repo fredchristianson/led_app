@@ -15,6 +15,7 @@
 #include "./data.h"
 #include "./tests.h"
 #include "./util.h"
+#include "./script_data_loader.h"
 
 extern EspClass ESP;
 
@@ -30,7 +31,7 @@ namespace DevRelief {
    
    
         BasicControllerApplication() {
-            m_logger = new Logger("BasicControllerApplication",APP_LOGGER_LEVEL);
+            m_logger = new Logger("APP",APP_LOGGER_LEVEL);
 
             m_logger->showMemory();
             if (!Tests::Run()) {
@@ -69,7 +70,7 @@ namespace DevRelief {
             m_httpServer->begin();
             
             m_logger->debug("show build version");
-            
+            m_executor.configChange(m_config);
             m_logger->debug("Running BasicControllerApplication configured: %s",m_config.getBuildVersion().text());
             m_initialized = true;
         }
@@ -98,25 +99,52 @@ namespace DevRelief {
 
 
             m_httpServer->routeBracesPost( "/api/config",[this](Request* req, Response* resp){
-                ////m_logger->debug("handling POST API  %s", req->uri().c_str());
+                
                 auto body = req->arg("plain").c_str();
-                resp->send(200,"text/json","not implemented");
+                ConfigDataLoader loader;
+                loader.updateConfig(m_config,body);
+                m_executor.configChange(m_config);
+
+                ApiResult result(true);
+                DRString apiText;
+                result.toText(apiText);
+                resp->send(200,"text/json",apiText.text());
             });
 
 
             m_httpServer->routeBracesGet( "/api/script/{}",[this](Request* req, Response* resp){
-                resp->send(200,"text/json","not implemented");
+                ScriptDataLoader loader;
+                DRString scriptText;
+                if (loader.loadScript(scriptText, req->pathArg(0).c_str())){
+                    ApiResult result;
+                    result.addProperty("data",scriptText.text());
+                    DRString apiText;
+                    result.toText(apiText);
+                    resp->send(200,"text/json",apiText.text());
+                }
+                resp->send(404,"text/json","script not loaded");
             });
 
 
             m_httpServer->routeBracesPost( "/api/script/{}",[this](Request* req, Response* resp){
-                resp->send(200,"text/json","not implemented");
+                auto body = req->arg("plain").c_str();
+                auto name =req->pathArg(0).c_str();
+
+                ScriptDataLoader loader;
+                loader.writeScript(name,body);
+                ApiResult result(true);
+                DRString apiText;
+                result.toText(apiText);
+                resp->send(200,"text/json",apiText.text());
+                //resp->send(200,"text/json","POST not implemented");
             });
 
-            m_httpServer->routeBracesGet( "/api/run/{}",[this](Request* req, Response* resp){
-                resp->send(200,"text/json","not implemented");
 
+            m_httpServer->routeBracesDelete( "/api/script/{}",[this](Request* req, Response* resp){
+                resp->send(200,"text/json","DELETE not implemented");
             });
+
+
 
 
             m_httpServer->routeBracesGet("/api/{}",[this](Request* req, Response* resp){
@@ -139,15 +167,19 @@ namespace DevRelief {
                 ESP.restart();
                 return;
             }
-            
+            m_logger->debug("get parameters");
+            SharedPtr<JsonRoot> paramJson = getParameters(req);
+
+            JsonObject *params = paramJson->getTopObject();
             ApiResult result;
             if (strcmp(api,"off") == 0) {
-                this->turnOff();
+                m_executor.turnOff();
                 //result.setText(R"j({"result":true,"message":"lights turned off"})j");
                 result.setCode(200);
                 result.setMessage("lights turned %s","off");
             } else if (strcmp(api,"on") == 0){
-                this->turnOn();
+                int level = params->get("level",100);
+                m_executor.white(level);
                 result.setCode(200);
                 result.setMessage("lights turned %s","on");
             } else {
@@ -155,23 +187,31 @@ namespace DevRelief {
                 result.setCode(404);
                 result.setMessage("failed");
             }
-            resp->send(200,"text/json","{result:false,message:\"unknown api \"}");
+            DRString apiText;
+            result.toText(apiText);
+            resp->send(200,"text/json",apiText.text());
+
         }
     
-        void turnOn(){
 
-        }
-
-        void turnOff(){
-
-        }
 
       
+        JsonRoot* getParameters(Request*req){
+            JsonRoot * root = new JsonRoot();
+            JsonObject* obj = root->createObject();
+            m_logger->debug("\tloop parameters");
+            for(int i=0;i<req->args();i++) {
+                m_logger->debug("\t%s=%s",req->argName(i).c_str(),req->arg(i).c_str());
+                obj->set(req->argName(i).c_str(),req->arg(i).c_str());
+            }
+            return root;
+        }
 
     private: 
         Logger * m_logger;
         HttpServer * m_httpServer;
         Config m_config;
+        ScriptExecutor m_executor;
         bool m_initialized;
     };
 

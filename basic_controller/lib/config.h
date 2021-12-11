@@ -9,19 +9,19 @@
 #include "./util.h";
 
 namespace DevRelief {
-    Logger ConfigLogger("Config",DEBUG_LEVEL);
+    Logger ConfigLogger("Config",CONFIG_LOGGER_LEVEL);
 
     class LedPin {
         public:
         LedPin(int n, int c, bool r) {
-            ConfigLogger.debug("create LedPin");
+            ConfigLogger.debug("create LedPin 0x%04X  %d %d %d",this,n,c,r);
             number=n;
             ledCount=c;
             reverse=r;
         }
 
         ~LedPin() {
-            ConfigLogger.debug("destroy LedPin");
+            ConfigLogger.debug("destroy LedPin 0x%04X %d %d %d",this,number,ledCount,reverse);
         }
 
         int number;
@@ -46,16 +46,7 @@ namespace DevRelief {
                 buildVersion = BUILD_VERSION;
                 buildDate = BUILD_DATE;
                 buildTime = BUILD_TIME;
-                /*
-                m_logger->debug("build version:");
-                m_logger->debug(BUILD_VERSION);
-                const char * bv = buildVersion.get();
-                if (bv == NULL) {
-                    m_logger->error("no build version");
-                } else {
-                    m_logger->debug("build version %s",bv);
-                }
-                */
+
             }
 
           
@@ -77,7 +68,10 @@ namespace DevRelief {
             }
             const LedPin* getPin(size_t idx) const { return pins[idx];}
             size_t getPinCount() const { return pins.size();}
-            const LinkedList<LedPin*>& getPins() { return pins;}
+            const PtrList<LedPin*>& getPins() { 
+                m_logger->always("return pins");
+                return pins;
+            }
 
             int getBrightness() const { return brightness;}
             void setBrightness(int b) { brightness = b;}
@@ -105,7 +99,7 @@ namespace DevRelief {
             void setScripts(LinkedList<DRString>& list) {
                 scripts.clear();
                 list.each([&](DRString&name) {
-                    scripts.add(name);
+                    addScript(name.get());
                 });
             }
             const LinkedList<DRString>& getScripts()  const{ return scripts;}

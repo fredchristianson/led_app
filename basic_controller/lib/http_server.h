@@ -24,7 +24,7 @@ class HttpServer {
 
 
         HttpServer() {
-            m_logger = new Logger("HttpServer",80);
+            m_logger = new Logger("HttpServer",HTTP_SERVER_LOGGER_LEVEL);
             m_logger->debug("HttpServer created");
             m_wifi = DRWiFi::get();
 
@@ -94,6 +94,17 @@ class HttpServer {
             auto server = m_server;
             auto handler = httpHandler;
             m_server->on(UriBraces(uri),HTTP_POST,[this,handler,server](){
+                this->cors(server);
+                m_logger->debug("uri found");
+                handler(server,server);
+            });
+        }
+
+        void routeBracesDelete(const char * uri, HttpHandler httpHandler){
+            m_logger->debug("routing DELETE to Uri %s",uri);
+            auto server = m_server;
+            auto handler = httpHandler;
+            m_server->on(UriBraces(uri),HTTP_DELETE,[this,handler,server](){
                 this->cors(server);
                 m_logger->debug("uri found");
                 handler(server,server);

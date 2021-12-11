@@ -33,7 +33,7 @@ class LoadResult {
     }
 
     DRFileBuffer& getBuffer() { return m_buffer;}
-    const char * getTest() {
+    const char * getText() {
         return m_buffer.text();
     }
 
@@ -130,7 +130,9 @@ class ConfigDataLoader : public DataLoader {
 
         bool addScripts(Config&config) {
             LinkedList<DRString> files;
+            m_logger->debug("adding scripts");
             if (m_fileSystem.listFiles("/script",files)){
+                m_logger->debug("\tcall config.setScripts");
                 config.setScripts(files);
             }
             return true;
@@ -159,6 +161,20 @@ class ConfigDataLoader : public DataLoader {
             return gen.generate(jsonRoot.get());
             
         }
+
+        bool updateConfig(Config& config, const char * jsonText){
+            JsonParser parser;
+            JsonRoot * root = parser.read(jsonText);
+            if (root == NULL) {
+                return false;
+            } else {
+                if (readJson(config,root)) {
+                    return saveConfig(config);
+                }
+            }
+            return false;
+        }
+
         SharedPtr<JsonRoot> toJson(Config&config) {
             JsonRoot* root=new JsonRoot;  
             JsonObject * json = root->createObject();
@@ -173,8 +189,10 @@ class ConfigDataLoader : public DataLoader {
             json->set("runningScript",config.getRunningScript());
             JsonArray* pins = root->createArray();
             json->set("pins",pins);
-            config.getPins().each( [&](LedPin* &pin) {
-                m_logger->debug("handle pin %d",pin->number); 
+            m_logger->debug("filling pins from config");
+            config.getPins().each( [logger=m_logger,pins](LedPin* pin) {
+                logger->debug("\thandle pin 0x%04X",pin); 
+                logger->debug("\tnumber %d",pin->number); 
                 JsonObject* pinElement = pins->createObjectElement();
                 pinElement->set("number",pin->number);
                 pinElement->set("ledCount",pin->ledCount);
@@ -203,7 +221,7 @@ class ConfigDataLoader : public DataLoader {
             if (loadFile(path,result)){
                 m_logger->debug("process json");
 
-                if (!readJson(config,result)) {
+                if (!readJson(config,result.getJsonRoot())) {
                     result.setSuccess(false);
                 }
 
@@ -214,10 +232,9 @@ class ConfigDataLoader : public DataLoader {
             return result.isSuccess();
         }
 
-        bool readJson(Config& config, LoadResult& result) {
+        bool readJson(Config& config, JsonRoot* root) {
             m_logger->debug("readJson.  getJson object");
            
-            JsonRoot * root = result.getJsonRoot();
 
             m_logger->debug("\tgot root %s",(root?"yes":"no"));
             if (root == NULL) {
@@ -265,18 +282,9 @@ class ConfigDataLoader : public DataLoader {
                 m_logger->debug("no pins found");
             }
 
-            
-            JsonArray* scripts = object->getArray("scripts");
-            if (scripts) {
-                scripts->each([&](JsonElement*&item) {
-                    DRString name;
-                    if (item->getDRStringValue(name)){
-                        m_logger->debug("add script %s",name.get());
-                        config.addScript(name);
-                    }
-                });
-            }
-            return result.isSuccess();
+            /* scripts are loaded from the filesystem, not stored*/
+            m_logger->always("\tdone reading JSON");
+            return true;
         }
 
     protected:

@@ -210,12 +210,17 @@ class JsonRoot : public JsonBase {
         JsonElement* getTopElement(){
             return m_value;
         }
+
+        JsonObject* getTopObject();
+        JsonArray* getTopArray();
         
         void setTopElement(JsonElement*top){
             m_value = top;
         }
 
         virtual Logger* getLogger() { return m_logger;}
+
+    
     protected:
         int m_nextJsonId;
         JsonElement * m_value;
@@ -1376,6 +1381,15 @@ JsonArray* JsonRoot::createArray(){
         m_value = arr;
     }
     return arr;
+}
+
+
+JsonObject* JsonRoot::getTopObject(){
+    return m_value->asObject();
+}
+
+JsonArray* JsonRoot::getTopArray(){
+    return m_value->asArray();
 }
 
 JsonRoot::~JsonRoot() { 
