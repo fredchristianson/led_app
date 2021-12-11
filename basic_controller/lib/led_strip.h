@@ -87,8 +87,8 @@ class AdafruitLedStrip : public DRLedStrip {
         virtual size_t getCount() { return m_controller->numPixels();}
         virtual void show() {
             m_logger->debug("show strip %d, %d",m_controller->getPin(),m_controller->numPixels());
-            m_controller->setBrightness(40);
-            m_controller->setPixelColor(10,m_controller->Color(200,100,50));
+            //m_controller->setBrightness(40);
+            //m_controller->setPixelColor(10,m_controller->Color(200,100,50));
             m_controller->show();
         }
     private:
@@ -299,10 +299,10 @@ HSLOperation TextToHSLOP(const char * text) {
 
 class IHSLStrip {
     public:
-        virtual void setHue(int index, int16_t hue, HSLOperation op)=0;
-        virtual void setSaturation(int index, int16_t hue, HSLOperation op)=0;
-        virtual void setLightness(int index, int16_t hue, HSLOperation op)=0;
-        virtual void setRGB(int index, CRGB& rgb, HSLOperation op)=0;
+        virtual void setHue(int index, int16_t hue, HSLOperation op=REPLACE)=0;
+        virtual void setSaturation(int index, int16_t hue, HSLOperation op=REPLACE)=0;
+        virtual void setLightness(int index, int16_t hue, HSLOperation op=REPLACE)=0;
+        virtual void setRGB(int index, const CRGB& rgb, HSLOperation op=REPLACE)=0;
         virtual size_t getCount()=0;
 };
 
@@ -321,7 +321,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
             reallocHSLData(0);
         }
 
-        void setRGB(int index, CRGB& rgb,HSLOperation op) {
+        void setRGB(int index, const CRGB& rgb,HSLOperation op) {
             CHSL hsl = RGBToHSL(rgb);
             setHue(index,hsl.hue,op);
             setLightness(index,hsl.saturation,op);
@@ -343,7 +343,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
                 m_logger->debug("setHue %d %d %d",index,hue,op);
             }
         }
-
+ 
         void setSaturation(int index, int16_t saturation, HSLOperation op=REPLACE) {
             if (index<0 || index>=m_count) {
                 m_logger->error("HSL saturation index out of range %d (0-%d)",index,m_count);

@@ -47,6 +47,7 @@ class LoadResult {
 
     void setJsonRoot(JsonRoot* json) {
         m_jsonRoot = json;
+        m_json = m_jsonRoot->getTopElement()->asObject();
     }
 
     void setSuccess(bool success) { m_success = success;}
@@ -59,7 +60,7 @@ private:
     DRFileBuffer m_buffer;    
     FileType m_type;
     JsonRoot* m_jsonRoot;
-    JsonRoot* m_json;
+    JsonElement* m_json;
     bool m_success;
     const char * m_error;
 };
@@ -99,6 +100,8 @@ public:
                 m_logger->debug("\tparse file %s",result.getBuffer().text());
                 JsonRoot* root = parser.read(result.getBuffer().text());
                 m_logger->debug("\tset root %s",(root == NULL ? "NULL" : "found"));
+                m_logger->debug("\ttop 0x%04X",(root == NULL ? 0 : root->getTopElement()));
+                m_logger->debug("\ttop obj 0x%04X",(root == NULL ? 0 : root->getTopElement()->asObject()));
                 result.setJsonRoot(root);
                 result.m_success = root != NULL;
                 result.m_error = root == NULL ? "JSON parse failed" : NULL;

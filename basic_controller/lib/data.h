@@ -220,6 +220,7 @@ private:
 class ApiResult : public Data {
     public:
         ApiResult(JsonElement *json) {
+            m_logger->always("create JSON ApiResult 0x%04X",json);
             addProperty("code",200);
             addProperty("success",true);
             addProperty("message","success");

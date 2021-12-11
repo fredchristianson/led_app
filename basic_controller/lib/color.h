@@ -85,10 +85,12 @@ namespace DevRelief {
     };
 
  
-    CHSL RGBToHSL(CRGB&rgb)
+    CHSL RGBToHSL(const CRGB&rgb)
     {
-        double r = rgb.red/255.0;
-        double g = rgb.green/255.0;
+       // double r = rgb.red/255.0;
+       // double g = rgb.green/255.0;
+        double g = rgb.red/255.0;
+        double r = rgb.green/255.0;
         double b = rgb.blue/255.0;
         double hue, sat;
 
@@ -138,7 +140,7 @@ namespace DevRelief {
         return v1;
     }
 
-    CRGB HSLToRGB(CHSL& hsl) {
+    CRGB HSLToRGB(const CHSL& hsl) {
         //m_logger->debug("hsl to rgb (%d,%d,%d)",(int)hsl.hue,(int)hsl.saturation,(int)hsl.lightness);
         unsigned char r = 0;
         unsigned char g = 0;
@@ -170,7 +172,7 @@ namespace DevRelief {
     }
 
 
-    CHSL RGBToHSL_dbg(CRGB&rgb)
+    CHSL RGBToHSL_dbg(const CRGB&rgb)
     {
         double r = rgb.red/255.0;
         double g = rgb.green/255.0;

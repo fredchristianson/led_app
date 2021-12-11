@@ -28,23 +28,57 @@ namespace DevRelief {
             }
 
             void white(uint8_t level) {
+                if (m_ledStrip == NULL) {
+                    return;
+                }
                 // level is 0-100
                 m_ledStrip->clear();
                 m_ledStrip->setBrightness(40);
-                m_logger->debug("Set whilte level %d",level);
+                m_logger->debug("Set white level %d",level);
                 for(int i=0;i<m_ledStrip->getCount();i++) {
-                    m_ledStrip->setSaturation(i,level);
-                    m_ledStrip->setLightness(i,100);
+                    m_ledStrip->setSaturation(i,100);
+                    m_ledStrip->setLightness(i,level);
                     m_ledStrip->setHue(i,0);
                 }
                 m_ledStrip->show();
             }
+
+            void solid(JsonObject* params) {
+                if (m_ledStrip == NULL) {
+                    return;
+                }
+                m_ledStrip->clear();
+                m_ledStrip->setBrightness(40);
+                int hue = params->get("hue",150);
+                int saturation = params->get("saturation",100);
+                int lightness = params->get("lightness",50);
+                m_logger->debug("Set solid %d %d %d %d",m_ledStrip->getCount(),hue,saturation,lightness);
+                for(int i=0;i<m_ledStrip->getCount();i++) {
+                    m_ledStrip->setSaturation(i,saturation);
+                    m_ledStrip->setLightness(i,lightness);
+                    m_ledStrip->setHue(i,hue);
+                }
+                m_ledStrip->show();
+            }
+
             void setScript(Script * script) {
+                delete m_script;
                 m_script = script;
             }
 
             void configChange(Config& config) {
+                turnOff();
                 setupLeds(config);
+            }
+
+            void step() {
+                if (m_ledStrip == NULL || m_script == NULL) {
+                    return;
+                }
+                m_ledStrip->clear();
+                ScriptState state(m_ledStrip);
+                m_script->step(state);
+                m_ledStrip->show();
             }
         private:
 

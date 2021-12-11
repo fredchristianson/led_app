@@ -41,9 +41,21 @@ class ScriptDataLoader : public DataLoader {
             return m_fileSystem.deleteFile(getPath(name));
         }
 
-        bool writeScript(const char * name, const char * text){
-            //SharedPtr<JsonRoot> jsonRoot = toJson(script);
-            return m_fileSystem.write(getPath(name),text);
+        Script* writeScript(const char * name, const char * text){
+            SharedPtr<JsonRoot> jsonRoot;
+            jsonRoot = parse(text);
+            Script* script = jsonToScript(jsonRoot.get());
+            if (script == NULL) {
+                return NULL;
+            }
+            m_fileSystem.write(getPath(name),text);
+            return script;
+        }
+
+        JsonRoot* parse(const char * text) {
+            JsonParser parser;
+            JsonRoot* root = parser.read(text);
+            return root;
         }
 
         bool save(Script& script, const char * name){
@@ -111,13 +123,10 @@ class ScriptDataLoader : public DataLoader {
 
             return root;
         }
-        bool loadScript(DRString& script, const char * name){
-            LoadResult result;
-            
+        bool loadScriptJson(const char * name,LoadResult result){
             m_logger->debug("load script %s",name);
             if (loadFile(getPath(name),result)){
-                m_logger->debug("process script json");
-                script = result.getText();
+                m_logger->debug("got JSON root=0x%04X, top=0x%04X",result.getJsonRoot(),result.getJson());
                 return true;
             } else {
                 m_logger->error("script json not found");
@@ -206,6 +215,32 @@ class ScriptDataLoader : public DataLoader {
             }
             */
             return true;
+        }
+
+        Script* jsonToScript(JsonRoot* jsonRoot){
+            if (jsonRoot == NULL || jsonRoot->getTopObject()== NULL) {
+                return NULL;
+            }
+            JsonObject* obj = jsonRoot->getTopObject();
+            Script* script = new Script();
+
+            JsonArray * arr = obj->getArray("commands");
+            arr->each([&](JsonElement*item) {
+                JsonObject*obj = item->asObject();
+                if (obj) {
+                    DRString type = obj->get("type","unknown");
+                    ScriptCommand* cmd = NULL;
+                    if (strcmp(type,"rgb")==0) {
+                        cmd=new RGBCommand(obj->get("red",0),obj->get("green",0),obj->get("blue",0));
+                    } else if (strcmp(type,"hsl")==0) {
+                        cmd=new HSLCommand(obj->get("hue",-1),obj->get("saturation",-1),obj->get("lightness",-1));
+                    }
+                    if (cmd != NULL) {
+                        script->add(cmd);
+                    }
+                }
+            });
+            return script;
         }
 
     protected:

@@ -49,6 +49,7 @@ namespace DevRelief {
                 return;
             }
             m_httpServer->handleClient();
+            m_executor.step();
         }
 
         void initialize() {
@@ -114,24 +115,28 @@ namespace DevRelief {
 
             m_httpServer->routeBracesGet( "/api/script/{}",[this](Request* req, Response* resp){
                 ScriptDataLoader loader;
-                DRString scriptText;
-                if (loader.loadScript(scriptText, req->pathArg(0).c_str())){
-                    ApiResult result;
-                    result.addProperty("data",scriptText.text());
+                LoadResult load;
+                m_logger->debug("load script");
+                if (loader.loadScriptJson( req->pathArg(0).c_str(),load)){
+                    ApiResult result(load.getJson());
                     DRString apiText;
                     result.toText(apiText);
                     resp->send(200,"text/json",apiText.text());
+                    return;
                 }
                 resp->send(404,"text/json","script not loaded");
             });
 
 
             m_httpServer->routeBracesPost( "/api/script/{}",[this](Request* req, Response* resp){
+                m_logger->debug("save script");
+
                 auto body = req->arg("plain").c_str();
                 auto name =req->pathArg(0).c_str();
 
                 ScriptDataLoader loader;
-                loader.writeScript(name,body);
+                Script* script = loader.writeScript(name,body);
+                m_executor.setScript(script);
                 ApiResult result(true);
                 DRString apiText;
                 result.toText(apiText);
@@ -141,6 +146,7 @@ namespace DevRelief {
 
 
             m_httpServer->routeBracesDelete( "/api/script/{}",[this](Request* req, Response* resp){
+                m_logger->debug("delete script");
                 resp->send(200,"text/json","DELETE not implemented");
             });
 
@@ -182,6 +188,10 @@ namespace DevRelief {
                 m_executor.white(level);
                 result.setCode(200);
                 result.setMessage("lights turned %s","on");
+            } else if (strcmp(api,"solid") == 0){
+                m_executor.solid(params);
+                result.setCode(200);
+                result.setMessage("lights turned %s","on");
             } else {
                 code = 404;
                 result.setCode(404);
@@ -199,9 +209,9 @@ namespace DevRelief {
         JsonRoot* getParameters(Request*req){
             JsonRoot * root = new JsonRoot();
             JsonObject* obj = root->createObject();
-            m_logger->debug("\tloop parameters");
+            m_logger->info("\tloop parameters");
             for(int i=0;i<req->args();i++) {
-                m_logger->debug("\t%s=%s",req->argName(i).c_str(),req->arg(i).c_str());
+                m_logger->info("\t%s=%s",req->argName(i).c_str(),req->arg(i).c_str());
                 obj->set(req->argName(i).c_str(),req->arg(i).c_str());
             }
             return root;

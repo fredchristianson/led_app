@@ -481,7 +481,7 @@ class JsonArrayItem : public JsonElement {
             }
         }
 
-
+        
     protected:
         JsonElement* m_value;
         JsonArrayItem* m_next;
@@ -535,6 +535,8 @@ class JsonArray : public JsonElement {
                 item = item->getNext();
             }
         }
+
+
     protected: 
         JsonArrayItem * m_firstItem;
 };
@@ -579,6 +581,16 @@ class JsonString : public JsonValue {
             strncpy(value,m_value,maxLen);
             return true;
         }
+
+        virtual bool getIntValue(int& value, int defaultValue){
+            if (m_value != NULL && isdigit(m_value[0])){
+                value = atoi(m_value);
+                return true;
+            } else {
+                value = defaultValue;
+                return false;
+            }
+        };
 
         const char * getText() { return m_value;}
     protected:
