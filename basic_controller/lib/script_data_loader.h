@@ -161,9 +161,9 @@ class ScriptDataLoader : public DataLoader {
                     m_logger->debug("\t\ttype: %s",type.text());
                     ScriptCommand* cmd = NULL;
                     if (strcmp(type,"rgb")==0) {
-                        cmd=new RGBCommand(obj->get("red",0),obj->get("green",0),obj->get("blue",0));
+                        cmd=new RGBCommand(jsonToIntValue(obj,"red",0),jsonToIntValue(obj,"green",0),jsonToIntValue(obj,"blue",0));
                     } else if (strcmp(type,"hsl")==0) {
-                        cmd=new HSLCommand(obj->get("hue",-1),obj->get("saturation",-1),obj->get("lightness",-1));
+                        cmd=new HSLCommand(jsonToValue(obj,"red"),jsonToValue(obj,"green"),jsonToValue(obj,"blue"));
                     } else {
                         m_logger->error("unknown ScriptCommand type %s",type.text());
                     }
@@ -177,6 +177,30 @@ class ScriptDataLoader : public DataLoader {
             return script;
         }
 
+        IScriptValue* jsonToIntValue(JsonObject*obj,const char * name, int defaultValue){
+            IScriptValue* val = jsonToValue(obj,name);
+            if (val == NULL) {
+                return new ScriptIntValue(defaultValue);
+            }
+            return val;
+        }
+        IScriptValue* jsonToValue(JsonObject*obj,const char * name){
+            JsonElement* jsonValue = obj->getPropertyValue(name);
+            if (jsonValue->isObject()) {
+                IScriptValue* start = jsonToValue(jsonValue->asObject(),"start");
+                if (start == NULL) {
+                    start = jsonToValue(jsonValue->asObject(),"value");
+                }
+                
+                if (start != NULL) {
+                    IScriptValue* end = jsonToValue(jsonValue->asObject(),"end");
+                    return new ScriptRangeValue(start,end);
+                }
+            } if (jsonValue->isString()) {
+
+            }
+            return NULL;
+        }
     protected:
         void setDefaults() {
             

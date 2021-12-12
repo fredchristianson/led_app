@@ -65,7 +65,7 @@ namespace DevRelief {
                     result = strcmp(a,b) == 0;
                 }
                 addResult(result,msg);
-                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertEqual strings %s [ %s]:  %d == %d",(result ? SUCCEEDED : FAILED), msg,a,b);
+                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertEqual strings %s [ %s]:  %s == %s",(result ? SUCCEEDED : FAILED), msg,a?a:"NULL",b?b:"NULL");
                 return result;
             }
 
@@ -158,9 +158,10 @@ namespace DevRelief {
             //success = runTest("testDRString",&Tests::testDRString) && success;
             //success = runTest("testDRStringCopy",&Tests::testDRStringCopy) && success;
             //success = runTest("testData",&Tests::testData) && success;
-            success = runTest("testConfigLoader",&Tests::testConfigLoader) && success;
+            //success = runTest("testConfigLoader",&Tests::testConfigLoader) && success;
             //success = runTest("testList",&Tests::testList) && success;
             //success = runTest("testPtrList",&Tests::testPtrList) && success;
+            success = runTest("testJsonVariable",&Tests::testJsonVariable) && success;
             int endHeap = ESP.getFreeHeap();
   
             if (endHeap != startHeap) {
@@ -453,6 +454,13 @@ namespace DevRelief {
             result.assertNull(list[-1],"negative index");
             
         } 
+
+        void testJsonVariable(TestResult& result) {
+            JsonRoot root;
+            JsonVariable* var = new JsonVariable(root,"var(abc)");
+            DRString name = var->getName();
+            result.assertEqual(name.text(),"abc","variable name");
+        }
         private:
             Logger* m_logger;        
     };

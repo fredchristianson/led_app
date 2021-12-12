@@ -9,6 +9,7 @@
 #include "./standard.h";
 #include "./list.h";
 #include "./led_strip.h";
+#include "./animation.h";
 
 namespace DevRelief {
     Logger ScriptLogger("Script",SCRIPT_LOGGER_LEVEL);
@@ -38,6 +39,62 @@ namespace DevRelief {
             int m_repeatOff;
     };
 
+    class IScriptValue {
+        public:
+            virtual int getInt(ScriptState & state, int percent)=0; // percent in [0,100]
+    };
+
+    class ScriptVariableValue : public IScriptValue {
+        public:
+            ScriptVariableValue(const char * value) : m_value(value) {
+                
+            }
+        
+            virtual int getInt(ScriptState& state, int percent){
+                return 0;
+            }
+        protected:
+            DRString m_value;
+    };
+
+    class ScriptIntValue : public IScriptValue {
+        public:
+            ScriptIntValue(int value) : m_value(value) {
+                
+            }
+        
+            virtual int getInt(ScriptState& state, int percent){
+                return m_value;
+            }
+        protected:
+            int m_value;
+    };
+
+    class ScriptRangeValue : public IScriptValue {
+        public:
+            ScriptRangeValue(IScriptValue* start,IScriptValue* end) {
+                m_start = start;
+                m_end = end;
+            }
+
+            ~ScriptRangeValue() {
+                delete m_start;
+                delete m_end;
+            }
+
+            virtual int getInt(ScriptState& state, int percent) {
+                int start = m_start->getInt(state,percent);
+                int end = m_end->getInt(state,percent);
+                int diff = end-start;
+                int result = start + diff*percent/100;
+                return result;
+            }
+
+        protected: 
+            IScriptValue* m_start;
+            IScriptValue* m_end;
+    };
+
     class ScriptCommand {
         public: 
             ScriptCommand(){
@@ -54,75 +111,74 @@ namespace DevRelief {
 
     class HSLCommand : public ScriptCommand {
         public: 
-            HSLCommand(int h=-1, int s = -1, int l=-1) {
+            HSLCommand(IScriptValue* h=NULL,IScriptValue* s=NULL,IScriptValue* l=NULL) {
                 m_hue = h;
                 m_saturation = s;
                 m_lightness = l;
             }
 
-            void setHue(int hue) { m_hue = hue;}
-            int getHue(int hue) { return m_hue;}
-            void setLightness(int lightness) { m_lightness = lightness;}
-            int getLightness(int lightness) { return m_lightness;}
-            void setSaturation(int saturation) { m_saturation = saturation;}
-            int getSaturation(int saturation) { return m_saturation;}
+            void setHue(IScriptValue* hue) { m_hue = hue;}
+            IScriptValue* getHue(IScriptValue* hue) { return m_hue;}
+            void setLightness(IScriptValue* lightness) { m_lightness = lightness;}
+            IScriptValue* getLightness(IScriptValue* lightness) { return m_lightness;}
+            void setSaturation(IScriptValue* saturation) { m_saturation = saturation;}
+            IScriptValue* getSaturation(IScriptValue* saturation) { return m_saturation;}
 
             virtual ~HSLCommand() {
 
             }
 
             virtual void step(ScriptState& state) {
+                int pos = 0;
                 state.eachLed([&](IHSLStrip* strip, int idx){
                     if (m_hue >= 0) {
-                        strip->setHue(idx,m_hue);
+                        strip->setHue(idx,m_hue->getInt(state,pos));
                     }
                     if (m_saturation>= 0) {
-                        strip->setSaturation(idx,m_saturation);
+                        strip->setSaturation(idx,m_saturation->getInt(state,pos));
                     }
                     if (m_lightness>= 0) {
-                        strip->setLightness(idx,m_lightness);
+                        strip->setLightness(idx,m_lightness->getInt(state,pos));
                     }
                 });
             }
 
         private:
-            int m_hue;
-            int m_saturation;
-            int m_lightness;
+            IScriptValue* m_hue;
+            IScriptValue* m_saturation;
+            IScriptValue* m_lightness;
     };
 
     class RGBCommand : public ScriptCommand {
         public: 
-            RGBCommand(int r=0,int g=0, int b=0) {
-                m_logger->debug("RGBCommand %d,%d,%d",r,g,b);
+            RGBCommand(IScriptValue* r=0,IScriptValue* g=0, IScriptValue* b=0) {
                 m_red = r;
                 m_green = g;
                 m_blue = b;
-                CRGB rgb(m_red,m_green,m_blue);
-                m_logger->debug("\t rgb %d,%d,%d",rgb.red,rgb.green,rgb.blue);
             }
 
-            void setRed(int red) { m_red = red;}
-            int getRed(int red) { return m_red;}
-            void setGreen(int green) { m_green = green;}
-            int getGreen(int green) { return m_green;}
-            void setBlue(int blue) { m_blue = blue;}
-            int getBlue(int blue) { return m_blue;}
+            void setRed(IScriptValue* red) { m_red = red;}
+            IScriptValue* getRed(IScriptValue* red) { return m_red;}
+            void setGreen(IScriptValue* green) { m_green = green;}
+            IScriptValue* getGreen(IScriptValue* green) { return m_green;}
+            void setBlue(IScriptValue* blue) { m_blue = blue;}
+            IScriptValue* getBlue(IScriptValue* blue) { return m_blue;}
 
             virtual ~RGBCommand() {
 
             }
 
             virtual void step(ScriptState& state) {
+                int pos = 0;
                 state.eachLed([&](IHSLStrip* strip, int idx){
-                    strip->setRGB(idx,CRGB(m_red,m_green,m_blue));
+                    strip->setRGB(idx,CRGB(m_red->getInt(state,pos),m_green->getInt(state,pos),m_blue->getInt(state,pos)));
                 });
             }
 
         private:
-            uint8_t m_red;
-            uint8_t m_blue;
-            uint8_t m_green;
+            IScriptValue* m_red;
+            IScriptValue* m_blue;
+            IScriptValue* m_green;
     };
 
     class Script {

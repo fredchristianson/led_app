@@ -108,6 +108,12 @@ class JsonBase {
 
         virtual bool isArray() { return false;}
         virtual bool isObject() { return false;}
+        virtual bool isString() { return false;}
+        virtual bool isInt() { return false;}
+        virtual bool isBool() { return false;}
+        virtual bool isFloat() { return false;}
+        virtual bool isVariable() { return false;}
+        virtual bool isNumber() { return false;}
         
         virtual JsonArray* asArray() { return NULL;}
         virtual JsonObject* asObject() { return NULL;}
@@ -605,6 +611,9 @@ class JsonString : public JsonValue {
         };
 
         const char * getText() { return m_value;}
+
+        virtual bool isString() { return true;}
+        virtual bool isNumber() { return m_value && isdigit(m_value[0]);}
     protected:
         char* m_value;
 };
@@ -628,6 +637,10 @@ class JsonInt : public JsonValue {
             value = m_value;
             return true;
         }
+
+        virtual bool isInt() { return true;}
+        virtual bool isNumber() { return true;}
+
     protected:
         int m_value;
 };
@@ -651,7 +664,10 @@ class JsonFloat : public  JsonValue {
             value = m_value;
             return true;
         }
-    protected:
+        virtual bool isFloat() { return true;}
+        virtual bool isNumber() { return true;}
+
+     protected:
         double m_value;
 };
 
@@ -673,12 +689,24 @@ class JsonBool : public  JsonValue {
             value = m_value;
             return true;
         }
+
+        virtual bool isBool() { return true;}
+
     protected:
         bool m_value;
 };
 
 class JsonVariable : public JsonValue {
     public:
+        JsonVariable(JsonRoot& root, const char * value):  JsonValue(root,JSON_VARIABLE) {
+            size_t len = strlen(value);
+            m_value = root.allocString(value,len);
+            m_logger->debug("create JsonVariable %s ",m_value);
+            mem.construct("JsonVariable",this);
+        
+
+        }
+
         JsonVariable(JsonRoot& root, const char * value, size_t len):  JsonValue(root,JSON_VARIABLE) {
             m_value = root.allocString(value,len);
             m_logger->debug("create JsonVariable %s ",m_value);
@@ -691,9 +719,24 @@ class JsonVariable : public JsonValue {
             mem.destruct("JsonVariable",this);
          }
 
-         const char* getText() { return m_value;}
+        const char* getText() { return m_value;}
+        virtual bool isVariable() { return true;}
+
+        DRString& getName(){
+            if (m_name.getLength()==0) {
+                char* start = strchr(m_value,'(');
+                char* end = strchr(m_value,')');
+                if (start == NULL || end == NULL) {
+                    m_name = m_value;
+                } else {
+                    m_name = DRString(start+1,end-start-1);
+                }
+            }
+            return m_name;
+        }
     protected:
         char * m_value;
+        DRString m_name;
 };
 
 class JsonNull : public JsonElement {
