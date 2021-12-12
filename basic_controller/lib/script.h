@@ -18,12 +18,24 @@ namespace DevRelief {
         public:
             ScriptState(IHSLStrip* strip) {
                 m_strip = strip;
+                m_startLed=0;
+                m_endLed=-1;
+                m_repeatOn=-1;
+                m_repeatOff=-1;
             }
 
             void eachLed(auto&& lambda) ;
 
+            void setStart(int s) { m_startLed = s;}
+            void setEnd(int s) { m_endLed = s;}
+            void setRepeatOn(int s) { m_repeatOn = s;m_repeatOff = s;}
+            void setRepeatOff(int s) { m_repeatOff = s;}
         private:
             IHSLStrip* m_strip;
+            int m_startLed;
+            int m_endLed;
+            int m_repeatOn;
+            int m_repeatOff;
     };
 
     class ScriptCommand {

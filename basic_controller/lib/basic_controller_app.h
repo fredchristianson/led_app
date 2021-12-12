@@ -32,7 +32,6 @@ namespace DevRelief {
    
         BasicControllerApplication() {
             m_logger = new Logger("APP",APP_LOGGER_LEVEL);
-
             m_logger->showMemory();
             if (!Tests::Run()) {
                 return;
@@ -119,14 +118,33 @@ namespace DevRelief {
                 m_logger->debug("load script");
                 if (loader.loadScriptJson( req->pathArg(0).c_str(),load)){
                     ApiResult result(load.getJson());
-                    DRString apiText;
-                    result.toText(apiText);
-                    resp->send(200,"text/json",apiText.text());
-                    return;
+                    result.send(req);
                 }
                 resp->send(404,"text/json","script not loaded");
             });
 
+            m_httpServer->routeBracesGet( "/api/run/{}",[this](Request* req, Response* resp){
+                ScriptDataLoader loader;
+                LoadResult load;
+                m_logger->debug("run script");
+                ApiResult result;
+                if (loader.loadScriptJson( req->pathArg(0).c_str(),load)){
+                    Script* script = loader.jsonToScript(load);
+                    if (script == NULL) {
+                        result.setCode(500);
+                        DRFormattedString msg("script parse failed: %s",req->pathArg(0).c_str());
+                        result.setMessage(msg);
+                    } else {
+                        m_executor.setScript(script);
+                    }
+                    result.setData(load.getJson());
+                } else {
+                    result.setCode(404);
+                    DRFormattedString msg("script not found: %s",req->pathArg(0).c_str());
+                    result.setMessage(msg);
+                }
+                result.send(req);
+            });
 
             m_httpServer->routeBracesPost( "/api/script/{}",[this](Request* req, Response* resp){
                 m_logger->debug("save script");
@@ -173,7 +191,7 @@ namespace DevRelief {
                 ESP.restart();
                 return;
             }
-            m_logger->debug("get parameters");
+            m_logger->never("get parameters");
             SharedPtr<JsonRoot> paramJson = getParameters(req);
 
             JsonObject *params = paramJson->getTopObject();
@@ -192,6 +210,10 @@ namespace DevRelief {
                 m_executor.solid(params);
                 result.setCode(200);
                 result.setMessage("lights turned %s","on");
+            } else if (strcmp(api,"mem") == 0){
+                ApiResult result;
+                result.send(req);
+                
             } else {
                 code = 404;
                 result.setCode(404);
@@ -209,9 +231,9 @@ namespace DevRelief {
         JsonRoot* getParameters(Request*req){
             JsonRoot * root = new JsonRoot();
             JsonObject* obj = root->createObject();
-            m_logger->info("\tloop parameters");
+            m_logger->never("\tloop parameters");
             for(int i=0;i<req->args();i++) {
-                m_logger->info("\t%s=%s",req->argName(i).c_str(),req->arg(i).c_str());
+                m_logger->debug("\t%s=%s",req->argName(i).c_str(),req->arg(i).c_str());
                 obj->set(req->argName(i).c_str(),req->arg(i).c_str());
             }
             return root;
@@ -224,5 +246,6 @@ namespace DevRelief {
         ScriptExecutor m_executor;
         bool m_initialized;
     };
+
 
 }

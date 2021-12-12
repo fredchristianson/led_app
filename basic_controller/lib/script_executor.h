@@ -24,10 +24,12 @@ namespace DevRelief {
             }
 
             void turnOff() {
+                endScript();
                 white(0);
             }
 
             void white(uint8_t level) {
+                endScript();
                 if (m_ledStrip == NULL) {
                     return;
                 }
@@ -44,6 +46,7 @@ namespace DevRelief {
             }
 
             void solid(JsonObject* params) {
+                endScript();
                 if (m_ledStrip == NULL) {
                     return;
                 }
@@ -61,8 +64,9 @@ namespace DevRelief {
                 m_ledStrip->show();
             }
 
+
             void setScript(Script * script) {
-                delete m_script;
+                endScript();
                 m_script = script;
             }
 
@@ -81,7 +85,9 @@ namespace DevRelief {
                 m_ledStrip->show();
             }
         private:
-
+            void endScript() {
+                m_script = NULL;
+            }
             void setupLeds(Config& config) {
                 m_logger->debug("setup HSL Strip");
                 if (m_ledStrip) {

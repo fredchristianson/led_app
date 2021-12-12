@@ -1,6 +1,5 @@
 #ifndef DR_DATA_H
 #define DR_DATA_H
-
 #include "./logger.h"
 #include "./parse_gen.h"
 #include "./buffer.h"
@@ -8,7 +7,7 @@
 
 namespace DevRelief {
 
-Logger PathLogger("JsonPath",DEBUG_LEVEL);
+Logger PathLogger("JsonPath",DATA_LOGGER_LEVEL);
 Logger DataLogger("Data",DATA_LOGGER_LEVEL);
 class JsonPath {
     public:
@@ -220,7 +219,7 @@ private:
 class ApiResult : public Data {
     public:
         ApiResult(JsonElement *json) {
-            m_logger->always("create JSON ApiResult 0x%04X",json);
+            m_logger->debug("create JSON ApiResult 0x%04X",json);
             addProperty("code",200);
             addProperty("success",true);
             addProperty("message","success");
@@ -242,6 +241,9 @@ class ApiResult : public Data {
             setMessage(msg,args);
         }
         
+        void setData(JsonElement*json) {
+            addProperty("data",json);
+        }
         bool toText(DRString& apiText){
             JsonGenerator gen(apiText);
             bool result = gen.generate(this);
@@ -255,10 +257,10 @@ class ApiResult : public Data {
         void setMessage(const char *msg,...) {
             va_list args;
             va_start(args,msg);
-            setMessage(msg,args);
+            setMessageArgs(msg,args);
         }
 
-        void setMessage(const char * msg, va_list args) {
+        void setMessageArgs(const char * msg, va_list args) {
             if (msg == NULL) {
                 return;
             }
@@ -279,9 +281,27 @@ class ApiResult : public Data {
             }
             addProperty("code",code);
         }
+
+        void send(Request* req){
+            JsonObject* mem = createObject("memory");
+            int heap = ESP.getFreeHeap();
+            mem->set("stack",(int)ESP.getFreeContStack());
+            mem->set("heap",heap);
+            if (m_lastHeapSize != 0) {
+                mem->set("lastHeap",(int)m_lastHeapSize);
+                mem->set("heapChange",(int)heap-m_lastHeapSize);
+            }
+            m_lastHeapSize = heap;
+            DRString result = toJsonString();
+            req->send(getInt("code",200),mimeType.text(),result.text());
+        }
     private:
         DRString mimeType;
+        static int m_lastHeapSize;
         
 };
+
+int ApiResult::m_lastHeapSize = 0;
+
 };
 #endif

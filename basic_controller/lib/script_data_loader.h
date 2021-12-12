@@ -14,7 +14,7 @@
 namespace DevRelief {
 
 Logger ScriptLoaderLogger("DataLoader",SCRIPT_LOADER_LOGGER_LEVEL);
-const char * PATH_BASE="/script/";
+const char * SCRIPT_PATH_BASE="/script/";
 
 
 class ScriptDataLoader : public DataLoader {
@@ -30,9 +30,10 @@ class ScriptDataLoader : public DataLoader {
         }
 
         DRString getPath(const char * name) {
-            DRString path= PATH_BASE;
+            DRString path= SCRIPT_PATH_BASE;
             path += name;
             path += ".json";
+            m_logger->debug("getPath(%s)==>%s",name,path.text());
             return path;
         }
         bool deleteScript(const char * name) {
@@ -123,7 +124,7 @@ class ScriptDataLoader : public DataLoader {
 
             return root;
         }
-        bool loadScriptJson(const char * name,LoadResult result){
+        bool loadScriptJson(const char * name,LoadResult& result){
             m_logger->debug("load script %s",name);
             if (loadFile(getPath(name),result)){
                 m_logger->debug("got JSON root=0x%04X, top=0x%04X",result.getJsonRoot(),result.getJson());
@@ -133,111 +134,44 @@ class ScriptDataLoader : public DataLoader {
             }
             return false;
         }
-/*
-        bool loadConfig(Script& script, const char * name){
-            LoadResult result;
-            
-            m_logger->debug("load script %s",name);
-            if (loadFile(getPath(name),result)){
-                m_logger->debug("process json");
 
-                if (!readJson(config,result.getJsonRoot())) {
-                    result.setSuccess(false);
-                }
-
-            } else {
-                m_logger->error("Config json not found");
-            }
-            addScripts(config);
-            return result.isSuccess();
-        }
-*/
         bool readJson(Script& script, JsonRoot* root) {
             m_logger->debug("readJson.  getJson object");
-           /*
-
-            m_logger->debug("\tgot root %s",(root?"yes":"no"));
-            if (root == NULL) {
-                return false;
-            }
-            JsonElement * top = root->getTopElement();
-            m_logger->debug("\tgot top %s",(top?"yes":"no"));
-            if (top == NULL) {
-                return false;
-            }
-            JsonObject*object = top->asObject();
-            if (object == NULL) {
-                m_logger->error("no JSON element found");
-                return false;
-            }
-            m_logger->debug("get hostname");
-            config.setHostname(object->get("hostname","unknown_host"));
-            m_logger->debug("get ipAddress");
-            config.setAddr(object->get("ipAddress","unknown_address"));
-            m_logger->debug("get brightness");
-            config.setBrightness(object->get("brightness",40));
-            m_logger->debug("get maxBrightness");
-            config.setMaxBrightness(object->get("maxBrightness",100));
-            m_logger->debug("get runningScript");
-            config.setRunningScript(object->get("runningScript",(const char*)NULL));
-            config.clearPins();
-            config.clearScripts();
-            m_logger->debug("get pins");
-
-            JsonArray* pins = object->getArray("pins");
-            if (pins) {
-                m_logger->debug("pins: %s",pins->toJsonString().get());
-                pins->each([&](JsonElement*&item) {
-                    m_logger->debug("got pin");
-                    JsonObject* pin = item->asObject();
-                    m_logger->debug("\tpin: %s",pin->toJsonString().get());
-                    if (pin){
-                        m_logger->debug("add pin %d",pin->get("number",-1));
-                        config.addPin(pin->get("number",-1),pin->get("ledCount",0),pin->get("reverse",false)); 
-                    } else {
-                        m_logger->error("pin is not an Object");
-                    }
-                });
-            } else {
-                m_logger->debug("no pins found");
-            }
-
-            
-            JsonArray* scripts = object->getArray("scripts");
-            if (scripts) {
-                scripts->each([&](JsonElement*&item) {
-                    DRString name;
-                    if (item->getDRStringValue(name)){
-                        m_logger->debug("add script %s",name.get());
-                        config.addScript(name);
-                    }
-                });
-            }
-            */
+          
             return true;
         }
 
+        Script* jsonToScript(LoadResult& load){
+            return jsonToScript(load.getJsonRoot());
+        }
         Script* jsonToScript(JsonRoot* jsonRoot){
             if (jsonRoot == NULL || jsonRoot->getTopObject()== NULL) {
                 return NULL;
             }
             JsonObject* obj = jsonRoot->getTopObject();
             Script* script = new Script();
+            m_logger->debug("convert JSON object to Script");
 
             JsonArray * arr = obj->getArray("commands");
             arr->each([&](JsonElement*item) {
+                m_logger->debug("\tgot json command");
                 JsonObject*obj = item->asObject();
                 if (obj) {
                     DRString type = obj->get("type","unknown");
+                    m_logger->debug("\t\ttype: %s",type.text());
                     ScriptCommand* cmd = NULL;
                     if (strcmp(type,"rgb")==0) {
                         cmd=new RGBCommand(obj->get("red",0),obj->get("green",0),obj->get("blue",0));
                     } else if (strcmp(type,"hsl")==0) {
                         cmd=new HSLCommand(obj->get("hue",-1),obj->get("saturation",-1),obj->get("lightness",-1));
+                    } else {
+                        m_logger->error("unknown ScriptCommand type %s",type.text());
                     }
                     if (cmd != NULL) {
                         script->add(cmd);
                     }
+                } else {
+                    m_logger->error("\t\tcommand is not an object");
                 }
             });
             return script;

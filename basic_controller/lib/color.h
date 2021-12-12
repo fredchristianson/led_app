@@ -89,8 +89,8 @@ namespace DevRelief {
     {
        // double r = rgb.red/255.0;
        // double g = rgb.green/255.0;
-        double g = rgb.red/255.0;
-        double r = rgb.green/255.0;
+        double r = rgb.red/255.0;
+        double g = rgb.green/255.0;
         double b = rgb.blue/255.0;
         double hue, sat;
 

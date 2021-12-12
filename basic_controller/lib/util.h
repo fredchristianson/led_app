@@ -122,6 +122,7 @@ class DRStringData {
         DRStringData(size_t length) : m_length(0), m_maxLength(0), m_data(NULL) {
             StringLogger.debug("create DRStringData %d",m_data);
             ensureLength(length);
+            m_length = length;
         }
 
         ~DRStringData() {
@@ -250,7 +251,8 @@ class DRString {
 
         const char * text() const { return m_data.get()->data();}
         size_t getLength() { return m_data.get()->getLength();}
-    private:
+
+    protected:
         SharedPtr<DRStringData> m_data;
 
 };
@@ -270,6 +272,7 @@ DRString::DRString(const char * orig) {
         strncpy(m_data.get()->data(),orig,len);
         StringLogger.debug("copy done");
     }
+
 }
 
 DRString::DRString(const char * orig, size_t length) {
@@ -307,11 +310,23 @@ const char * DRString::operator+=(const char * other){
     memcpy(extra,other,olen);
     return m_data.get()->data();
 }
-};
 
-
-class Util {
+class DRFormattedString : public DRString{
     public:
+        DRFormattedString(const char * format,...){
+            va_list args;
+            va_start (args,format);
+            formatString(format,args);
+        }
+
+    private:
+        void formatString(const char * format, va_list args) {
+            char buf[2];
+            int len = vsnprintf(buf,1,format,args);
+            m_data.get()->ensureLength(len+1);
+            vsnprintf(m_data.get()->data(),len,format,args);
+        }
+};
 
 };
 #endif

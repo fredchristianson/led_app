@@ -113,6 +113,7 @@ class JsonBase {
         virtual JsonObject* asObject() { return NULL;}
         virtual JsonElement* asElement() { return NULL;}
 
+        virtual JsonObject* createObject(const char * propertyName) { return NULL;}
         virtual bool getIntValue(int& value,int defaultValue) {
             value = defaultValue;
             return false;
@@ -207,6 +208,8 @@ class JsonRoot : public JsonBase {
         JsonObject* createObject();
         JsonArray* createArray();
 
+        virtual JsonObject* createObject(const char * propertyName);
+
         JsonElement* getTopElement(){
             return m_value;
         }
@@ -220,7 +223,8 @@ class JsonRoot : public JsonBase {
 
         virtual Logger* getLogger() { return m_logger;}
 
-    
+        JsonObject* asObject();
+        JsonArray* asArray();
     protected:
         int m_nextJsonId;
         JsonElement * m_value;
@@ -384,6 +388,11 @@ class JsonObject : public JsonElement {
             return prop;
         }
 
+        virtual JsonObject* createObject(const char * propertyName) {
+            JsonObject* obj = new JsonObject(*getRoot());
+            set(propertyName,obj);
+            return obj;
+        }
         
         JsonProperty* set(const char *name,JsonElement * value){
             m_logger->info("add property [%d] %s",getJsonId(),name,(value == NULL ? -1 : value->getType()));
@@ -406,6 +415,9 @@ class JsonObject : public JsonElement {
         JsonProperty* set(const char *name,int value);
         JsonProperty* set(const char *name,const char *value);
         JsonProperty* set(const char *name,double value);
+
+
+
 
         bool get(const char *name,bool defaultValue);
         int get(const char *name,int defaultValue);
@@ -1599,6 +1611,33 @@ DRString JsonBase::toJsonString(){
     gen.generate(this);
     return dr;
 }
+
+
+class JsonObjectRoot : public JsonRoot {
+    public:
+        JsonObjectRoot() {
+            createObject();
+        }
+};
+
+class JsonArrayRoot : public JsonRoot {
+    public:
+        JsonArrayRoot() {
+            createArray();
+        }
+};
+
+JsonObject* JsonRoot::asObject() { return m_value ? m_value->asObject() : NULL;}
+JsonArray* JsonRoot::asArray() { return m_value ? m_value->asArray():NULL;}
+JsonObject* JsonRoot::createObject(const char * propertyName) {
+    if (this->asObject() == NULL) {
+        return NULL;
+    }
+    else {
+        this->asObject()->createObject(propertyName);
+    }
+}
+
 
 }
 #endif
