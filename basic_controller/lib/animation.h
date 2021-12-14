@@ -3,7 +3,8 @@
 
 namespace DevReleif {
     class Animator {
-
+        private:
+            // easing
     };
 
 

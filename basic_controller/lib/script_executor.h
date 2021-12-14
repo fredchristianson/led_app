@@ -7,7 +7,7 @@
 #include "./led_strip.h";
 #include "./config.h";
 #include "./standard.h";
-#include "./script.h";
+#include "./script/script.h";
 namespace DevRelief {
 
     class ScriptExecutor {

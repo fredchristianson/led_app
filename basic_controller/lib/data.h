@@ -188,9 +188,9 @@ public:
         m_logger->debug("get string prop %s ",path);
         JsonPath jsonPath;
         JsonElement* element = jsonPath.getPropertyValue(m_obj,path);
-        if (element != NULL) {
-            m_logger->debug("\tgot property");
-            element->getStringValue(buffer,maxLen,defaultValue);
+        const char * val;
+        if (element != NULL && element->getStringValue(val,NULL)) {
+            strncpy(buffer,val,maxLen);
         } else {
             strncpy(buffer,defaultValue,maxLen);
         }

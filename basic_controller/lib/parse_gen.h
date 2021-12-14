@@ -120,6 +120,7 @@ class JsonBase {
         virtual JsonElement* asElement() { return NULL;}
 
         virtual JsonObject* createObject(const char * propertyName) { return NULL;}
+        
         virtual bool getIntValue(int& value,int defaultValue) {
             value = defaultValue;
             return false;
@@ -135,19 +136,37 @@ class JsonBase {
             return false;
         }
 
-        virtual bool getDRStringValue(DRString& val) {
-            val = "";
+        
+        virtual bool getStringValue(const char *& value, const char* defaultValue=NULL) {
+            value = defaultValue;
             return false;
         }
 
-        virtual bool getStringValue(char * value, size_t maxLen,const char* defaultValue=NULL) {
-            if (defaultValue != NULL) {
-                strncpy(value,defaultValue,maxLen);
-            } else {
-                value[0] = 0;
-            }
-            return false;
+        // these get() methods assume the caller knows the type will succeed or is happy with a default
+        virtual double getFloat() {
+            double f;
+            getFloatValue(f,0);
+            return f;
         }
+
+        virtual int getInt() {
+            int i;
+            getIntValue(i,0);
+            return i;
+        }
+
+        virtual bool getBool() { 
+            bool b;
+            getBoolValue(b,false);
+            return b;
+        }
+
+        virtual const char * getString() {
+            const char * s;
+            getStringValue(s,NULL);
+            return s;
+        }
+
 
         int getJsonId() { return m_jsonId;}
         void setJsonId(int id) { m_jsonId = id;}
@@ -339,7 +358,7 @@ class JsonProperty : public JsonElement {
 
         bool get(bool defaultValue);
         int get(int defaultValue);
-        DRString get(const char *defaultValue);
+        const char * get(const char *defaultValue=NULL);
         double get(double defaultValue);
 
 
@@ -369,6 +388,13 @@ class JsonObject : public JsonElement {
             return false;
         }
 
+        void eachProperty(auto lambda) {
+            JsonProperty* prop = m_firstProperty;
+            while(prop != NULL) {
+                lambda(prop->getName(),prop->getValue());
+                prop = prop->getNext();
+            }
+        }
         JsonProperty* add(JsonProperty* prop){
             if (m_firstProperty == NULL) {
                 m_logger->info("set firstProperty of [%d]",getJsonId());
@@ -399,6 +425,8 @@ class JsonObject : public JsonElement {
             set(propertyName,obj);
             return obj;
         }
+
+        virtual JsonArray* createArray(const char * propertyName);
         
         JsonProperty* set(const char *name,JsonElement * value){
             m_logger->info("add property [%d] %s",getJsonId(),name,(value == NULL ? -1 : value->getType()));
@@ -427,7 +455,7 @@ class JsonObject : public JsonElement {
 
         bool get(const char *name,bool defaultValue);
         int get(const char *name,int defaultValue);
-        DRString get(const char *name,const char *defaultValue);
+        const char * get(const char *name,const char *defaultValue);
         double get(const char *name,double defaultValue);
         JsonArray* getArray(const char * name);
         JsonObject* getChild(const char * name);
@@ -595,14 +623,24 @@ class JsonString : public JsonValue {
             return val;
         }
         
-        virtual bool getStringValue(char * value, size_t maxLen,const char* defaultValue=NULL) {
-            strncpy(value,m_value,maxLen);
+        virtual bool getStringValue(const char *& value, const char* defaultValue=NULL) {
+            value = m_value;
             return true;
         }
 
         virtual bool getIntValue(int& value, int defaultValue){
-            if (m_value != NULL && isdigit(m_value[0])){
+            if (isNumber()){
                 value = atoi(m_value);
+                return true;
+            } else {
+                value = defaultValue;
+                return false;
+            }
+        };
+
+        virtual bool getFloatValue(double& value, double defaultValue){
+            if (isNumber()){
+                value = atof(m_value);
                 return true;
             } else {
                 value = defaultValue;
@@ -613,7 +651,14 @@ class JsonString : public JsonValue {
         const char * getText() { return m_value;}
 
         virtual bool isString() { return true;}
-        virtual bool isNumber() { return m_value && isdigit(m_value[0]);}
+        virtual bool isNumber() { 
+            if (m_value == NULL || !isdigit(m_value[0])) { return false;}
+            const char * p = m_value;
+            while(p != NULL && p[0] != 0 && (p[0] == '.' || isdigit(p[0]))) {
+                p++;
+            }
+            return p[0] == 0;
+        }
     protected:
         char* m_value;
 };
@@ -637,7 +682,10 @@ class JsonInt : public JsonValue {
             value = m_value;
             return true;
         }
-
+        virtual bool getFloatValue(double& value,double defaultValue) {
+            value = m_value;
+            return true;
+        }
         virtual bool isInt() { return true;}
         virtual bool isNumber() { return true;}
 
@@ -664,6 +712,11 @@ class JsonFloat : public  JsonValue {
             value = m_value;
             return true;
         }
+        virtual bool getIntValue(int& value,int defaultValue) {
+            value = roundl(m_value);
+            return true;
+        }
+
         virtual bool isFloat() { return true;}
         virtual bool isNumber() { return true;}
 
@@ -696,48 +749,7 @@ class JsonBool : public  JsonValue {
         bool m_value;
 };
 
-class JsonVariable : public JsonValue {
-    public:
-        JsonVariable(JsonRoot& root, const char * value):  JsonValue(root,JSON_VARIABLE) {
-            size_t len = strlen(value);
-            m_value = root.allocString(value,len);
-            m_logger->debug("create JsonVariable %s ",m_value);
-            mem.construct("JsonVariable",this);
-        
 
-        }
-
-        JsonVariable(JsonRoot& root, const char * value, size_t len):  JsonValue(root,JSON_VARIABLE) {
-            m_value = root.allocString(value,len);
-            m_logger->debug("create JsonVariable %s ",m_value);
-            mem.construct("JsonVariable",this);
-        
-
-        }
-
-        virtual ~JsonVariable() { delete m_value;
-            mem.destruct("JsonVariable",this);
-         }
-
-        const char* getText() { return m_value;}
-        virtual bool isVariable() { return true;}
-
-        DRString& getName(){
-            if (m_name.getLength()==0) {
-                char* start = strchr(m_value,'(');
-                char* end = strchr(m_value,')');
-                if (start == NULL || end == NULL) {
-                    m_name = m_value;
-                } else {
-                    m_name = DRString(start+1,end-start-1);
-                }
-            }
-            return m_name;
-        }
-    protected:
-        char * m_value;
-        DRString m_name;
-};
 
 class JsonNull : public JsonElement {
     public:
@@ -816,9 +828,6 @@ public:
                 break;
             case JSON_BOOLEAN:
                 writeBool((JsonBool*)element);
-                break;
-            case JSON_VARIABLE:
-                writeVariable((JsonVariable*)element);
                 break;
             case JSON_OBJECT:
                 writeObject((JsonObject*)element);
@@ -951,9 +960,7 @@ public:
     }
     
         
-    void writeVariable(JsonVariable* element) {
-        writeText(element->getText());
-    }
+
     
     void writeText(const char * text) {
         if (text == NULL) {
@@ -1324,11 +1331,7 @@ public:
         const char * nameStart;
         size_t nameLen;
         if(tok.nextString(nameStart,nameLen)){
-            if (nameLen>4 && strncmp(nameStart,"var(",4)==0){
-                return new JsonVariable(*m_root,nameStart,nameLen);
-            } else {
-                return new JsonString(*m_root,nameStart,nameLen);
-            }
+           return new JsonString(*m_root,nameStart,nameLen);
         }
         return NULL;
     }
@@ -1568,11 +1571,12 @@ int JsonObject::get(const char *name,int defaultValue){
     return val;
 }
 
-DRString JsonObject::get(const char *name,const char *defaultValue){
+const char * JsonObject::get(const char *name,const char *defaultValue){
     m_logger->debug("get string value for %s",name);
     DRString val;
     JsonProperty*prop = getProperty(name);
     if (prop) {
+        m_logger->debug("got prop %s",name);
         val = prop->get(defaultValue);
     } else {
         val = defaultValue;
@@ -1590,6 +1594,13 @@ double JsonObject::get(const char *name,double defaultValue){
         val = prop->get(defaultValue);
     }
     return val;
+}
+
+
+JsonArray* JsonObject::createArray(const char * propertyName) {
+    JsonArray* arr = new JsonArray(*getRoot());
+    set(propertyName,arr);
+    return arr;
 }
 
 JsonArray* JsonObject::getArray(const char * name){
@@ -1628,14 +1639,19 @@ int JsonProperty::get(int defaultValue){
     return val;
 }
 
-DRString JsonProperty::get(const char * defaultValue){
-    DRString result;
+const char * JsonProperty::get(const char * defaultValue){
+    const char * result = defaultValue;
+    m_logger->debug("get property string");
     if (m_value) {
-        if (!m_value->getDRStringValue(result)) {
+        m_logger->debug("\tgetStringValue from type %d",m_value->getType());
+        if (!m_value->getStringValue(result)){
+            m_logger->debug("\t\tfailed"); // todo: failing here when it shouldn't
+
             result = defaultValue;
         }
     } else {
-        result = defaultValue;
+        m_logger->debug("\tno m_value");
+
     }
     return result;
 }

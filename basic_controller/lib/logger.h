@@ -6,17 +6,7 @@
 #include <time.h>
 extern EspClass ESP;
 
-bool serialInitilized = false;
-void initializeWriter() {
-    if (!Serial) {
-        serialInitilized = true;
-        Serial.begin(115200);
-
-        Serial.printf("\nSerial Logger Running\n--------------\n");
-    }
-
-}
-
+namespace DevRelief {
 enum LogLevel {
     DEBUG_LEVEL=100,
     INFO_LEVEL=80,
@@ -25,6 +15,23 @@ enum LogLevel {
     ALWAYS=1
 };
 
+#if LOGGING_ON==1
+bool serialInitilized = false;
+void initializeWriter() {
+    if (!Serial) {
+        serialInitilized = true;
+        Serial.begin(115200);
+
+        Serial.printf("\nSerial Logger Running\n--------------\n");
+        while(!Serial){
+            // wait for Serial port to be ready
+        }
+    }
+
+}
+
+
+
 #define MAX_MESSAGE_SIZE 1024
 char messageBuffer[MAX_MESSAGE_SIZE+1];
 String padding("                                   ");
@@ -32,14 +39,13 @@ const char * TABS = "\t\t\t\t\t\t";
 int MAX_TAB_COUNT = 5;
 char lastErrorMessage[100];
 long lastErrorTime=0;
-int loggerIndent;
+int loggerIndent=0;
 
 class Logger {
 public:
     Logger(const char * name, int level = 100) {
         initializeWriter();
         setModuleName(name);
-        loggerIndent = 0;
         m_periodicTimer = 0;
         m_level = level;
         //this->always("create Logger %s",name);
@@ -228,5 +234,30 @@ private:
     long m_periodicTimer;
 
 };
-
+#else
+    class Logger {
+        public: 
+        Logger(const char * name, int level = 100) {}
+        void setModuleName(const char *) {}
+        void setLevel(int l) {}
+        int getLevel() { return 0;}
+        void indent() {}
+        void outdent() {}
+        void restart() {}
+        void write(int,const char*,va_list){}
+        void write(int level,const char*,...){}
+        void write(const char * message,...) {}
+        void debug(const char *,...){}
+        void info(const char *,...){}
+        void warn(const char *,...){}
+        void error(const char *,...){}
+        void always(const char *,...){}
+        void never(const char *,...){}
+        void errorNoRepeat(const char * message,...) {}
+        void periodic(int level,long frequencyMS, long * lastTimer,const char * message,...){}
+        const char * getLevelName(int level) {return NULL;}
+        void showMemory(const char*ignore=NULL) {}
+    };
+#endif
+}
 #endif

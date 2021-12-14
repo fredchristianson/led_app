@@ -9,11 +9,11 @@
 #include "./led_strip.h"
 #include "./parse_gen.h"
 #include "./config.h"
-#include "./script.h"
+#include "./script/script.h"
 #include "./script_executor.h"
 #include "./standard.h"
 #include "./data.h"
-#include "./tests.h"
+#include "./test/tests.h"
 #include "./util.h"
 #include "./script_data_loader.h"
 
@@ -71,7 +71,10 @@ namespace DevRelief {
             
             m_logger->debug("show build version");
             m_executor.configChange(m_config);
-            m_logger->debug("Running BasicControllerApplication configured: %s",m_config.getBuildVersion().text());
+            m_logger->debug("Running BasicControllerApplication configured: %s.  Built at %s %s",
+                m_config.getBuildVersion().text(),
+                m_config.getBuildDate().text(),
+                m_config.getBuildTime().text());
             m_initialized = true;
         }
 

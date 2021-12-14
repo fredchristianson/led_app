@@ -2,12 +2,16 @@
 #define TESTS_H
 
 
-#include "./parse_gen.h";
-#include "./logger.h";
-#include "./config.h";
-#include "./data.h";
-#include "./data_loader.h";
-#include "./list.h";
+#include "../parse_gen.h";
+#include "../logger.h";
+#include "../config.h";
+#include "../data.h";
+#include "../data_loader.h";
+#include "../list.h";
+
+#include "./test_suite.h";
+#include "./json_suite.h";
+#include "./string_suite.h";
 
 namespace DevRelief {
 
@@ -21,118 +25,8 @@ namespace DevRelief {
 
     };
 #else    
-    int nextTestObjectId=100;
-    const char * SUCCEEDED = "succeeded";
-    const char * FAILED = "failed";
-    const char * UNKNOWN_TEST="-???-";
-
-    class TestResult {
-        public:
-            TestResult(Logger * logger) { 
-                m_success = true;
-                m_logger = logger;    
-            }
-
-            void fail(const char * msg = UNKNOWN_TEST) { 
-                if (msg != NULL) {
-                    m_logger->error("test failed: %s",msg);
-                }
-                m_success = false;
-            }
-            
-            void addResult(bool success,const char * msg) {
-                if (!success) {
-                    fail(msg);
-                }
-            }
-
-            bool isSuccess() { return m_success;}
-
-            bool assertEqual(int a, int b,const char * msg=UNKNOWN_TEST) {
-                bool result = (a == b);
-                addResult(result,msg);
-                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertEqual %s [ %s]:  %d == %d",(result ? SUCCEEDED : FAILED), msg,a,b);
-                return result;
-            }
-
-            bool assertEqual(const char * a, const char * b,const char * msg=UNKNOWN_TEST) {
-                bool result = true;
-                if (a==b) {
-                    result = true;
-                } else if ((a==NULL&&b!=NULL) || (a!=NULL&&b==NULL)){
-                    result = false;
-                } else {
-                    result = strcmp(a,b) == 0;
-                }
-                addResult(result,msg);
-                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertEqual strings %s [ %s]:  %s == %s",(result ? SUCCEEDED : FAILED), msg,a?a:"NULL",b?b:"NULL");
-                return result;
-            }
-
-            bool assertEqual(void* a,void * b,const char * msg=UNKNOWN_TEST) {
-                bool result = (a == b);
-                addResult(result,msg);
-                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertEqual %s [ %s]:  %d == %d",(result ? SUCCEEDED : FAILED), msg,a,b);
-                return result;
-            }
-
-            bool assertNotEqual(void* a,void* b,const char * msg=UNKNOWN_TEST) {
-                bool result = (a != b);
-                addResult(result,msg);
-                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertNotEqual %s [ %s]:  %d != %d",(result ? SUCCEEDED : FAILED), msg,a,b);
-                return result;
-            }
-
-            bool assertNull(void*a,const char * msg=UNKNOWN_TEST) {
-                bool result = (a == NULL);
-                addResult(result,msg);
-                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertNull %s [ %s]:  %d",(result ? SUCCEEDED : FAILED), msg,a);
-                return result;
-            }
-
-            bool assertNotNull(void*a,const char * msg=UNKNOWN_TEST) {
-                bool result = (a != NULL);
-                addResult(result,msg);
-                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertNotNull %s [ %s]:  %d",(result ? SUCCEEDED : FAILED), msg,a);
-                return result;
-            }
-
-            bool assertTrue(bool a,const char * msg=UNKNOWN_TEST) {
-                bool result = a;
-                addResult(result,msg);
-                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertTrue %s [ %s]:  %d",(result ? SUCCEEDED : FAILED), msg,a);
-                return result;
-            }
-
-            bool assertFalse(bool a,const char * msg=UNKNOWN_TEST) {
-                bool result = !a;
-                addResult(result,msg);
-                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertFalse %s [ %s]:  %d",(result ? SUCCEEDED : FAILED), msg,a);
-                return result;
-            }
-
-        private:
-            Logger* m_logger;
-            bool m_success;
-    };
-
-    class TestObject {
-        public:
-        TestObject(){
-            id = nextTestObjectId++;
-            value = 0;
-        }
-        TestObject(int v){
-            id = nextTestObjectId++;
-            value = v;
-        }
-
-        int id;
-        int value;
-    };
-
+  
     class Tests {
-        typedef void (Tests::*TestFn)(TestResult &);
         public:
         static bool Run() {
 
@@ -150,9 +44,10 @@ namespace DevRelief {
             m_logger = new Logger("Tests",DEBUG_LEVEL);
             m_logger->always("force logging to allocate static buffers in order to detect real memory leaks: %f %d %s %d",.123,4567,"abc",true);
             int startHeap = ESP.getFreeHeap();
-            m_logger->info("Running testStringBuffer");
             m_logger->showMemory();
             bool success = true;
+            success = JsonTestSuite::Run(m_logger) && success;
+            success = StringTestSuite::Run(m_logger) && success;
             //success = runTest("testSharedPtr",&Tests::testSharedPtr) && success;
             //success = runTest("testStringBuffer",&Tests::testStringBuffer) && success;
             //success = runTest("testDRString",&Tests::testDRString) && success;
@@ -161,9 +56,11 @@ namespace DevRelief {
             //success = runTest("testConfigLoader",&Tests::testConfigLoader) && success;
             //success = runTest("testList",&Tests::testList) && success;
             //success = runTest("testPtrList",&Tests::testPtrList) && success;
-            success = runTest("testJsonVariable",&Tests::testJsonVariable) && success;
+
+            m_logger->debug("test suites done");
+
             int endHeap = ESP.getFreeHeap();
-  
+            m_logger->debug("end heap %d",endHeap);
             if (endHeap != startHeap) {
                 m_logger->error("Leaked %d bytes of memory",startHeap-endHeap);
                 success = false;
@@ -176,25 +73,7 @@ namespace DevRelief {
             return success;
         }
 
-        bool runTest(const char * name, TestFn test){
-            TestResult result(m_logger);
-            int mem = ESP.getFreeHeap();
-            m_logger->info("Run test: %s",name);
-            m_logger->indent();
-            m_logger->showMemory("memory before test");
-
-            (this->*test)(result);
-            m_logger->debug("test complete");
-            int endMem = ESP.getFreeHeap();
-            m_logger->showMemory("memory after test");
-            if (endMem != mem) {
-                m_logger->error("Memory Leak: %d bytes",endMem-mem);
-                result.fail("memory leak");
-            }
-            m_logger->outdent();
-            return result.isSuccess();
-        }
-
+     /*
 
         void testDRString(TestResult& result) {
             DRString s1;
@@ -355,13 +234,13 @@ namespace DevRelief {
             char sbuf[30];
             const char * t = api.getString("string",sbuf,30);
             m_logger->debug("true==%s,  false==%s, %f, %s",bt?"true":"false",bf?"true":"false",f,t);
-            /*
+            
             DRBuffer buf;
             JsonGenerator gen(buf);
             gen.generate(&api);
             m_logger->always("JSON:");
             m_logger->always(buf.text());
-            */
+            
         }   
 
         void testList(TestResult& result) {
@@ -423,7 +302,7 @@ namespace DevRelief {
             list.insertAt(0,t0);
             list.insertAt(3,t6);
             list.insertAt(10,t7);
-/**/
+
             result.assertEqual(list.get(0),t0,"insert then get(0)");
             result.assertEqual(list.get(3),t6,"insert then get(3)");
             result.assertEqual(list.last(),t7,"insert then last()");
@@ -431,7 +310,7 @@ namespace DevRelief {
 
             list.insertAt(4,t5);
             result.assertEqual(list.firstIndexOf(t5),4,"firstIndexOf");
-/*            */
+
             list.removeAt(3);
             result.assertEqual(list.get(3),t5);
 
@@ -440,7 +319,7 @@ namespace DevRelief {
 
             list.clear();
             result.assertEqual(list.size(),0,"no items after clear()");            
-/**/
+/
             TestObject* tA = new TestObject();
             TestObject* tB = new TestObject();
             TestObject* tC = new TestObject();
@@ -455,12 +334,7 @@ namespace DevRelief {
             
         } 
 
-        void testJsonVariable(TestResult& result) {
-            JsonRoot root;
-            JsonVariable* var = new JsonVariable(root,"var(abc)");
-            DRString name = var->getName();
-            result.assertEqual(name.text(),"abc","variable name");
-        }
+*/
         private:
             Logger* m_logger;        
     };

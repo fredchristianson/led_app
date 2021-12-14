@@ -23,6 +23,46 @@ namespace DevRelief {
 Logger ledLogger("LED",LED_LOGGER_LEVEL);
 
 
+typedef enum HSLOperation {  
+    REPLACE=0,
+    ADD=1,
+    SUBTRACT=2,
+    AVERAGE=3,
+    MIN=4,
+    MAX=5
+};
+static const char * HSLOPTEXT[]={"replace","add","subtract","average","min","max"};
+
+const char * HSLOpToText(HSLOperation op) {
+    if (op>=REPLACE && op <= MAX) {
+        return HSLOPTEXT[op];
+    }
+    ledLogger.error("Unknown HSL OP %d",op);
+    return HSLOPTEXT[0];
+};
+
+HSLOperation TextToHSLOP(const char * text) {
+    int pos = 0;
+    while(strcasecmp(text,HSLOPTEXT[pos])!= 0 && pos <= MAX) {
+        pos++;
+    }
+    if (pos <= MAX){
+        return (HSLOperation)pos;
+    }
+    ledLogger.error("Unknown HSL OP text %s",text);
+    return REPLACE;
+}
+
+
+class IHSLStrip {
+    public:
+        virtual void setHue(int index, int16_t hue, HSLOperation op=REPLACE)=0;
+        virtual void setSaturation(int index, int16_t hue, HSLOperation op=REPLACE)=0;
+        virtual void setLightness(int index, int16_t hue, HSLOperation op=REPLACE)=0;
+        virtual void setRGB(int index, const CRGB& rgb, HSLOperation op=REPLACE)=0;
+        virtual size_t getCount()=0;
+};
+
 class DRLedStrip {
     public:
         DRLedStrip() {
@@ -265,46 +305,8 @@ class RotatedStrip: public AlteredStrip {
         int16_t m_rotationCount;
 };
 
-typedef enum HSLOperation {  
-    REPLACE=0,
-    ADD=1,
-    SUBTRACT=2,
-    AVERAGE=3,
-    MIN=4,
-    MAX=5
-};
-
-static const char * HSLOPTEXT[]={"replace","add","subtract","average","min","max"};
-
-const char * HSLOpToText(HSLOperation op) {
-    if (op>=REPLACE && op <= MAX) {
-        return HSLOPTEXT[op];
-    }
-    ledLogger.error("Unknown HSL OP %d",op);
-    return HSLOPTEXT[0];
-};
-
-HSLOperation TextToHSLOP(const char * text) {
-    int pos = 0;
-    while(strcasecmp(text,HSLOPTEXT[pos])!= 0 && pos <= MAX) {
-        pos++;
-    }
-    if (pos <= MAX){
-        return (HSLOperation)pos;
-    }
-    ledLogger.error("Unknown HSL OP text %s",text);
-    return REPLACE;
-}
 
 
-class IHSLStrip {
-    public:
-        virtual void setHue(int index, int16_t hue, HSLOperation op=REPLACE)=0;
-        virtual void setSaturation(int index, int16_t hue, HSLOperation op=REPLACE)=0;
-        virtual void setLightness(int index, int16_t hue, HSLOperation op=REPLACE)=0;
-        virtual void setRGB(int index, const CRGB& rgb, HSLOperation op=REPLACE)=0;
-        virtual size_t getCount()=0;
-};
 
 class HSLStrip: public AlteredStrip, public IHSLStrip{
     public:

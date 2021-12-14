@@ -7,8 +7,9 @@
 #include "./data.h"
 #include "./file_system.h"
 #include "./config.h"
-#include "./script.h"
+#include "./script/script.h"
 #include "./data_loader.h"
+#include "./util.h"
 
 
 namespace DevRelief {
@@ -151,21 +152,25 @@ class ScriptDataLoader : public DataLoader {
             JsonObject* obj = jsonRoot->getTopObject();
             Script* script = new Script();
             m_logger->debug("convert JSON object to Script");
+            script->setName(jsonString(obj,S_NAME,"unnamed"));
 
             JsonArray * arr = obj->getArray("commands");
             arr->each([&](JsonElement*item) {
                 m_logger->debug("\tgot json command");
                 JsonObject*obj = item->asObject();
                 if (obj) {
-                    DRString type = obj->get("type","unknown");
-                    m_logger->debug("\t\ttype: %s",type.text());
+                    const char * type = obj->get("type","unknown");
+                    m_logger->debug("\t\ttype: %s",type);
                     ScriptCommand* cmd = NULL;
-                    if (strcmp(type,"rgb")==0) {
-                        cmd=new RGBCommand(jsonToIntValue(obj,"red",0),jsonToIntValue(obj,"green",0),jsonToIntValue(obj,"blue",0));
-                    } else if (strcmp(type,"hsl")==0) {
-                        cmd=new HSLCommand(jsonToValue(obj,"red"),jsonToValue(obj,"green"),jsonToValue(obj,"blue"));
+                    if (matchName(S_RGB,type)) {
+                        cmd= jsonToRGBCommand(obj);
+                    } else if (matchName(S_HSL,type)) {
+                        cmd=jsonToHSLCommand(obj);
+                    }  else if (matchName(S_VALUES,type)) {
+                        cmd=jsonToValueCommand(obj);
                     } else {
-                        m_logger->error("unknown ScriptCommand type %s",type.text());
+                        m_logger->error("unknown ScriptCommand type %s",type);
+                        m_logger->info(obj->toJsonString().text());
                     }
                     if (cmd != NULL) {
                         script->add(cmd);
@@ -177,30 +182,97 @@ class ScriptDataLoader : public DataLoader {
             return script;
         }
 
-        IScriptValue* jsonToIntValue(JsonObject*obj,const char * name, int defaultValue){
-            IScriptValue* val = jsonToValue(obj,name);
-            if (val == NULL) {
-                return new ScriptIntValue(defaultValue);
+        const char * jsonString(JsonObject* obj,const char * name, const char * defaultValue) {
+            JsonProperty* prop = obj->getProperty(name);
+            if (prop){
+                const char * val = prop->get(defaultValue);
+                return val;
             }
-            return val;
+            return defaultValue;
         }
-        IScriptValue* jsonToValue(JsonObject*obj,const char * name){
-            JsonElement* jsonValue = obj->getPropertyValue(name);
-            if (jsonValue->isObject()) {
-                IScriptValue* start = jsonToValue(jsonValue->asObject(),"start");
-                if (start == NULL) {
-                    start = jsonToValue(jsonValue->asObject(),"value");
-                }
-                
-                if (start != NULL) {
-                    IScriptValue* end = jsonToValue(jsonValue->asObject(),"end");
-                    return new ScriptRangeValue(start,end);
-                }
-            } if (jsonValue->isString()) {
 
-            }
-            return NULL;
+        ScriptValueCommand* jsonToValueCommand(JsonObject* json) {
+            ScriptValueCommand* cmd = new ScriptValueCommand();
+            json->eachProperty([&](const char* name, JsonElement*value){
+                if (Util::equal("type",name)) {
+                    return;
+                }
+                IScriptValue * scriptValue = jsonToValue(value);
+                if (scriptValue == NULL) {
+                    m_logger->error("unable to get IScriptValue from %s",value->toJsonString().text());
+                } else {
+                    cmd->add(name,scriptValue);
+                }
+            });
+   
+            return cmd;
         }
+        RGBCommand* jsonToRGBCommand(JsonObject* json) {
+            RGBCommand* cmd = new RGBCommand();
+            cmd->setRed(jsonToValue(json,"red"));
+            cmd->setGreen(jsonToValue(json,"green"));
+            cmd->setBlue(jsonToValue(json,"blue"));
+            return cmd;
+        }
+
+
+        HSLCommand* jsonToHSLCommand(JsonObject* json) {
+            HSLCommand* cmd = new HSLCommand();
+            cmd->setHue(jsonToValue(json,"hue"));
+            cmd->setLightness(jsonToValue(json,"lightness"));
+            cmd->setSaturation(jsonToValue(json,"saturation"));
+            return cmd;
+        }
+
+        IScriptValue* jsonToValue(JsonObject* json, const char * name) {
+            JsonElement * jsonValue = json->getPropertyValue(name);
+            if (jsonValue == NULL) {
+                m_logger->debug("No value found for %s",name);
+                return NULL;
+            }
+            return jsonToValue(jsonValue);
+        }
+
+        IScriptValue* jsonToValue(JsonElement* jsonValue) {
+            IScriptValue* scriptValue = NULL;
+            if (jsonValue->isString()) {
+                const char * val = jsonValue->getString();
+                if (Util::startsWith(val,"var(")){
+                    scriptValue = parseVarName(val);
+                } else if (Util::startsWith(val,"func:")){
+                    scriptValue = parseFunctionName(val);
+                }
+            } else if (jsonValue->isObject()) {
+                JsonObject*valueObject = jsonValue->asObject();
+                IScriptValue * start = jsonToValue(valueObject,"start");
+                if (start == NULL) {
+                    start = jsonToValue(valueObject,"value");
+                }
+                IScriptValue * end = jsonToValue(valueObject,"end");
+                scriptValue = new ScriptRangeValue(start,end);
+            } else if (jsonValue->isNumber()) {
+                scriptValue = new ScriptNumberValue(jsonValue->getFloat());
+            }
+            return scriptValue;
+        }
+
+        ScriptVariableValue* parseVarName(const char * val) {
+            if (val == NULL) { return NULL;}
+            const char * lparen = strchr(val,'(');
+            const char * rparen = strchr(val,')');
+            if (lparen == NULL || rparen == NULL) {
+                m_logger->error("bad variable name: %s",val);
+                return NULL;
+            }
+            auto result = DRString(lparen+1,(rparen-lparen)-1);
+            m_logger->debug("got variable name %s",result.text());
+            return new ScriptVariableValue(result.text());
+        }
+
+        ScriptFunctionValue* parseFunctionName(const char * val) {
+            return new ScriptFunctionValue(val);
+        }
+      
     protected:
         void setDefaults() {
             
