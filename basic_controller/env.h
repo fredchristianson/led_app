@@ -39,5 +39,5 @@
     // RUN_TESTS should be 1 to run tests on start.  otherwise they are not run
     #define RUN_TESTS 1
     #define RUN_STRING_TESTS 0
-    #define RUN_JSON_TESTS 0
+    #define RUN_JSON_TESTS 1
 #endif

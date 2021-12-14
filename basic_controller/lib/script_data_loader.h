@@ -240,6 +240,8 @@ class ScriptDataLoader : public DataLoader {
                     scriptValue = parseVarName(val);
                 } else if (Util::startsWith(val,"func:")){
                     scriptValue = parseFunctionName(val);
+                } else {
+                    scriptValue = new ScriptStringValue(val);
                 }
             } else if (jsonValue->isObject()) {
                 JsonObject*valueObject = jsonValue->asObject();

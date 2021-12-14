@@ -226,29 +226,41 @@ void LinkedList<T>::clear(){
 
 template<typename T>
 void LinkedList<T>::removeAt(int index){
+    m_logger->always("remove at %d",index);
 	if (index < 0 || index >= m_size)
 	{
 		return;
 	}
     if (index == 0) {
+        m_logger->always("remove root");
         ListNode<T>*next = m_root->next;
+        m_logger->always("delete root");
         deleteNode(m_root);
+        m_logger->always("deleted");
         m_root = next;
         m_size--;
         return;
     }
 
+    m_logger->always("get node %d",index-1);
 
 	ListNode<T>*prev = getNode(index-1);
+    m_logger->always("got 0x%04X",prev);
     ListNode<T>*tmp = prev->next;
+    m_logger->always("tmp 0x%04X",tmp);
     prev->next = tmp->next;
+    m_logger->always("prev->next 0x%04X",prev->next);
     m_size --;
+    m_logger->always("delete 0x%04X",tmp);
     deleteNode(tmp);
+    m_logger->always("deleted 0x%04X",tmp);
 }
 
 template<typename T>
 void LinkedList<T>::removeFirst(T t) {
+    m_logger->always("remove first");
     removeAt(firstIndexOf(t));
+    m_logger->always("\tremoved");
 }
 
 template<typename T>
@@ -264,14 +276,14 @@ void LinkedList<T>::removeAll(T t){
 
 template<typename T>
 int LinkedList<T>::firstIndexOf(T t,int start) const{
-    m_logger->debug("firstIndexOf %d after %d",t,start);
+    m_logger->always("firstIndexOf %d after %d",t,start);
     int idx = start;
     ListNode<T>*node = m_root;
     while(idx<m_size&&node != NULL && node->data != t) {
         node = node->next;
         idx++;
     }
-    
+    m_logger->always("result 0x%04x  --  %d",node,idx);
     return node != NULL ? idx : -1;
 }
 

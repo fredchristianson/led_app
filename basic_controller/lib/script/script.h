@@ -125,17 +125,24 @@ namespace DevRelief
         }
 
         int getIntValue(const char * name,int rangePositionPercent,int defaultValue){
+            IScriptValue* value=NULL;
             IScriptValueProvider** providerPtr = m_valueProviders.first([&](IScriptValueProvider*p){
-                return p->hasValue(name);
+                IScriptValue* v = p->getValue(name);
+                if (v != NULL && m_lookupPath.firstIndexOf(v)<0) {
+                    value = v;
+                    return true;
+                }        
+                return false;
             });
-            if (providerPtr != NULL) {
-                IScriptValueProvider* provider = *providerPtr;
-                IScriptValue*value = provider->getValue(name);
-                if (value == NULL) {
-                    m_logger->error("ScriptValueProvider does not have value named %s",name);
-                } else {
-                    return value->getIntValue(*this,rangePositionPercent, defaultValue);
-                }
+
+            if (value == NULL) {
+                m_logger->error("ScriptValueProvider does not have value named %s",name);
+            } else {
+                m_lookupPath.add(value);
+                int i = value->getIntValue(*this,rangePositionPercent, defaultValue);
+                m_lookupPath.removeFirst(value);
+                m_logger->debug("return value %d",i);
+                return i;
             }
             return defaultValue;
         }
@@ -148,7 +155,7 @@ namespace DevRelief
                 IScriptValueProvider* provider = *providerPtr;
                 IScriptValue*value = provider->getValue(name);
                 if (value == NULL) {
-                    m_logger->error("ScriptValueProvider does not have value named %s",name);
+                    m_logger->errorNoRepeat("ScriptValueProvider does not have value named %s",name);
                 } else {
                     return value->getFloatValue(*this,rangePositionPercent, defaultValue);
                 }
@@ -161,6 +168,7 @@ namespace DevRelief
         LinkedList<IScriptPosition *> m_previousPositions;
         LinkedList<IScriptCommand *> m_previousCommands;
         LinkedList<IScriptValueProvider *> m_valueProviders;
+        LinkedList<IScriptValue*> m_lookupPath;
         // vars: time (ms/s/?), step
         Logger* m_logger;
     };
@@ -199,6 +207,7 @@ namespace DevRelief
         virtual int getIntValue(ScriptState &state, int percent,int defaultValue) override
         {
             int val = state.getIntValue(m_name.text(),percent,m_defaultValue);
+            m_logger->always("ScriptVariableValue %s got %d",m_name.text(),val);
             return val;
         }
 
@@ -281,6 +290,42 @@ namespace DevRelief
 
     protected:
         double m_value;
+    };
+
+    class ScriptStringValue : public IScriptValue
+    {
+    public:
+        ScriptStringValue(const char * value) : m_value(value)
+        {
+            memLogger->debug("ScriptStringValue()");
+        }
+
+        virtual ~ScriptStringValue() {
+            memLogger->debug("virtual ~ScriptStringValue()");
+        }
+
+        virtual int getIntValue(ScriptState &state, int percent, int defaultValue) override
+        {
+            const char * n = m_value.text();
+            if (n != NULL) {
+                return atoi(n);
+            }
+            return defaultValue;
+        }
+
+        virtual double getFloatValue(ScriptState &state, int percent, double defaultValue) override
+        {
+            const char * n = m_value.text();
+            if (n != NULL) {
+                return atof(n);
+            }
+            return defaultValue;
+        }
+
+        virtual DRString toString() { return m_value; }
+
+    protected:
+        DRString m_value;
     };
 
     class ScriptRangeValue : public IScriptValue
@@ -589,7 +634,20 @@ namespace DevRelief
         {
             int pos = 0;
             state.eachLed([&](IHSLStrip *strip, int idx)
-                          { strip->setRGB(idx, CRGB(m_red->getIntValue(state, pos,0), m_green->getIntValue(state, pos,0), m_blue->getIntValue(state, pos,0))); });
+                { 
+                    m_logger->never("RGB Led 0x%04, 0x%04, 0x%04",m_red,m_green,m_blue);
+                    int r = m_red ? m_red->getIntValue(state, pos,0) : 0;
+                    m_logger->never("\tred=%d",r);
+                    int g = m_green? m_green->getIntValue(state, pos,0) : 0;
+                    m_logger->never("\tgreen=%d",g);
+                    int b =  m_blue ? m_blue->getIntValue(state, pos,0) : 0;
+                    m_logger->never("\tblue=%d",b);
+                    CRGB crgb(r,g,b);
+                    m_logger->never("\tgot crgb");
+                    strip->setRGB(idx, crgb); 
+                    m_logger->never("\tstrip LED set");
+
+            });
         }
 
     private:
@@ -639,7 +697,7 @@ namespace DevRelief
 
     void ScriptState::eachLed(auto &&lambda)
     {
-        int count = m_strip->getCount();
+        int count = 2;// m_strip->getCount();
         for (int i = 0; i < count; i++)
         {
             lambda(m_strip, i);
