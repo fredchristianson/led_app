@@ -100,15 +100,15 @@ template<typename T>
 T* LinkedList<T>::first(auto&& lambda) const {
     m_logger->debug("find first match");
     ListNode<T>* node = m_root;
-    ListNode<T>* match == NULL;
-    while(node != NULL && match == NULL) {
+    ListNode<T>* matchNode = NULL;
+    while(node != NULL && matchNode == NULL) {
         m_logger->debug("\tcompare item 0x%04X  --> 0x%04X",node,node->next);
         if (lambda(node->data)) {
-            match = node;
+            matchNode = node;
         }
         node = node->next;
     }  
-    return match ? &(match->data) : NULL;
+    return matchNode ? &(matchNode->data) : NULL;
 }
 
 template<typename T>

@@ -194,14 +194,13 @@ class ScriptDataLoader : public DataLoader {
         ScriptValueCommand* jsonToValueCommand(JsonObject* json) {
             ScriptValueCommand* cmd = new ScriptValueCommand();
             json->eachProperty([&](const char* name, JsonElement*value){
-                if (Util::equal("type",name)) {
-                    return;
-                }
-                IScriptValue * scriptValue = jsonToValue(value);
-                if (scriptValue == NULL) {
-                    m_logger->error("unable to get IScriptValue from %s",value->toJsonString().text());
-                } else {
-                    cmd->add(name,scriptValue);
+                if (!Util::equal("type",name)) {
+                    IScriptValue * scriptValue = jsonToValue(value);
+                    if (scriptValue == NULL) {
+                        m_logger->error("unable to get IScriptValue from %s",value->toJsonString().text());
+                    } else {
+                        cmd->add(name,scriptValue);
+                    }
                 }
             });
    
@@ -266,7 +265,21 @@ class ScriptDataLoader : public DataLoader {
             }
             auto result = DRString(lparen+1,(rparen-lparen)-1);
             m_logger->debug("got variable name %s",result.text());
-            return new ScriptVariableValue(result.text());
+            double defaultValue = 0;
+            const char * def = strchr(val,'|');
+            if (def != NULL) {
+                m_logger->debug("found default value %s",def);
+                while(*def != 0 && !isdigit(*def)) {
+                    def++;
+                }
+                if (*def != 0) {
+                    m_logger->debug("convert to float %s",def);
+                    defaultValue = atof(def);
+                }
+            } else {
+                m_logger->debug("no defaul value");
+            }
+            return new ScriptVariableValue(result.text(),defaultValue);
         }
 
         ScriptFunctionValue* parseFunctionName(const char * val) {

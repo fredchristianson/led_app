@@ -1573,7 +1573,7 @@ int JsonObject::get(const char *name,int defaultValue){
 
 const char * JsonObject::get(const char *name,const char *defaultValue){
     m_logger->debug("get string value for %s",name);
-    DRString val;
+    const char * val;
     JsonProperty*prop = getProperty(name);
     if (prop) {
         m_logger->debug("got prop %s",name);

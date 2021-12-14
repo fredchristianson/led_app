@@ -31,21 +31,26 @@ namespace DevRelief
     Logger ScriptLogger("Script", SCRIPT_LOGGER_LEVEL);
     Logger ScriptMemoryLogger("ScriptMem", SCRIPT_MEMORY_LOGGER_LEVEL);
     Logger ScriptCommandLogger("ScriptCommand", SCRIPT_LOGGER_LEVEL);
+    Logger ScriptStateLogger("ScriptCommand", SCRIPT_STATE_LOGGER_LEVEL);
 
     Logger *memLogger = &ScriptMemoryLogger;
 
     class IScriptValue
     {
     public:
-        virtual int getInt(ScriptState &state, int percent) = 0; // percent in [0,100]
+        virtual int getIntValue(ScriptState &state, int rangePositionPercent,int defaultValue) = 0; // percent in [0,100]
+        virtual double getFloatValue(ScriptState &state, int rangePositionPercent,double defaultValue) = 0; // percent in [0,100]
+
+        // for debugging
         virtual DRString toString() = 0;
     };
 
     class IScriptValueProvider
     {
     public:
-        bool hasValue(const char * name)=0;
-        IScriptValue* getValue(const char * name);
+        virtual bool hasValue(const char * name)=0;
+        virtual IScriptValue* getValue(const char * name)=0;
+ 
     };
 
     class NameValue
@@ -63,6 +68,8 @@ namespace DevRelief
             ScriptMemoryLogger.debug("virtual ~NameValue() %s", m_name.text());
         }
 
+        const char * getName() { return m_name.text();}
+        IScriptValue* getValue() { return m_value;}
     private:
         DRString m_name;
         IScriptValue *m_value;
@@ -102,6 +109,7 @@ namespace DevRelief
         ScriptState(IHSLStrip *strip)
         {
             memLogger->debug("create ScriptState");
+            m_logger = &ScriptStateLogger;
             m_strip = strip;
         }
 
@@ -116,10 +124,36 @@ namespace DevRelief
             m_valueProviders.insertAt(0,provider);
         }
 
-        int getIntValue(const char * name,int defaultValue){
-            IScriptValueProvider* provider = m_valueProviders.first([&](IScriptValueProvider*p){
-                return provider->hasValue(name);
+        int getIntValue(const char * name,int rangePositionPercent,int defaultValue){
+            IScriptValueProvider** providerPtr = m_valueProviders.first([&](IScriptValueProvider*p){
+                return p->hasValue(name);
             });
+            if (providerPtr != NULL) {
+                IScriptValueProvider* provider = *providerPtr;
+                IScriptValue*value = provider->getValue(name);
+                if (value == NULL) {
+                    m_logger->error("ScriptValueProvider does not have value named %s",name);
+                } else {
+                    return value->getIntValue(*this,rangePositionPercent, defaultValue);
+                }
+            }
+            return defaultValue;
+        }
+
+        double getFloatValue(const char * name,int rangePositionPercent,double defaultValue){
+            IScriptValueProvider** providerPtr = m_valueProviders.first([&](IScriptValueProvider*p){
+                return p->hasValue(name);
+            });
+            if (providerPtr != NULL) {
+                IScriptValueProvider* provider = *providerPtr;
+                IScriptValue*value = provider->getValue(name);
+                if (value == NULL) {
+                    m_logger->error("ScriptValueProvider does not have value named %s",name);
+                } else {
+                    return value->getFloatValue(*this,rangePositionPercent, defaultValue);
+                }
+            }
+            return defaultValue;
         }
     private:
         IHSLStrip *m_strip;
@@ -128,6 +162,7 @@ namespace DevRelief
         LinkedList<IScriptCommand *> m_previousCommands;
         LinkedList<IScriptValueProvider *> m_valueProviders;
         // vars: time (ms/s/?), step
+        Logger* m_logger;
     };
 
     class ValueAnimator : public IValueAnimator
@@ -154,18 +189,23 @@ namespace DevRelief
         {
             memLogger->debug("ScriptVariableValue()");
             m_logger = &ScriptLogger;
+            m_logger->debug("Created ScriptVariableValue %s.  default=%f",value,defaultValue);
         }
 
         virtual ~ScriptVariableValue()
         {
             memLogger->debug("virtual ~ScriptVariableValue");
         }
-        virtual int getInt(ScriptState &state, int percent)
+        virtual int getIntValue(ScriptState &state, int percent,int defaultValue) override
         {
-            m_logger->debug("ScriptVariableValue: get value for %s",m_name.text());
-            int val = state.getIntValue(m_name.text(),m_defaultValue);
-            m_logger->debug("\tgot value: %d",val);
-            return 0;
+            int val = state.getIntValue(m_name.text(),percent,m_defaultValue);
+            return val;
+        }
+
+        virtual double getFloatValue(ScriptState &state, int percent,double defaultValue) override
+        {
+            double val = state.getFloatValue(m_name.text(),percent,m_defaultValue);
+            return val;
         }
 
         virtual DRString toString() { return DRString("Variable: ").append(m_name); }
@@ -200,9 +240,14 @@ namespace DevRelief
             memLogger->debug("virtual ~ScriptFunctionValue()");
 
         }
-        virtual int getInt(ScriptState &state, int percent)
+        virtual int getIntValue(ScriptState &state, int percent,int defaultValue) override
         {
-            return 0;
+            return defaultValue;
+        }
+
+        virtual double getFloatValue(ScriptState &state, int percent,double defaultValue) override
+        {
+            return defaultValue;
         }
         virtual DRString toString() { return DRString("Function: ").append(m_value); }
 
@@ -222,12 +267,12 @@ namespace DevRelief
             memLogger->debug("virtual ~ScriptNumberValue()");
         }
 
-        virtual int getInt(ScriptState &state, int percent)
+        virtual int getIntValue(ScriptState &state, int percent, int defaultValue) override
         {
             return roundl(m_value);
         }
 
-        virtual double getFloat(ScriptState &state, int percent)
+        virtual double getFloatValue(ScriptState &state, int percent, double defaultValue) override
         {
             return m_value;
         }
@@ -257,12 +302,31 @@ namespace DevRelief
 
         }
 
-        virtual int getInt(ScriptState &state, int percent)
+        virtual int getIntValue(ScriptState &state, int percent, int defaultValue)
         {
-            int start = m_start->getInt(state, percent);
-            int end = m_end->getInt(state, percent);
+            if (m_start == NULL){
+                return m_end ? m_end->getIntValue(state,100,defaultValue) : defaultValue;
+            } else if (m_end == NULL) {
+                return m_start ? m_start->getIntValue(state,0,defaultValue) : defaultValue;
+            }
+            int start = m_start->getIntValue(state, percent,0);
+            int end = m_end->getIntValue(state, percent,100);
             int diff = end - start;
             int result = start + diff * percent / 100;
+            return result;
+        }
+
+        virtual double getFloatValue(ScriptState &state, int percent, double defaultValue)
+        {
+            if (m_start == NULL){
+                return m_end ? m_end->getIntValue(state,100,defaultValue) : defaultValue;
+            } else if (m_end == NULL) {
+                return m_start ? m_start->getIntValue(state,0,defaultValue) : defaultValue;
+            }
+            double start = m_start->getFloatValue(state, percent,0);
+            double end = m_end->getFloatValue(state, percent,100);
+            double diff = end - start;
+            double result = start + diff * percent / 100;
             return result;
         }
 
@@ -370,6 +434,32 @@ namespace DevRelief
             m_values.add(new NameValue(name, value));
         }
 
+        virtual bool hasValue(const char * name){
+            return m_values.first([name](NameValue* nv){ return Util::equal(name,nv->getName());}) != NULL;
+        }
+        virtual IScriptValue* getValue(const char * name){
+            NameValue** foundPtr = m_values.first([name](NameValue* nv){ return Util::equal(name,nv->getName());});
+            if (foundPtr != NULL) {
+                NameValue* nameValue = *foundPtr;
+                return nameValue->getValue();
+            }
+            return NULL;
+        }
+
+        virtual int getIntValue(const char * name,ScriptState* state,int rangePositionPercent, int defaultValue){
+            IScriptValue*value = getValue(name);
+            if (value == NULL) {
+                return state->getIntValue(name,rangePositionPercent,defaultValue);
+            }
+        }
+
+        virtual double getFloatValue(const char * name,ScriptState* state,int rangePositionPercent, double defaultValue){
+            IScriptValue*value = getValue(name);
+            if (value == NULL) {
+                return state->getFloatValue(name,rangePositionPercent,defaultValue);
+            }
+        }
+        
     private:
         PtrList<NameValue *> m_values;
     };
@@ -451,13 +541,13 @@ namespace DevRelief
             state.eachLed([&](IHSLStrip *strip, int idx)
                           {
                     if (m_hue >= 0) {
-                        strip->setHue(idx,m_hue->getInt(state,pos));
+                        strip->setHue(idx,m_hue->getIntValue(state,pos,0));
                     }
                     if (m_saturation>= 0) {
-                        strip->setSaturation(idx,m_saturation->getInt(state,pos));
+                        strip->setSaturation(idx,m_saturation->getIntValue(state,pos,0));
                     }
                     if (m_lightness>= 0) {
-                        strip->setLightness(idx,m_lightness->getInt(state,pos));
+                        strip->setLightness(idx,m_lightness->getIntValue(state,pos,0));
                     } });
         }
 
@@ -499,7 +589,7 @@ namespace DevRelief
         {
             int pos = 0;
             state.eachLed([&](IHSLStrip *strip, int idx)
-                          { strip->setRGB(idx, CRGB(m_red->getInt(state, pos), m_green->getInt(state, pos), m_blue->getInt(state, pos))); });
+                          { strip->setRGB(idx, CRGB(m_red->getIntValue(state, pos,0), m_green->getIntValue(state, pos,0), m_blue->getIntValue(state, pos,0))); });
         }
 
     private:
