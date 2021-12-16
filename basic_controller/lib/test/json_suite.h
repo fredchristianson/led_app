@@ -47,7 +47,8 @@ namespace DevRelief
                 "count": 10,
                 "wrap": true,
                 "reverse": true,
-                "skip": 3
+                "skip": 3,
+                "animate": {"speed":20}
             },
             {
                 "type": "rgb",

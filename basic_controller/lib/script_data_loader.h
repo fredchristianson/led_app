@@ -197,6 +197,7 @@ class ScriptDataLoader : public DataLoader {
             }
             pos->setWrap(jsonToValue(json,"wrap"));
             pos->setReverse(jsonToValue(json,"reverse"));
+            pos->setAnimator(jsonToPositionAnimator(json,"animate"));
             return pos;
         }
 
@@ -232,6 +233,24 @@ class ScriptDataLoader : public DataLoader {
             cmd->setLightness(jsonToValue(json,"lightness"));
             cmd->setSaturation(jsonToValue(json,"saturation"));
             return cmd;
+        }
+
+        PositionAnimator* jsonToPositionAnimator(JsonObject* json, const char * name) {
+            m_logger->test("get PositionAnimator from %s",json->toJsonString().get());
+            JsonElement * jsonValue = json->getPropertyValue(name);
+            m_logger->test("got %s property 0x%04X",name,jsonValue);
+            PositionAnimator* animator = NULL;
+            if (jsonValue != NULL && jsonValue->asObject()) {
+                m_logger->debug("create PositionAnimator");
+                JsonObject* obj = jsonValue->asObject();
+                animator = new PositionAnimator();
+                animator->setDuration(jsonToValue(obj,"duration"));
+                animator->setSpeed(jsonToValue(obj,"speed"));
+                animator->setRepeat(jsonToValue(obj,"repeat"));
+                animator->setRepeatDelay(jsonToValue(obj,"delay"));
+            }
+            m_logger->test("return animator 0x%04X",animator);
+            return animator;
         }
 
         ScriptValue* jsonToValue(JsonObject* json, const char * name) {

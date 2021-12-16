@@ -62,7 +62,7 @@ namespace DevRelief
     public:
         virtual ~IScriptPosition() {}
         virtual IHSLStrip *getPrevious() = 0;
-        virtual void setPrevious(ScriptState &state, IHSLStrip *) = 0;
+        virtual void updateValues(ScriptState &state, IHSLStrip *) = 0;
         // start, count, step, wrap?, reverse, after (pixel after previous pos)
         // base: Relative (default), absolute, strip, after
         // IHSLStrip
@@ -242,12 +242,12 @@ namespace DevRelief
                 m_logger->test("\tprevious position 0x%04x",m_position);
             if (m_position != NULL)
             {
-                position->setPrevious(*this, m_position);
+                position->updateValues(*this, m_position);
             }
             else
             {
                 m_logger->never("\tset previous to strip");
-                position->setPrevious(*this, m_strip);
+                position->updateValues(*this, m_strip);
             }
             m_position = position;
         }
@@ -274,6 +274,7 @@ namespace DevRelief
         IHSLStrip *getStrip() { return m_position != NULL ? m_position : m_strip; }
         IHSLStrip *getBaseStrip() { return m_strip; }
 
+        long scriptTimeMsecs() { return millis()-m_startTime;}
     private:
         int m_stepNumber;
         IHSLStrip *m_strip;
@@ -287,13 +288,74 @@ namespace DevRelief
         Logger *m_logger;
         IScriptCommand *m_currentCommand;
         IScriptCommand *m_previousCommand;
-        long m_startTime;
-        long m_lastStepTime;
+        unsigned long m_startTime;
+        unsigned long m_lastStepTime;
         Script *m_script;
     };
 
     class ValueAnimator : public IValueAnimator
     {
+        public:
+            ValueAnimator() {
+                m_logger=&ScriptLogger;
+                m_speedValue=0;
+                m_durationValue=0;
+                m_repeatValue=0;
+                m_repeatDelayValue=0;
+            }
+
+            virtual ~ValueAnimator() {
+                delete m_speedValue;
+                delete m_durationValue;
+                delete m_repeatValue;
+                delete m_repeatDelayValue;
+            };
+
+            void setSpeed(IScriptValue* speed) { delete m_speedValue ; m_speedValue = speed;}
+            void setDuration(IScriptValue* duration) { delete m_durationValue ; m_durationValue = duration;}
+            void setRepeat(IScriptValue* repeat) { delete m_repeatValue ; m_repeatValue = repeat;}
+            void setRepeatDelay(IScriptValue* repeatDelay) { delete m_repeatDelayValue ; m_repeatDelayValue = repeatDelay;}
+            
+
+            double getValue(ScriptState& state, double low, double high) {
+                m_logger->test("ValueAnimator::getValue %d %d",low,high);
+                double stepsPerSecond = 0;
+                if (low == high) {
+                    m_logger->test("\tvalues equal");
+                    return low;
+                }
+                double range = high-low+1;
+                int durationMsecs = 0;
+                if (m_speedValue != NULL) {
+                    double speed = m_speedValue->getFloatValue(state,0,0);
+                    stepsPerSecond = speed;
+                    durationMsecs =  (int)((range/stepsPerSecond)*1000);
+                } else if (m_durationValue != NULL) {
+                    durationMsecs = m_durationValue->getFloatValue(state,0,0);
+                    if (durationMsecs != 0) {
+                        int steps = high-low+1;
+                        stepsPerSecond = 1000*steps/durationMsecs;
+                    }
+                }
+                m_logger->test("\tspeed=%f. duration=%d",stepsPerSecond,durationMsecs);
+                if (durationMsecs == 0) {
+                    return low;
+                }
+                int time = state.scriptTimeMsecs();
+                int timePosition = time % durationMsecs;
+                m_logger->test("\ttime=%d. timeposition=%d",time,timePosition);
+
+                Animator animator(0,durationMsecs);
+                double value = animator.getValueAt(low,high,timePosition);
+                m_logger->test("\tvalue %f",value);
+                return value;
+            }
+        protected:
+            IScriptValue* m_speedValue; 
+            IScriptValue* m_durationValue;  // ignored if m_seed is set
+            IScriptValue*    m_repeatValue;
+            IScriptValue*    m_repeatDelayValue;
+            Logger* m_logger;
     };
 
     class TimeValueAnimator : public ValueAnimator
@@ -304,9 +366,11 @@ namespace DevRelief
         // unfold
     };
 
-    class PositionValueAnimator : public ValueAnimator
+    class PositionAnimator : public ValueAnimator
     {
-        // unfold
+        public:
+            PositionAnimator() {}
+            ~PositionAnimator() {}
     };
 
     class ScriptPosition : public IScriptPosition
@@ -329,6 +393,8 @@ namespace DevRelief
             m_wrap = true;
             m_reverse = false;
             m_logger = &ScriptLogger;
+            m_animation = NULL;
+            m_animationOffset = 0;
         }
 
         ~ScriptPosition() {
@@ -338,9 +404,10 @@ namespace DevRelief
             delete m_skipValue;
             delete m_wrapValue;
             delete m_reverseValue;
+            delete m_animation;
         }
 
-        void setPrevious(ScriptState &state, IHSLStrip *strip);
+        void updateValues(ScriptState &state, IHSLStrip *strip);
         IHSLStrip *getPrevious()
         {
             return m_previous;
@@ -395,8 +462,9 @@ namespace DevRelief
         size_t getStart() { return m_start; }
         bool translate(int& index)
         {
-            m_logger->test("translate %d.  start=%d. count=%d. end=%d. skip=%d this=0x%04X",index,m_start,m_count,m_end,m_skip,this);
+            m_logger->test("translate %d.  start=%d. count=%d. end=%d. skip=%d this=0x%04X anim:%d",index,m_start,m_count,m_end,m_skip,this,m_animationOffset);
             if (m_count == 0) { return false;}
+            index = index + m_animationOffset;
             if (m_skipValue) {
                 m_logger->test("\tskip %d. index=%d",m_skip,index*m_skip);
                 index = index * m_skip;
@@ -420,7 +488,7 @@ namespace DevRelief
                 }
             }
 
-            // always works in PIXEL units.  setPrevious took care of % to pixel if needed
+            // always works in PIXEL units.  updateValues took care of % to pixel if needed
 
             if (m_start>m_end) {
                 index = -index;
@@ -436,6 +504,11 @@ namespace DevRelief
         void setReverse(IScriptValue* reverse) { m_reverseValue = reverse; }
         void clear() { m_previous->clear();}
         void show() { m_previous->show();}
+        void setAnimator(PositionAnimator* animator) {
+            delete m_animation;
+            m_animation = animator;
+            m_logger->debug("PositionAnimator 0x%04X",animator);
+        }
     private:
         // values that may be variables
         IScriptValue* m_wrapValue;
@@ -445,6 +518,8 @@ namespace DevRelief
         IScriptValue *m_countValue;
         IScriptValue *m_skipValue;
 
+        PositionAnimator* m_animation;
+        int m_animationOffset;
         // evaluated variable values
         int m_start;
         int m_count;
@@ -875,19 +950,7 @@ namespace DevRelief
         }
     };
 
-    class TimeAnimatorCommand : public ScriptCommand
-    {
-    private:
-        ValueAnimator *m_animator;
-    };
-
-    class PositionAnimatorCommand : public ScriptCommand
-    {
-    private:
-        ValueAnimator *m_animator;
-    };
-
-
+ 
     class ScriptValueCommand : public ScriptCommand, IScriptValueProvider
     {
     public:
@@ -1132,7 +1195,7 @@ namespace DevRelief
         {
             if (m_frequencyMSecs > state.msecsSinceLastStep())
             {
-                m_logger->periodic(INFO_LEVEL,5000,NULL,"frequency not reached %d %d",m_frequencyMSecs,state.msecsSinceLastStep());
+                //m_logger->periodic(INFO_LEVEL,5000,NULL,"frequency not reached %d %d",m_frequencyMSecs,state.msecsSinceLastStep());
                 return;
             }
             m_logger->never("reached step frequency");
@@ -1171,9 +1234,9 @@ namespace DevRelief
         }
     }
 
-    void ScriptPosition::setPrevious(ScriptState &state, IHSLStrip *strip)
+    void ScriptPosition::updateValues(ScriptState &state, IHSLStrip *strip)
     {
-        ScriptLogger.test("setPrevious strip");
+        ScriptLogger.test("updateValues strip");
         if (m_wrapValue) {
             m_wrap = m_wrapValue->getBoolValue(state,0,true);
         } else {
@@ -1224,6 +1287,11 @@ namespace DevRelief
             m_start = round(m_start*100.0/baseCount);
             m_end = round(m_end*100.0/baseCount);
             m_count = round(m_count*100.0/baseCount);
+        }
+        m_animationOffset = 0;
+        if (m_animation && m_count>0) {
+            m_animationOffset = m_animation->getValue(state, 0,m_count-1);
+            ScriptLogger.test("animation offset: %d",m_animationOffset);
         }
         ScriptLogger.test("\tstart: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s.",m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"));
 
