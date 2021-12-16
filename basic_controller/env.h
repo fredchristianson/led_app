@@ -1,3 +1,6 @@
+#ifndef ENV_H
+#define ENV_H
+
 #define PROD 1
 #define DEV 2
 #define ENV DEV
@@ -29,6 +32,7 @@
 #define SCRIPT_LOGGER_LEVEL DEBUG_LEVEL
 #define SCRIPT_STATE_LOGGER_LEVEL DEBUG_LEVEL
 #define SCRIPT_MEMORY_LOGGER_LEVEL WARN_LEVEL
+#define TEST_LOGGER_LEVEL INFO_LEVEL
 
 #if ENV==PROD
     #define ENV_PROD
@@ -37,7 +41,9 @@
     #define DEBUG
     #define ENSURE 1
     // RUN_TESTS should be 1 to run tests on start.  otherwise they are not run
-    #define RUN_TESTS 1
+    #define RUN_TESTS 0
     #define RUN_STRING_TESTS 0
     #define RUN_JSON_TESTS 1
+#endif
+
 #endif

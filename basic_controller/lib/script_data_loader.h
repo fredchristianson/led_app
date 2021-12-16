@@ -14,7 +14,7 @@
 
 namespace DevRelief {
 
-Logger ScriptLoaderLogger("DataLoader",SCRIPT_LOADER_LOGGER_LEVEL);
+Logger ScriptLoaderLogger("ScriptDataLoader",SCRIPT_LOADER_LOGGER_LEVEL);
 const char * SCRIPT_PATH_BASE="/script/";
 
 
@@ -167,12 +167,25 @@ class ScriptDataLoader : public DataLoader {
                     } else if (matchName(S_HSL,type)) {
                         cmd=jsonToHSLCommand(obj);
                     }  else if (matchName(S_VALUES,type)) {
+                        m_logger->debug("read Values command");
                         cmd=jsonToValueCommand(obj);
+                    }  else if (matchName(S_POSITION,type)) {
+                        cmd=jsonToPositionCommand(obj);
                     } else {
                         m_logger->error("unknown ScriptCommand type %s",type);
                         m_logger->info(obj->toJsonString().text());
                     }
                     if (cmd != NULL) {
+                        JsonObject*posJson = obj->getChild("position");
+                        
+                        if (posJson != NULL) {
+                            m_logger->debug("got position json");
+                            IScriptPosition*pos = jsonToPosition(posJson);
+                            if (pos != NULL) {
+                                m_logger->debug("got position object");
+                                cmd->setScriptPosition(pos);
+                            }
+                        }
                         script->add(cmd);
                     }
                 } else {
@@ -191,14 +204,38 @@ class ScriptDataLoader : public DataLoader {
             return defaultValue;
         }
 
+
+        PositionCommand* jsonToPositionCommand(JsonObject* json) {
+            m_logger->debug("create PositionCommand");
+            PositionCommand* cmd = new PositionCommand();
+            IScriptPosition* pos = jsonToPosition(json);
+            cmd->setScriptPosition(pos);
+            return cmd;
+        }
+
+
+        ScriptPosition* jsonToPosition(JsonObject* json) {
+            ScriptPosition* pos = new ScriptPosition();
+            pos->setStartValue(jsonToValue(json,"start"));
+            pos->setCountValue(jsonToValue(json,"count"));
+            pos->setEndValue(jsonToValue(json,"end"));
+            const char * type = json->get("unit","percent");
+            if (Util::equal(type,"pixel")){
+                pos->setUnit(POS_PIXEL);
+            }
+            return pos;
+        }
+
         ScriptValueCommand* jsonToValueCommand(JsonObject* json) {
             ScriptValueCommand* cmd = new ScriptValueCommand();
+            m_logger->debug("created ScriptValueCommand");
             json->eachProperty([&](const char* name, JsonElement*value){
                 if (!Util::equal("type",name)) {
-                    IScriptValue * scriptValue = jsonToValue(value);
+                    ScriptValue * scriptValue = jsonToValue(value);
                     if (scriptValue == NULL) {
-                        m_logger->error("unable to get IScriptValue from %s",value->toJsonString().text());
+                        m_logger->error("unable to get ScriptValue from %s",value->toJsonString().text());
                     } else {
+                        m_logger->debug("add ScriptValue for %s",name);
                         cmd->add(name,scriptValue);
                     }
                 }
@@ -223,17 +260,17 @@ class ScriptDataLoader : public DataLoader {
             return cmd;
         }
 
-        IScriptValue* jsonToValue(JsonObject* json, const char * name) {
+        ScriptValue* jsonToValue(JsonObject* json, const char * name) {
             JsonElement * jsonValue = json->getPropertyValue(name);
             if (jsonValue == NULL) {
-                m_logger->debug("No value found for %s",name);
+                //m_logger->debug("No value found for %s",name);
                 return NULL;
             }
             return jsonToValue(jsonValue);
         }
 
-        IScriptValue* jsonToValue(JsonElement* jsonValue) {
-            IScriptValue* scriptValue = NULL;
+        ScriptValue* jsonToValue(JsonElement* jsonValue) {
+            ScriptValue* scriptValue = NULL;
             if (jsonValue->isString()) {
                 const char * val = jsonValue->getString();
                 if (Util::startsWith(val,"var(")){
@@ -245,11 +282,11 @@ class ScriptDataLoader : public DataLoader {
                 }
             } else if (jsonValue->isObject()) {
                 JsonObject*valueObject = jsonValue->asObject();
-                IScriptValue * start = jsonToValue(valueObject,"start");
+                ScriptValue * start = jsonToValue(valueObject,"start");
                 if (start == NULL) {
                     start = jsonToValue(valueObject,"value");
                 }
-                IScriptValue * end = jsonToValue(valueObject,"end");
+                ScriptValue * end = jsonToValue(valueObject,"end");
                 scriptValue = new ScriptRangeValue(start,end);
             } else if (jsonValue->isNumber()) {
                 scriptValue = new ScriptNumberValue(jsonValue->getFloat());

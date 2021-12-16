@@ -30,7 +30,7 @@ namespace DevRelief
             },
             {
                 "type": "values",
-                "x": 101
+                "x": "101"
                 "y": "var(yy)",
             }
             ]
@@ -50,7 +50,9 @@ namespace DevRelief
         virtual void setLightness(int index, int16_t hue, HSLOperation op = REPLACE) {}
         virtual void setRGB(int index, const CRGB &rgb, HSLOperation op = REPLACE) {}
         virtual size_t getCount() { return 10; };
-
+        virtual size_t getStart() { return 0; };
+        virtual void clear() {}
+        virtual void show() {}
     private:
         Logger *m_logger;
     };
@@ -64,8 +66,9 @@ namespace DevRelief
             m_result = result;
         }
 
-        void step(ScriptState &state)
+        void doStep(ScriptState &state) override
         {
+            m_logger->debug("TestValuesCommand step");
             m_result->assertEqual(state.getIntValue("x",0,0),101,"get x from closest values");
             m_result->assertEqual(state.getIntValue("y",0,0),200,"get y from inner var(yy)");
             m_result->assertEqual(state.getIntValue("z",0,0),300,"get z from 2nd values");
@@ -145,7 +148,8 @@ namespace DevRelief
         m_logger->info("\tConverto to script");
         SharedPtr<Script> script = loader.jsonToScript(root.get());
         TestStrip strip(m_logger);
-        ScriptState state(&strip);
+        ScriptState state;
+        state.beginScript(script.get(),&strip);
         TestValuesCommand* cmd=new TestValuesCommand(&result, m_logger);
         script->add(cmd);
         script->step(state);
@@ -160,7 +164,7 @@ namespace DevRelief
         JsonParser parser;
         m_logger->info("\tParse JSON");
         SharedPtr<JsonRoot> root = parser.read(SIMPLE_SCRIPT);
-        m_logger->info("\tConverto to script");
+        m_logger->info("\tConvert to script");
         SharedPtr<Script> script = loader.jsonToScript(root.get());
         m_logger->info("\tdone");
     }

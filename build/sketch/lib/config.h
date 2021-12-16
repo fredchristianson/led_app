@@ -1,7 +1,7 @@
 #line 1 "d:\\dev\\arduino\\led_app\\basic_controller\\lib\\config.h"
 #ifndef CONFIG_H
 #define CONFIG_H
-#define CONFIG_HOSTNAME  "Lanai"
+
 
 #include "./parse_gen.h";
 #include "./logger.h";
@@ -10,27 +10,19 @@
 #include "./util.h";
 
 namespace DevRelief {
-    Logger ConfigLogger("Config",DEBUG_LEVEL);
-    const char * DEFAULT_CONFIG = R"config({ 
-        "name": "CONFIG_HOSTNAME",
-        "addr": "unset",
-        "scripts": [],
-        "strips": [],
-        "brightness": 40
-        ]
-    })config";
+    Logger ConfigLogger("Config",CONFIG_LOGGER_LEVEL);
 
     class LedPin {
         public:
         LedPin(int n, int c, bool r) {
-            ConfigLogger.debug("create LedPin");
+            ConfigLogger.debug("create LedPin 0x%04X  %d %d %d",this,n,c,r);
             number=n;
             ledCount=c;
             reverse=r;
         }
 
         ~LedPin() {
-            ConfigLogger.debug("destroy LedPin");
+            ConfigLogger.debug("destroy LedPin 0x%04X %d %d %d",this,number,ledCount,reverse);
         }
 
         int number;
@@ -42,20 +34,20 @@ namespace DevRelief {
 
     class Config {
         public:
-            static const Config* instance;
+            static Config* getInstance() { return instance;}
             static void setInstance(Config*cfg) { Config::instance = cfg;}
 
             Config() {
                 m_logger = &ConfigLogger;
-                m_logger->debug("create Config");
-                m_logger->debug("\tset hostName");
-                hostName = CONFIG_HOSTNAME;
-                m_logger->debug("\tset runningScript");
+                hostName = HOSTNAME;
                 runningScript = NULL;
-                m_logger->debug("\tset runningParameters");
                 runningParameters = NULL;
                 brightness = 40;
                 maxBrightness = 100;
+                buildVersion = BUILD_VERSION;
+                buildDate = BUILD_DATE;
+                buildTime = BUILD_TIME;
+
             }
 
           
@@ -64,7 +56,7 @@ namespace DevRelief {
             }
 
             
-            const DRString& getAddr() { return ipAddress;}
+            const DRString& getAddr() const { return ipAddress;}
 
             void clearPins() {
                 pins.clear();
@@ -72,22 +64,26 @@ namespace DevRelief {
 
 
             void addPin(int number,int ledCount,bool reverse=false) {
+                m_logger->debug("addPin %d %d %d",number,ledCount,reverse);
                 pins.add(new LedPin(number,ledCount,reverse));
             }
-            const LedPin* getPin(size_t idx) { return pins[idx];}
-            size_t getPinCount() { return pins.size();}
-            const LinkedList<LedPin*>& getPins() { return pins;}
+            const LedPin* getPin(size_t idx) const { return pins[idx];}
+            size_t getPinCount() const { return pins.size();}
+            const PtrList<LedPin*>& getPins() { 
+                m_logger->always("return pins");
+                return pins;
+            }
 
-            int getBrightness() { return brightness;}
+            int getBrightness() const { return brightness;}
             void setBrightness(int b) { brightness = b;}
-            int getMaxBrightness() { return maxBrightness;}
+            int getMaxBrightness() const { return maxBrightness;}
             void setMaxBrightness(int b) { maxBrightness = b;}
 
             void clearScripts() {
                 scripts.clear();
             }
 
-            size_t getScriptCount() { return scripts.size();}
+            size_t getScriptCount()  const{ return scripts.size();}
             
             bool addScript(const char * name) {
                 m_logger->debug("add script %s",name);
@@ -100,19 +96,33 @@ namespace DevRelief {
                 m_logger->debug("\tadded");
                 return true;
             }
-            const LinkedList<DRString>& getScripts() { return scripts;}
 
-            const DRString& getHostname() { return hostName;}
+            void setScripts(LinkedList<DRString>& list) {
+                scripts.clear();
+                list.each([&](DRString&name) {
+                    addScript(name.get());
+                });
+            }
+            const LinkedList<DRString>& getScripts()  const{ return scripts;}
+
+            const DRString& getHostname() const { return hostName;}
             void setHostname(const char * name) {
                 hostName = name;
             }
             void setRunningScript(const char * name) {
                 runningScript = name;
             }
-            const DRString& getRunningScript() { return runningScript;}
+            const DRString& getRunningScript()  const{ return runningScript;}
+
+            const DRString& getBuildVersion()const { return buildVersion;}
+            const DRString& getBuildDate()const { return buildDate;}
+            const DRString& getBuildTime()const { return buildTime;}
     private:            
             DRString     hostName;
             DRString     ipAddress;
+            DRString    buildVersion;
+            DRString    buildDate;
+            DRString    buildTime;
             PtrList<LedPin*>  pins;
             LinkedList<DRString>   scripts;
             DRString runningScript;
@@ -120,8 +130,10 @@ namespace DevRelief {
             int  brightness;
             int  maxBrightness;
             Logger * m_logger;
+            static Config* instance;
+
     };
-    const Config* Config::instance;
+    Config* Config::instance;
 }
 
 

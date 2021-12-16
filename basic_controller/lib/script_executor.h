@@ -68,6 +68,7 @@ namespace DevRelief {
             void setScript(Script * script) {
                 endScript();
                 m_script = script;
+                m_state.beginScript(script,m_ledStrip);
             }
 
             void configChange(Config& config) {
@@ -79,10 +80,8 @@ namespace DevRelief {
                 if (m_ledStrip == NULL || m_script == NULL) {
                     return;
                 }
-                m_ledStrip->clear();
-                ScriptState state(m_ledStrip);
-                m_script->step(state);
-                m_ledStrip->show();
+                m_script->step(m_state);
+
             }
         private:
             void endScript() {
@@ -118,6 +117,7 @@ namespace DevRelief {
             Logger* m_logger;
             Script* m_script;
             HSLStrip* m_ledStrip;
+            ScriptState m_state;
     };
 
 }

@@ -48,10 +48,7 @@ const char * S_UPDATE = "update";
 const char * S_PATTERN = "pattern";
 
 bool matchName(const char * want, const char * have) {
-    Logger tmp("matchName");
-    tmp.always("matchname '%s'=='%s'",want,have);
     bool i= strcasecmp(want,have) == 0;
-    tmp.always("\tresult %d",i);
     return i;
 };
 

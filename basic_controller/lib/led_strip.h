@@ -61,6 +61,9 @@ class IHSLStrip {
         virtual void setLightness(int index, int16_t hue, HSLOperation op=REPLACE)=0;
         virtual void setRGB(int index, const CRGB& rgb, HSLOperation op=REPLACE)=0;
         virtual size_t getCount()=0;
+        virtual size_t getStart()=0;
+        virtual void clear()=0;
+        virtual void show()=0;
 };
 
 class DRLedStrip {
@@ -323,6 +326,8 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
             reallocHSLData(0);
         }
 
+        virtual size_t getStart() override { return 0;}
+
         void setRGB(int index, const CRGB& rgb,HSLOperation op) {
             CHSL hsl = RGBToHSL(rgb);
             setHue(index,hsl.hue,op);
@@ -351,6 +356,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
                 m_logger->error("HSL saturation index out of range %d (0-%d)",index,m_count);
                 return;
             } 
+            if (saturation<0 || saturation>100) { return;}
             m_saturation[index] = clamp(0,100,performOperation(op,m_saturation[index],saturation));
         }
 
@@ -359,7 +365,10 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
                 m_logger->error("HSL lightness index out of range %d (0-%d)",index,m_count);
                 return;
             } 
+            
+            if (lightness<0 || lightness>100) { return;}
             m_lightness[index] = clamp(0,100,performOperation(op,m_lightness[index],lightness));
+            m_logger->periodic(0, 1000, NULL, "slightness %d",lightness);
         }
 
         void clear() {
@@ -393,7 +402,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
                 if (false && idx < 20) {
                     m_logger->always("light: %d",light);
                 }
-                CHSL hsl(clamp(0,360,hue),defaultValue(0,100,sat,100),defaultValue(0,100,light,0));
+                CHSL hsl(clamp(0,360,hue),defaultValue(0,100,sat,100),defaultValue(0,100,light,50));
                 if (idx == 0) {
                     const CRGB rgb = HSLToRGB(hsl);
                     m_logger->debug("hsl(%d,%d,%d)->RGB(%d,%d,%d)",hsl.hue,hsl.saturation,hsl.lightness,rgb.red,rgb.green,rgb.blue);

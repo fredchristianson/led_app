@@ -21,13 +21,56 @@
 
 namespace DevRelief {
 
-Logger* ledLogger = new Logger("LED",10);
+Logger ledLogger("LED",LED_LOGGER_LEVEL);
 
+
+typedef enum HSLOperation {  
+    REPLACE=0,
+    ADD=1,
+    SUBTRACT=2,
+    AVERAGE=3,
+    MIN=4,
+    MAX=5
+};
+static const char * HSLOPTEXT[]={"replace","add","subtract","average","min","max"};
+
+const char * HSLOpToText(HSLOperation op) {
+    if (op>=REPLACE && op <= MAX) {
+        return HSLOPTEXT[op];
+    }
+    ledLogger.error("Unknown HSL OP %d",op);
+    return HSLOPTEXT[0];
+};
+
+HSLOperation TextToHSLOP(const char * text) {
+    int pos = 0;
+    while(strcasecmp(text,HSLOPTEXT[pos])!= 0 && pos <= MAX) {
+        pos++;
+    }
+    if (pos <= MAX){
+        return (HSLOperation)pos;
+    }
+    ledLogger.error("Unknown HSL OP text %s",text);
+    return REPLACE;
+}
+
+
+class IHSLStrip {
+    public:
+        virtual void setHue(int index, int16_t hue, HSLOperation op=REPLACE)=0;
+        virtual void setSaturation(int index, int16_t hue, HSLOperation op=REPLACE)=0;
+        virtual void setLightness(int index, int16_t hue, HSLOperation op=REPLACE)=0;
+        virtual void setRGB(int index, const CRGB& rgb, HSLOperation op=REPLACE)=0;
+        virtual size_t getCount()=0;
+        virtual size_t getStart()=0;
+        virtual void clear()=0;
+        virtual void show()=0;
+};
 
 class DRLedStrip {
     public:
         DRLedStrip() {
-            m_logger = ledLogger;
+            m_logger = &ledLogger;
             validCheck=0x123fe;
         }
 
@@ -54,7 +97,7 @@ class DRLedStrip {
 class AdafruitLedStrip : public DRLedStrip {
     public: 
         AdafruitLedStrip(int pin, uint16_t ledCount){
-            m_logger = new Logger("AdafruitLED",20);
+            m_logger = new Logger("AdafruitLED",ADAFRUIT_LED_LOGGER_LEVEL);
             m_logger->debug("create AdafruitLedStrip %d %d",pin,ledCount);
             m_controller = new Adafruit_NeoPixel(ledCount,pin,NEO_GRB+NEO_KHZ800);
             m_controller->setBrightness(40);
@@ -79,6 +122,9 @@ class AdafruitLedStrip : public DRLedStrip {
         }
 
         virtual void setColor(uint16_t index, const CRGB& color){
+            if (index == 0) {
+                m_logger->debug("setColor  %02X,%02X,%02X",color.red,color.green,color.blue);
+            }
             m_controller->setPixelColor(index,m_controller->Color(color.red,color.green,color.blue));
         }
 
@@ -86,7 +132,7 @@ class AdafruitLedStrip : public DRLedStrip {
         virtual void show() {
             m_logger->debug("show strip %d, %d",m_controller->getPin(),m_controller->numPixels());
             //m_controller->setBrightness(40);
-            //m_controller->setPixelColor(1,m_controller->Color(200,100,50));
+            //m_controller->setPixelColor(10,m_controller->Color(200,100,50));
             m_controller->show();
         }
     private:
@@ -108,7 +154,7 @@ class CompoundLedStrip : public DRLedStrip {
             strips[2] = NULL;
             strips[3] = NULL;
             count = 0;
-            m_logger = new Logger("CompoundStrip",20);
+            m_logger = new Logger("CompoundStrip",COMPOUND_STRIP_LOGGER_LEVEL);
             m_logger->info("create CompoundLedStrip");
         }
 
@@ -184,7 +230,7 @@ class CompoundLedStrip : public DRLedStrip {
                     ledcount += strips[i]->getCount();
                 }
             }
-            m_logger->debug("getcount()=%d",ledcount);
+            m_logger->never("getcount()=%d",ledcount);
             return ledcount;
         }
 
@@ -263,23 +309,8 @@ class RotatedStrip: public AlteredStrip {
         int16_t m_rotationCount;
 };
 
-enum HSLOperation {  
-    REPLACE=0,
-    ADD=1,
-    SUBTRACT=2,
-    AVERAGE=3,
-    MIN=4,
-    MAX=5
-};
 
-class IHSLStrip {
-    public:
-        virtual void setHue(int index, int16_t hue, HSLOperation op)=0;
-        virtual void setSaturation(int index, int16_t hue, HSLOperation op)=0;
-        virtual void setLightness(int index, int16_t hue, HSLOperation op)=0;
-        virtual void setRGB(int index, CRGB& rgb, HSLOperation op)=0;
-        virtual size_t getCount()=0;
-};
+
 
 class HSLStrip: public AlteredStrip, public IHSLStrip{
     public:
@@ -288,21 +319,24 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
             m_hue = NULL;
             m_saturation = NULL;
             m_lightness = NULL;
-            m_logger = new Logger("HSLStrip",20);
+            m_logger = new Logger("HSLStrip",HSL_STRIP_LOGGER_LEVEL);
+            m_logger->debug("created HSLStrip with base 0x%04X",base);
         }
 
         ~HSLStrip() {
             reallocHSLData(0);
         }
 
-        void setRGB(int index, CRGB& rgb,HSLOperation op) {
+        virtual size_t getStart() override { return 0;}
+
+        void setRGB(int index, const CRGB& rgb,HSLOperation op) {
             CHSL hsl = RGBToHSL(rgb);
             setHue(index,hsl.hue,op);
             setLightness(index,hsl.saturation,op);
             setLightness(index,hsl.lightness,op);
         }
 
-        void setHue(int index, int16_t hue, HSLOperation op) {
+        void setHue(int index, int16_t hue, HSLOperation op=REPLACE) {
             if (index<0 || index>=m_count) {
                 m_logger->error("HSL Hue index out of range %d (0-%d)",index,m_count);
                 return;
@@ -317,8 +351,8 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
                 m_logger->debug("setHue %d %d %d",index,hue,op);
             }
         }
-
-        void setSaturation(int index, int16_t saturation, HSLOperation op) {
+ 
+        void setSaturation(int index, int16_t saturation, HSLOperation op=REPLACE) {
             if (index<0 || index>=m_count) {
                 m_logger->error("HSL saturation index out of range %d (0-%d)",index,m_count);
                 return;
@@ -326,7 +360,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
             m_saturation[index] = clamp(0,100,performOperation(op,m_saturation[index],saturation));
         }
 
-        void setLightness(int index, int16_t lightness, HSLOperation op) {
+        void setLightness(int index, int16_t lightness, HSLOperation op=REPLACE) {
             if (index<0 || index>=m_count) {
                 m_logger->error("HSL lightness index out of range %d (0-%d)",index,m_count);
                 return;
