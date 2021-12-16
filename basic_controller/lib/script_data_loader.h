@@ -91,36 +91,7 @@ class ScriptDataLoader : public DataLoader {
         SharedPtr<JsonRoot> toJson(Script& script) {
             JsonRoot* root=new JsonRoot;  
             JsonObject * json = root->createObject();
-            /*
-            json->set("buildVersion",config.getBuildVersion());
-            json->set("buildDate",config.getBuildDate());
-            json->set("buildTime",config.getBuildTime());
-            json->set("hostname",config.getHostname());
-
-            json->set("ipAddress",config.getAddr());
-            json->set("brightness",config.getBrightness());
-            json->set("maxBrightness",config.getMaxBrightness());
-            json->set("runningScript",config.getRunningScript());
-            JsonArray* pins = root->createArray();
-            json->set("pins",pins);
-            config.getPins().each( [&](LedPin* &pin) {
-                m_logger->debug("handle pin %d",pin->number); 
-                JsonObject* pinElement = pins->createObjectElement();
-                pinElement->set("number",pin->number);
-                pinElement->set("ledCount",pin->ledCount);
-                pinElement->set("reverse",pin->reverse);
-                pins->addItem(pinElement);
-            });
-            m_logger->debug("pins done");
-
-            JsonArray* scripts = root->createArray();
-            json->set("scripts",scripts);
-            config.getScripts().each( [&](DRString &script) {
-                m_logger->debug("handle script %s",script.get()); 
-                
-                scripts->add(script.get());
-            });
-            */
+          
             m_logger->debug("scripts done");
 
             return root;
@@ -219,6 +190,7 @@ class ScriptDataLoader : public DataLoader {
             pos->setStartValue(jsonToValue(json,"start"));
             pos->setCountValue(jsonToValue(json,"count"));
             pos->setEndValue(jsonToValue(json,"end"));
+            pos->setSkipValue(jsonToValue(json,"skip"));
             const char * type = json->get("unit","percent");
             if (Util::equal(type,"pixel")){
                 pos->setUnit(POS_PIXEL);

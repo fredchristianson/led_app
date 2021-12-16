@@ -46,7 +46,8 @@ namespace DevRelief
                 "start": 5,
                 "count": 10,
                 "wrap": true,
-                "reverse": true
+                "reverse": true,
+                "skip": 3
             },
             {
                 "type": "rgb",

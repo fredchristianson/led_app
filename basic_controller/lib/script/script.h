@@ -349,7 +349,13 @@ namespace DevRelief
         void setStartValue(IScriptValue *val) { m_startValue = val; }
         void setCountValue(IScriptValue *val) { m_countValue = val; }
         void setEndValue(IScriptValue *val) { m_endValue = val; }
-        void setSkipValue(IScriptValue *val) { m_skipValue = val; }
+        void setSkipValue(IScriptValue *val) {
+            if (val != NULL) {
+                delete m_skipValue;
+                m_logger->debug("got skip value %s",val->toString().get());
+                m_skipValue = val; 
+            }
+        }
         void setUnit(PositionUnit unit) { m_unit = unit; }
         void setHue(int index, int16_t hue, HSLOperation op = REPLACE)
         {
@@ -362,7 +368,7 @@ namespace DevRelief
         void setSaturation(int index, int16_t saturation, HSLOperation op = REPLACE)
         {
             if (m_previous == NULL || !translate(index)) {
-                ScriptLogger.periodic(ERROR_LEVEL,100,NULL,"Script position missing a previous strip");
+                //ScriptLogger.periodic(ERROR_LEVEL,100,NULL,"Script position missing a previous strip");
                 return;
             }
             m_previous->setSaturation((index), saturation, op);
@@ -370,7 +376,7 @@ namespace DevRelief
         void setLightness(int index, int16_t lightness, HSLOperation op = REPLACE)
         {
             if (m_previous == NULL || !translate(index)) {
-                ScriptLogger.periodic(ERROR_LEVEL,100,NULL,"Script position missing a previous strip");
+                //ScriptLogger.periodic(ERROR_LEVEL,100,NULL,"Script position missing a previous strip");
                 return;
             }
             m_previous->setLightness((index), lightness, op);
@@ -389,8 +395,14 @@ namespace DevRelief
         size_t getStart() { return m_start; }
         bool translate(int& index)
         {
-            m_logger->test("translate %d.  start=%d. count=%d. end=%d.  this=0x%04X",index,m_start,m_count,m_end,this);
+            m_logger->test("translate %d.  start=%d. count=%d. end=%d. skip=%d this=0x%04X",index,m_start,m_count,m_end,m_skip,this);
             if (m_count == 0) { return false;}
+            if (m_skipValue) {
+                m_logger->test("\tskip %d. index=%d",m_skip,index*m_skip);
+                index = index * m_skip;
+            } else {
+                m_logger->test("\tno skip");
+            }
             if (index < 0) {
                 if (m_wrap) {
                     index = m_count + (index%m_count);
@@ -439,7 +451,7 @@ namespace DevRelief
         int m_end;
         bool m_wrap;
         bool m_reverse;
-        bool m_skip;
+        int m_skip;
         PositionUnit m_unit;
         PositionType m_type;
         IHSLStrip *m_previous; // in ScriptCommand order
@@ -449,7 +461,12 @@ namespace DevRelief
 
     class ScriptValue : public IScriptValue {
         public:
+            ScriptValue() {
+                m_logger = &ScriptLogger;
+            }
             virtual ~ScriptValue() {}
+        protected:
+            Logger* m_logger;
     };
 
     class ScriptVariableValue : public ScriptValue
@@ -576,7 +593,9 @@ namespace DevRelief
 
         virtual int getIntValue(ScriptState &state, double percent, int defaultValue) override
         {
-            return roundl(m_value);
+            int v = m_value;
+            m_logger->test("getIntValue %f %d",m_value,v);
+            return v;
         }
 
         virtual double getFloatValue(ScriptState &state, double percent, double defaultValue) override
@@ -1166,9 +1185,11 @@ namespace DevRelief
             m_reverse = false;
         }
         if (m_skipValue) {
-            m_skip = m_skipValue->getIntValue(state,0,1);
+            int skip  = m_skipValue->getIntValue(state,0,1);
+            m_skip = skip;
+            ScriptLogger.test("skip %d %d.  %s",skip,m_skip,m_skipValue->toString().get());
         } else {
-            m_skip = 0;
+            m_skip = 1;
         }
 
         m_base = strip;
@@ -1176,7 +1197,7 @@ namespace DevRelief
             m_base = state.getBaseStrip();
         }
         m_previous = strip;
-        m_start = strip->getStart();
+        m_start = 0;
         if (m_startValue != NULL)
         {
             m_start = m_startValue->getIntValue(state, 0, m_start);
@@ -1200,9 +1221,9 @@ namespace DevRelief
         }
         if (m_unit == POS_PERCENT) {
             double baseCount = m_base->getCount();
-            m_start = roundl(m_start*100.0/baseCount);
-            m_end = roundl(m_end*100.0/baseCount);
-            m_count = roundl(m_count*100.0/baseCount);
+            m_start = round(m_start*100.0/baseCount);
+            m_end = round(m_end*100.0/baseCount);
+            m_count = round(m_count*100.0/baseCount);
         }
         ScriptLogger.test("\tstart: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s.",m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"));
 
