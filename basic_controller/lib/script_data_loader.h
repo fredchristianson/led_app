@@ -223,6 +223,8 @@ class ScriptDataLoader : public DataLoader {
             if (Util::equal(type,"pixel")){
                 pos->setUnit(POS_PIXEL);
             }
+            pos->setWrap(jsonToValue(json,"wrap"));
+            pos->setReverse(jsonToValue(json,"reverse"));
             return pos;
         }
 
@@ -288,6 +290,8 @@ class ScriptDataLoader : public DataLoader {
                 }
                 ScriptValue * end = jsonToValue(valueObject,"end");
                 scriptValue = new ScriptRangeValue(start,end);
+            } else if (jsonValue->isBool()) {
+                scriptValue = new ScriptBoolValue(jsonValue->getBool());
             } else if (jsonValue->isNumber()) {
                 scriptValue = new ScriptNumberValue(jsonValue->getFloat());
             }

@@ -43,6 +43,7 @@ namespace DevRelief
         
         virtual int getIntValue(ScriptState &state, double rangePositionPercent, int defaultValue) = 0;         // percent in [0,100]
         virtual double getFloatValue(ScriptState &state, double rangePositionPercent, double defaultValue) = 0; // percent in [0,100]
+        virtual bool getBoolValue(ScriptState &state, double rangePositionPercent, bool defaultValue) = 0; // percent in [0,100]
 
         // for debugging
         virtual DRString toString() = 0;
@@ -113,63 +114,72 @@ namespace DevRelief
 
         void addValueProvider(IScriptValueProvider *provider)
         {
-            m_logger->never("add valueProvider 0x%04X",provider);
+            m_logger->test("add valueProvider 0x%04X",provider);
             m_valueProviders.insertAt(0, provider);
+            m_logger->test("\tsize(): %d",m_valueProviders.size());
+        }
+
+        IScriptValue* findValue(const char * name,auto lambda) {
+            IScriptValue * value=NULL;
+            m_logger->test("find value %s from %d providers",name,m_valueProviders.size());
+            IScriptValueProvider **providerPtr = m_valueProviders.first([&](IScriptValueProvider *p) {
+                m_logger->test("\tcheck provider 0x%04X",p);
+                IScriptValue* v = p->getValue(name);
+                if (v != NULL && m_lookupPath.firstIndexOf(v)<0) {
+                    m_logger->test("\tprovider is good");
+                    value = v;
+                    return true;
+                } else {
+                    m_logger->test("\tIScriptValue ",(v ? "has already been used - avoid loop ": "is good"));
+                }
+                return false; 
+            });
+
+            if (value == NULL)
+            {
+                m_logger->test("ScriptValueProvider does not have value named %s", name);
+            }
+            else
+            {
+                m_logger->test("\tadd value to lookup path 0x%04X %s",*providerPtr,name);
+                m_lookupPath.add(value);
+                lambda(value);
+                m_lookupPath.removeFirst(value);
+            }
+            return value;
         }
 
         int getIntValue(const char *name, double rangePositionPercent, int defaultValue)
         {
-            m_logger->never("getIntValue for %s",name);
-            IScriptValue *value = NULL;
-            IScriptValueProvider **providerPtr = m_valueProviders.first([&](IScriptValueProvider *p)
-                {
-                    m_logger->never("\tcheck provider 0x%04X",p);
-                IScriptValue* v = p->getValue(name);
-                if (v != NULL && m_lookupPath.firstIndexOf(v)<0) {
-                    m_logger->never("\tprovider is goo");
-                    value = v;
-                    return true;
-                }         else {
-                    m_logger->never("\tIScriptValue ",(v ? "has already been used - avoid loop ": "is good"));
-                }
-                return false; 
-                });
-
-            if (value == NULL)
-            {
-                m_logger->never("ScriptValueProvider does not have value named %s", name);
-            }
-            else
-            {
-                m_logger->never("\tadd value to lookup path 0x%04X %s",*providerPtr,name);
-                m_lookupPath.add(value);
-                int i = value->getIntValue(*this, rangePositionPercent, defaultValue);
-                m_logger->never("\tgot value %d",i);
-                m_lookupPath.removeFirst(value);
-                m_logger->never("return value %d",i);
-                return i;
-            }
-            return defaultValue;
+            m_logger->test("getIntValue for %s",name);
+            int result = defaultValue;
+            IScriptValue *value = findValue(name,[&](IScriptValue*value){
+                m_logger->test("found variable");
+                result = value->getIntValue(*this,rangePositionPercent,defaultValue);
+            });
+            return result;
         }
+
+
 
         double getFloatValue(const char *name, double rangePositionPercent, double defaultValue)
         {
-            IScriptValueProvider **providerPtr = m_valueProviders.first([&](IScriptValueProvider *p)
-                                                                        { return p->hasValue(name); });
-            if (providerPtr != NULL)
-            {
-                IScriptValueProvider *provider = *providerPtr;
-                IScriptValue *value = provider->getValue(name);
-                if (value == NULL)
-                {
-                    m_logger->errorNoRepeat("ScriptValueProvider does not have value named %s", name);
-                }
-                else
-                {
-                    return value->getFloatValue(*this, rangePositionPercent, defaultValue);
-                }
-            }
-            return defaultValue;
+            m_logger->never("getIntValue for %s",name);
+            double result = defaultValue;
+            IScriptValue *value = findValue(name,[&](IScriptValue*value){
+                result = value->getFloatValue(*this,rangePositionPercent,defaultValue);
+            });
+            return result;
+        }
+
+        double getBoolValue(const char *name, double rangePositionPercent, bool defaultValue)
+        {
+            m_logger->never("getIntValue for %s",name);
+            bool result = defaultValue;
+            IScriptValue *value = findValue(name,[&](IScriptValue*value){
+                result = value->getBoolValue(*this,rangePositionPercent,defaultValue);
+            });
+            return result;
         }
 
         void beginScript(Script *script, IHSLStrip *strip)
@@ -191,6 +201,7 @@ namespace DevRelief
             m_currentCommand = NULL;
             m_previousCommand = NULL;
             m_previousCommands.clear();
+            m_valueProviders.clear();
             long now = millis();
             m_lastStepTime = now;
             m_stepNumber++;
@@ -213,7 +224,6 @@ namespace DevRelief
             m_previousCommand = m_currentCommand;
             m_currentCommand = NULL;
             m_previousCommands.insertAt(0, cmd);
-            m_valueProviders.clear();
         }
 
         long msecsSinceLastStep() { 
@@ -228,10 +238,10 @@ namespace DevRelief
 
         void addPosition(IScriptPosition *position)
         {
-            m_logger->never("Add script position");
+            m_logger->test("Add script position 0x%04X",position);
+                m_logger->test("\tprevious position 0x%04x",m_position);
             if (m_position != NULL)
             {
-                m_logger->never("\tset previous to script position");
                 position->setPrevious(*this, m_position);
             }
             else
@@ -244,7 +254,7 @@ namespace DevRelief
 
         void removePosition(IScriptPosition *position)
         {
-            m_logger->never("Remove script position");   
+            m_logger->test("Remove script position");   
             if (position != m_position)
             {
                 m_logger->error("can only remove last position");
@@ -262,6 +272,7 @@ namespace DevRelief
         }
 
         IHSLStrip *getStrip() { return m_position != NULL ? m_position : m_strip; }
+        IHSLStrip *getBaseStrip() { return m_strip; }
 
     private:
         int m_stepNumber;
@@ -311,9 +322,13 @@ namespace DevRelief
             m_unit = POS_PERCENT;
             m_type = POS_RELATIVE;
             m_previous = NULL;
+            m_wrapValue = NULL;
+            m_reverseValue = NULL;
             m_start = 0;
             m_count = 0;
             m_wrap = true;
+            m_reverse = false;
+            m_logger = &ScriptLogger;
         }
 
         ~ScriptPosition() {
@@ -321,7 +336,8 @@ namespace DevRelief
             delete m_countValue;
             delete m_endValue;
             delete m_skipValue;
-
+            delete m_wrapValue;
+            delete m_reverseValue;
         }
 
         void setPrevious(ScriptState &state, IHSLStrip *strip);
@@ -337,71 +353,98 @@ namespace DevRelief
         void setUnit(PositionUnit unit) { m_unit = unit; }
         void setHue(int index, int16_t hue, HSLOperation op = REPLACE)
         {
-            if (m_previous == NULL) {
-                ScriptLogger.periodic(ERROR_LEVEL,100,NULL,"Script position missing a previous strip");
+            if (m_previous == NULL || !translate(index)) {
+                //ScriptLogger.periodic(ERROR_LEVEL,100,NULL,"Script position missing a previous strip");
                 return;
             }
-            m_previous->setHue(translate(index), hue, op);
+            m_previous->setHue((index), hue, op);
         }
         void setSaturation(int index, int16_t saturation, HSLOperation op = REPLACE)
         {
-            if (m_previous == NULL) {
+            if (m_previous == NULL || !translate(index)) {
                 ScriptLogger.periodic(ERROR_LEVEL,100,NULL,"Script position missing a previous strip");
                 return;
             }
-            m_previous->setSaturation(translate(index), saturation, op);
+            m_previous->setSaturation((index), saturation, op);
         }
         void setLightness(int index, int16_t lightness, HSLOperation op = REPLACE)
         {
-            if (m_previous == NULL) {
+            if (m_previous == NULL || !translate(index)) {
                 ScriptLogger.periodic(ERROR_LEVEL,100,NULL,"Script position missing a previous strip");
                 return;
             }
-            m_previous->setLightness(translate(index), lightness, op);
+            m_previous->setLightness((index), lightness, op);
         }
         void setRGB(int index, const CRGB &rgb, HSLOperation op = REPLACE)
         {
-            if (m_previous == NULL) {
-                ScriptLogger.periodic(ERROR_LEVEL,100,NULL,"Script position missing a previous strip");
+            int orig = index;
+            if (m_previous == NULL || !translate(index)) {
+                //ScriptLogger.periodic(ERROR_LEVEL,1000,NULL,"Script position missing a previous strip");
                 return;
             }
-            m_previous->setRGB(translate(index), rgb, op);
+            m_logger->debug("\ttranslated RGB index %d===>%d",orig,index);
+            m_previous->setRGB((index), rgb, op);
         }
         size_t getCount() { return m_count; }
         size_t getStart() { return m_start; }
-        int translate(int index)
+        bool translate(int& index)
         {
+            m_logger->test("translate %d.  start=%d. count=%d. end=%d.  this=0x%04X",index,m_start,m_count,m_end,this);
+            if (m_count == 0) { return false;}
+            if (index < 0) {
+                if (m_wrap) {
+                    index = m_count + (index%m_count);
+                } else {
+                    m_logger->test("clip");
+                    return false;
+                }
+            }
+            if (index >= m_count) {
+                if (m_wrap) {
+                    index = index%m_count;
+                } else {
+                    m_logger->test("clip");
+                    return false;
+                }
+            }
 
-            if (m_unit == POS_PIXEL)
-            {
-                return index + m_start;
+            // always works in PIXEL units.  setPrevious took care of % to pixel if needed
+
+            if (m_start>m_end) {
+                index = -index;
+
             }
-            int count = m_count;
-            if (index <= 0)
-            {
-                return 0;
-            }
-            if (index >= 100)
-            {
-                return count;
-            }
-            return (int)round((index * count) / 100.0) + m_start;
+            index = m_start+index;
+            m_logger->test("\ttranslated %d",index);
+
+            return true;
         }
 
-        void setWrap(bool wrap) { m_wrap = wrap; }
+        void setWrap(IScriptValue* wrap) { m_wrapValue = wrap; }
+        void setReverse(IScriptValue* reverse) { m_reverseValue = reverse; }
         void clear() { m_previous->clear();}
         void show() { m_previous->show();}
     private:
-        int m_start;
-        int m_count;
-        bool m_wrap;
+        // values that may be variables
+        IScriptValue* m_wrapValue;
+        IScriptValue* m_reverseValue;
         IScriptValue *m_startValue;
         IScriptValue *m_endValue;
         IScriptValue *m_countValue;
         IScriptValue *m_skipValue;
+
+        // evaluated variable values
+        int m_start;
+        int m_count;
+        int m_end;
+        bool m_wrap;
+        bool m_reverse;
+        bool m_skip;
         PositionUnit m_unit;
         PositionType m_type;
-        IHSLStrip *m_previous;
+        IHSLStrip *m_previous; // in ScriptCommand order
+        IHSLStrip *m_base;      // may be different from previous for ABSOLUTE and other
+        Logger* m_logger;
     };
 
     class ScriptValue : public IScriptValue {
@@ -433,6 +476,12 @@ namespace DevRelief
         virtual double getFloatValue(ScriptState &state, double percent, double defaultValue) override
         {
             double val = state.getFloatValue(m_name.text(), percent, m_defaultValue);
+            return val;
+        }
+
+        virtual bool getBoolValue(ScriptState &state, double percent, bool defaultValue) override
+        {
+            double val = state.getBoolValue(m_name.text(), percent, m_defaultValue);
             return val;
         }
 
@@ -491,16 +540,22 @@ namespace DevRelief
         {
             memLogger->debug("~ScriptFunctionValue()");
         }
-        virtual int getIntValue(ScriptState &state, double percent, int defaultValue) override
+        int getIntValue(ScriptState &state, double percent, int defaultValue) override
         {
             return defaultValue;
         }
 
-        virtual double getFloatValue(ScriptState &state, double percent, double defaultValue) override
+        double getFloatValue(ScriptState &state, double percent, double defaultValue) override
         {
             return defaultValue;
         }
-        virtual DRString toString() { return DRString("Function: ").append(m_value); }
+
+       bool getBoolValue(ScriptState &state, double percent, bool defaultValue) override
+        {
+            return defaultValue;
+        }
+
+        DRString toString() { return DRString("Function: ").append(m_value); }
 
     protected:
         DRString m_value;
@@ -529,11 +584,50 @@ namespace DevRelief
             return m_value;
         }
 
+        virtual bool getBoolValue(ScriptState &state, double percent, bool defaultValue) override
+        {
+            return m_value != 0;
+        }
+
         virtual DRString toString() { return DRString::fromFloat(m_value); }
 
     protected:
         double m_value;
     };
+
+    class ScriptBoolValue : public ScriptValue
+    {
+    public:
+        ScriptBoolValue(double value) : m_value(value)
+        {
+            memLogger->debug("ScriptBoolValue()");
+        }
+
+        virtual ~ScriptBoolValue()
+        {
+            memLogger->debug("~ScriptBoolValue()");
+        }
+
+        int getIntValue(ScriptState &state, double percent, int defaultValue) override
+        {
+            return m_value ? 1 : 0;
+        }
+
+        double getFloatValue(ScriptState &state, double percent, double defaultValue) override
+        {
+            return m_value ? 1 : 0;
+        }
+
+        bool getBoolValue(ScriptState & state, double percent, bool defaultValue) override {
+            return m_value;
+        }
+
+        DRString toString() { return m_value ? "true":"false"; }
+
+    protected:
+        bool m_value;
+    };
+
 
     class ScriptStringValue : public ScriptValue
     {
@@ -548,7 +642,7 @@ namespace DevRelief
             memLogger->debug("~ScriptStringValue()");
         }
 
-        virtual int getIntValue(ScriptState &state, double percent, int defaultValue) override
+        int getIntValue(ScriptState &state, double percent, int defaultValue) override
         {
             const char *n = m_value.text();
             if (n != NULL)
@@ -558,7 +652,7 @@ namespace DevRelief
             return defaultValue;
         }
 
-        virtual double getFloatValue(ScriptState &state, double percent, double defaultValue) override
+        double getFloatValue(ScriptState &state, double percent, double defaultValue) override
         {
             const char *n = m_value.text();
             if (n != NULL)
@@ -568,7 +662,17 @@ namespace DevRelief
             return defaultValue;
         }
 
-        virtual DRString toString() { return m_value; }
+        bool getBoolValue(ScriptState &state, double percent, bool defaultValue) override
+        {
+            const char *n = m_value.text();
+            if (n != NULL)
+            {
+                return Util::equal(n,"true");
+            }
+            return defaultValue;
+        }
+
+        DRString toString() override { return m_value; }
 
     protected:
         DRString m_value;
@@ -624,6 +728,13 @@ namespace DevRelief
             double diff = end - start;
             double result = start + diff * percent / 100;
             return result;
+        }
+        virtual bool getBoolValue(ScriptState &state, double percent, bool defaultValue)
+        {
+            int start = m_start->getIntValue(state, percent, 0);
+            int end = m_end->getIntValue(state, percent, start);
+            // bool probably doesn't make sense for a range.  return true if there is a range rather than single value
+           return start != end;
         }
 
         virtual DRString toString()
@@ -1043,6 +1154,27 @@ namespace DevRelief
 
     void ScriptPosition::setPrevious(ScriptState &state, IHSLStrip *strip)
     {
+        ScriptLogger.test("setPrevious strip");
+        if (m_wrapValue) {
+            m_wrap = m_wrapValue->getBoolValue(state,0,true);
+        } else {
+            m_wrap = true;
+        }
+        if (m_reverseValue) {
+            m_reverse = m_reverseValue->getBoolValue(state,0,true);
+        } else {
+            m_reverse = false;
+        }
+        if (m_skipValue) {
+            m_skip = m_skipValue->getIntValue(state,0,1);
+        } else {
+            m_skip = 0;
+        }
+
+        m_base = strip;
+        if (m_type == POS_ABSOLUTE){
+            m_base = state.getBaseStrip();
+        }
         m_previous = strip;
         m_start = strip->getStart();
         if (m_startValue != NULL)
@@ -1053,13 +1185,27 @@ namespace DevRelief
         if (m_countValue != NULL)
         {
             m_count = m_countValue->getIntValue(state, 0, m_count);
+            m_end = m_start+m_count-1;
         }
         else if (m_endValue != NULL)
         {
-            int end = m_start + m_count;
-            end = m_endValue->getIntValue(state, 0, end);
-            m_count = end - m_start;
+            m_end = m_start + m_count-1;
+            m_end = m_endValue->getIntValue(state, 0, m_end);
+            m_count = abs(m_end - m_start)+1;
         };
+        if(m_reverse) {
+            int tmp = m_start;
+            m_start = m_end;
+            m_end = tmp;
+        }
+        if (m_unit == POS_PERCENT) {
+            double baseCount = m_base->getCount();
+            m_start = roundl(m_start*100.0/baseCount);
+            m_end = roundl(m_end*100.0/baseCount);
+            m_count = roundl(m_count*100.0/baseCount);
+        }
+        ScriptLogger.test("\tstart: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s.",m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"));
+
     }
 }
 #endif

@@ -37,6 +37,25 @@ namespace DevRelief
         }       
         )script";
 
+    const char *POSITION_SCRIPT = R"script(
+        {
+            "commands": [
+            {
+                "type": "position",
+                "unit": "pixel",
+                "start": 5,
+                "count": 10,
+                "wrap": true,
+                "reverse": true
+            },
+            {
+                "type": "rgb",
+                "red": 255
+            }
+            ]
+        }       
+        )script";
+
     class TestStrip : public IHSLStrip
     {
     public:
@@ -49,12 +68,27 @@ namespace DevRelief
         virtual void setSaturation(int index, int16_t hue, HSLOperation op = REPLACE) {}
         virtual void setLightness(int index, int16_t hue, HSLOperation op = REPLACE) {}
         virtual void setRGB(int index, const CRGB &rgb, HSLOperation op = REPLACE) {}
-        virtual size_t getCount() { return 10; };
+        virtual size_t getCount() { return 100; };
         virtual size_t getStart() { return 0; };
         virtual void clear() {}
         virtual void show() {}
-    private:
+    protected:
         Logger *m_logger;
+    };
+
+    class TestPositionStrip : public TestStrip {
+        public:
+            TestPositionStrip(Logger*logger,TestResult* result) : TestStrip(logger){
+                m_result = result;
+            }
+            virtual void setRGB(int index, const CRGB &rgb, HSLOperation op = REPLACE) {
+                m_logger->debug("TestPositionStrip got index %d",index);
+                m_result->assertBetween(index,5,14,"index in range 5-14");   
+            }
+
+        private:
+            TestResult* m_result;
+
     };
 
     class TestValuesCommand : public ScriptCommand
@@ -104,9 +138,11 @@ namespace DevRelief
                     { testJsonValue(r); });
             runTest("testSimpleJson", [&](TestResult &r)
                     { testParseSimple(r); });
+            runTest("testPosition", [&](TestResult &r)
+                    { testPosition(r); });                    
         }
 
-        JsonTestSuite(Logger *logger) : TestSuite("JSON Tests", logger)
+        JsonTestSuite(Logger *logger) : TestSuite("JSON Tests", logger,true)
         {
         }
 
@@ -114,6 +150,7 @@ namespace DevRelief
         void testJsonMemory(TestResult &result);
         void testJsonValue(TestResult &result);
         void testParseSimple(TestResult &result);
+        void testPosition(TestResult &result);
     };
 
     void JsonTestSuite::testJsonMemory(TestResult &result)
@@ -145,7 +182,7 @@ namespace DevRelief
         JsonParser parser;
         m_logger->info("\tParse JSON");
         SharedPtr<JsonRoot> root = parser.read(VALUES_SCRIPT);
-        m_logger->info("\tConverto to script");
+        m_logger->info("\tConvert to script");
         SharedPtr<Script> script = loader.jsonToScript(root.get());
         TestStrip strip(m_logger);
         ScriptState state;
@@ -166,6 +203,21 @@ namespace DevRelief
         SharedPtr<JsonRoot> root = parser.read(SIMPLE_SCRIPT);
         m_logger->info("\tConvert to script");
         SharedPtr<Script> script = loader.jsonToScript(root.get());
+        m_logger->info("\tdone");
+    }
+
+    void JsonTestSuite::testPosition(TestResult &result)
+    {
+        m_logger->info("Parse position JSON Script");
+        m_logger->debug(POSITION_SCRIPT);
+        ScriptDataLoader loader;
+        JsonParser parser;
+        SharedPtr<JsonRoot> root = parser.read(POSITION_SCRIPT);
+        SharedPtr<Script> script = loader.jsonToScript(root.get());
+        TestPositionStrip strip(m_logger,&result);
+        ScriptState state;
+        state.beginScript(script.get(),&strip);
+        script->step(state);
         m_logger->info("\tdone");
     }
 

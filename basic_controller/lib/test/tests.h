@@ -41,7 +41,6 @@ namespace DevRelief {
         }
 
         bool run() {
-            Logger::setTesting(true);
             m_logger = new Logger("Tests",TEST_LOGGER_LEVEL);
             m_logger->always("force logging to allocate static buffers in order to detect real memory leaks: %f %d %s %d",.123,4567,"abc",true);
             int startHeap = ESP.getFreeHeap();
