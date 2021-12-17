@@ -253,10 +253,38 @@ class ScriptDataLoader : public DataLoader {
             return animator;
         }
 
+        ValueAnimator* jsonToValueAnimator(JsonObject* json) {
+            m_logger->test("get ValueAnimator from %s",json->toJsonString().get());
+            JsonElement * jsonValue = json->getPropertyValue("animate");
+            JsonObject* animate = NULL;
+            if (jsonValue == NULL) {
+                // see if the animate properties are promoted ot parent
+                if (json->getProperty("duration") || json->getProperty("speed") || json->getProperty("unfold")) {
+                    animate = json;
+                }
+            } else {
+                animate = jsonValue->asObject();
+            }
+            m_logger->test("use animate object 0x%04X",animate);
+            ValueAnimator* animator = NULL;
+            if (animate) {
+                m_logger->debug("create ValueAnimator");
+                JsonObject* obj = animate;
+                animator = new ValueAnimator();
+                animator->setDuration(jsonToValue(obj,"duration"));
+                animator->setSpeed(jsonToValue(obj,"speed"));
+                animator->setRepeat(jsonToValue(obj,"repeat"));
+                animator->setRepeatDelay(jsonToValue(obj,"delay"));
+                animator->setUnfold(jsonToValue(obj,"unfold"));
+            }
+            m_logger->test("return value animator 0x%04X",animator);
+            return animator;
+        }
+
         ScriptValue* jsonToValue(JsonObject* json, const char * name) {
             JsonElement * jsonValue = json->getPropertyValue(name);
             if (jsonValue == NULL) {
-                //m_logger->debug("No value found for %s",name);
+                m_logger->debug("No value found for %s",name);
                 return NULL;
             }
             return jsonToValue(jsonValue);
@@ -280,9 +308,15 @@ class ScriptDataLoader : public DataLoader {
                     start = jsonToValue(valueObject,"value");
                 }
                 ScriptValue * end = jsonToValue(valueObject,"end");
-                scriptValue = new ScriptRangeValue(start,end);
+                auto rangeValue = new ScriptRangeValue(start,end);
+                rangeValue->setAnimator(jsonToValueAnimator(valueObject));
+                scriptValue = rangeValue;
             } else if (jsonValue->isBool()) {
+                m_logger->debug("creating ScriptBoolValue()");
                 scriptValue = new ScriptBoolValue(jsonValue->getBool());
+                m_logger->debug("\tdone ScriptBoolValue()");
+                m_logger->debug("\ttoString()");
+                m_logger->debug("%s",scriptValue->toString().get());
             } else if (jsonValue->isNumber()) {
                 scriptValue = new ScriptNumberValue(jsonValue->getFloat());
             }

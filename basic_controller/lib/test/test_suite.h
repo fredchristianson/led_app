@@ -68,19 +68,43 @@ namespace DevRelief {
                 return result;
             }
 
-            bool assertEqual(void* a,void * b,const char * msg=UNKNOWN_TEST) {
+            bool assertEqual(void * a,void * b,const char * msg=UNKNOWN_TEST) {
                 bool result = (a == b);
                 addResult(result,msg);
                 m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertEqual %s [ %s]:  %d == %d",(result ? SUCCEEDED : FAILED), msg,a,b);
                 return result;
             }
 
-            bool assertNotEqual(void* a,void* b,const char * msg=UNKNOWN_TEST) {
+
+            bool assertNotEqual(int a,int b,const char * msg=UNKNOWN_TEST) {
                 bool result = (a != b);
+                addResult(result,msg);
+                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertNotEqual %s [ %s]:  %d == %d",(result ? SUCCEEDED : FAILED), msg,a,b);
+                return result;
+            }
+
+
+            bool assertNotEqual(const char* a,const char* b,const char * msg=UNKNOWN_TEST) {
+                bool result = true;
+                if (a == b) {
+                    result = false;
+                } else if ((a == NULL && b != NULL) ||(b == NULL && a != NULL)){
+                    result = false;
+                } else {
+                    result = strcmp(a,b) != 0;
+                }
                 addResult(result,msg);
                 m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertNotEqual %s [ %s]:  %d != %d",(result ? SUCCEEDED : FAILED), msg,a,b);
                 return result;
             }
+
+            bool assertNotEqual(void* a,void * b,const char * msg=UNKNOWN_TEST) {
+                bool result = (a != b);
+                addResult(result,msg);
+                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertMptEqual %s [ %s]:  %d == %d",(result ? SUCCEEDED : FAILED), msg,a,b);
+                return result;
+            }
+
 
             bool assertNull(void*a,const char * msg=UNKNOWN_TEST) {
                 bool result = (a == NULL);

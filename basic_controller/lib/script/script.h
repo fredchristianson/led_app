@@ -302,6 +302,7 @@ namespace DevRelief
                 m_durationValue=0;
                 m_repeatValue=0;
                 m_repeatDelayValue=0;
+                m_unfoldValue = NULL;
             }
 
             virtual ~ValueAnimator() {
@@ -309,6 +310,7 @@ namespace DevRelief
                 delete m_durationValue;
                 delete m_repeatValue;
                 delete m_repeatDelayValue;
+                delete m_unfoldValue;
             };
 
             void setSpeed(IScriptValue* speed) { delete m_speedValue ; m_speedValue = speed;}
@@ -317,8 +319,8 @@ namespace DevRelief
             void setRepeatDelay(IScriptValue* repeatDelay) { delete m_repeatDelayValue ; m_repeatDelayValue = repeatDelay;}
             
 
-            double getValue(ScriptState& state, double low, double high) {
-                m_logger->test("ValueAnimator::getValue %d %d",low,high);
+            double getTimeValue(ScriptState& state, double low, double high) {
+                m_logger->test("ValueAnimator::getTimeValue %f %f",low,high);
                 double stepsPerSecond = 0;
                 if (low == high) {
                     m_logger->test("\tvalues equal");
@@ -342,19 +344,53 @@ namespace DevRelief
                     return low;
                 }
                 int time = state.scriptTimeMsecs();
-                int timePosition = time % durationMsecs;
-                m_logger->test("\ttime=%d. timeposition=%d",time,timePosition);
+                double timePosition = time % durationMsecs;
+                m_logger->test("\ttime=%d. timeposition=%f",time,timePosition);
 
-                Animator animator(0,durationMsecs);
+                bool unfold = false;
+                if (m_unfoldValue){
+                    unfold = m_unfoldValue->getBoolValue(state,0,false);
+                }
+                Animator animator(0,durationMsecs, unfold);
                 double value = animator.getValueAt(low,high,timePosition);
                 m_logger->test("\tvalue %f",value);
                 return value;
+            }
+
+            double getPositionValue(ScriptState&state,double low, double high,double percent) {
+                m_logger->test("getPositionValue %f %f %f",low,high,percent);
+                Animator animate(low,high,isUnfolded(state));
+                double val = animate.getValueAtPercent(low,high,percent);
+                m_logger->test("\tvalue %f",val);
+                return val;
+            }
+
+            void setUnfold(IScriptValue* unfold) {
+                delete m_unfoldValue;
+                m_unfoldValue = unfold;
+            }
+
+            bool isUnfolded(ScriptState& state) {
+                return m_unfoldValue && m_unfoldValue->getBoolValue(state,0,false);
+            }
+
+            bool hasSpeedOrDuration(ScriptState&state) {
+                return (m_speedValue && m_speedValue->getIntValue(state,0,0)>0)||
+                        (m_durationValue && m_durationValue->getIntValue(state,0,0)>0);
+            }
+
+            bool canAnimateOverTime(ScriptState&state) { 
+                m_logger->test("canAnimateOverTime");
+                bool speedOrDuration = hasSpeedOrDuration(state);
+                m_logger->test("\t%s",speedOrDuration?"yes":"no");
+                return speedOrDuration;
             }
         protected:
             IScriptValue* m_speedValue; 
             IScriptValue* m_durationValue;  // ignored if m_seed is set
             IScriptValue*    m_repeatValue;
             IScriptValue*    m_repeatDelayValue;
+            IScriptValue* m_unfoldValue;
             Logger* m_logger;
     };
 
@@ -455,7 +491,7 @@ namespace DevRelief
                 //ScriptLogger.periodic(ERROR_LEVEL,1000,NULL,"Script position missing a previous strip");
                 return;
             }
-            m_logger->debug("\ttranslated RGB index %d===>%d",orig,index);
+            m_logger->never("\ttranslated RGB index %d===>%d",orig,index);
             m_previous->setRGB((index), rgb, op);
         }
         size_t getCount() { return m_count; }
@@ -505,7 +541,9 @@ namespace DevRelief
         void clear() { m_previous->clear();}
         void show() { m_previous->show();}
         void setAnimator(PositionAnimator* animator) {
+            m_logger->debug("delete old animator 0x%04x",m_animation);
             delete m_animation;
+            m_logger->debug("set new animator");
             m_animation = animator;
             m_logger->debug("PositionAnimator 0x%04X",animator);
         }
@@ -692,13 +730,15 @@ namespace DevRelief
     class ScriptBoolValue : public ScriptValue
     {
     public:
-        ScriptBoolValue(double value) : m_value(value)
+        ScriptBoolValue(bool value) : m_value(value)
         {
             memLogger->debug("ScriptBoolValue()");
+            m_logger->debug("ScriptBoolValue()");
         }
 
         virtual ~ScriptBoolValue()
         {
+            m_logger->debug("~ScriptBoolValue()");
             memLogger->debug("~ScriptBoolValue()");
         }
 
@@ -716,7 +756,14 @@ namespace DevRelief
             return m_value;
         }
 
-        DRString toString() { return m_value ? "true":"false"; }
+        DRString toString() override { 
+            m_logger->debug("ScriptBoolValue.toString()");
+            const char * val =  m_value ? "true":"false"; 
+            m_logger->debug("\tval=%s",val);
+            DRString drv(val);
+            m_logger->debug("\tcreated DRString");
+            return drv;
+        }
 
     protected:
         bool m_value;
@@ -780,6 +827,7 @@ namespace DevRelief
             memLogger->debug("ScriptRangeValue()");
             m_start = start;
             m_end = end;
+            m_animate = NULL;
         }
 
         virtual ~ScriptRangeValue()
@@ -787,24 +835,13 @@ namespace DevRelief
             memLogger->debug("~ScriptRangeValue() start");
             delete m_start;
             delete m_end;
+            delete m_animate;
             memLogger->debug("~ScriptRangeValue() end");
         }
 
         virtual int getIntValue(ScriptState &state, double percent, int defaultValue)
         {
-            if (m_start == NULL)
-            {
-                return m_end ? m_end->getIntValue(state, 100, defaultValue) : defaultValue;
-            }
-            else if (m_end == NULL)
-            {
-                return m_start ? m_start->getIntValue(state, 0, defaultValue) : defaultValue;
-            }
-            int start = m_start->getIntValue(state, percent, 0);
-            int end = m_end->getIntValue(state, percent, 100);
-            int diff = end - start;
-            int result = start + diff * percent;
-            return result;
+            return (int)getFloatValue(state,percent,(double)defaultValue);
         }
 
         virtual double getFloatValue(ScriptState &state, double percent, double defaultValue)
@@ -817,11 +854,23 @@ namespace DevRelief
             {
                 return m_start ? m_start->getIntValue(state, 0, defaultValue) : defaultValue;
             }
-            double start = m_start->getFloatValue(state, percent, 0);
-            double end = m_end->getFloatValue(state, percent, 100);
-            double diff = end - start;
-            double result = start + diff * percent / 100;
-            return result;
+            double start = m_start->getIntValue(state, percent, 0);
+            double end = m_end->getIntValue(state, percent, 1);
+            m_logger->test("check canAnimateOverTime");
+            if (m_animate == NULL) {
+                int diff = end - start;
+                int result = start + diff * percent;
+                return result;
+            } else {
+                if (m_animate->canAnimateOverTime(state)){
+                    m_logger->test("animator has speed (animate over time");
+                    return m_animate->getTimeValue(state,start,end);
+                } else {
+                    m_logger->test("\tuse position 0x%04X",m_animate);
+                    return m_animate->getPositionValue(state,start,end,percent);
+
+                }
+            }
         }
         virtual bool getBoolValue(ScriptState &state, double percent, bool defaultValue)
         {
@@ -838,9 +887,13 @@ namespace DevRelief
                 .append(m_end ? m_end->toString() : "NULL");
         }
 
+        void setAnimator(ValueAnimator* animator) {
+            m_animate = animator;
+        }
     protected:
         ScriptValue *m_start;
         ScriptValue *m_end;
+        ValueAnimator* m_animate;
     };
 
     class ScriptPatternElement
@@ -971,8 +1024,12 @@ namespace DevRelief
 
         void add(const char *name, ScriptValue *value)
         {
-            m_logger->debug("Add ScriptValueCommand value %s=%s", name, value->toString().get());
+            m_logger->debug("Add ScriptValueCommand value %s 0x%04x", name,value);
+            // DRString val = value->toString();
+            // m_logger->debug("got toString()");
+            // m_logger->debug("%s ",val.get());
             m_values.add(new NameValue(name, value));
+            m_logger->debug("added NameValue");
         }
 
         virtual bool hasValue(const char *name)
@@ -1290,7 +1347,7 @@ namespace DevRelief
         }
         m_animationOffset = 0;
         if (m_animation && m_count>0) {
-            m_animationOffset = m_animation->getValue(state, 0,m_count-1);
+            m_animationOffset = m_animation->getTimeValue(state, 0,m_count-1);
             ScriptLogger.test("animation offset: %d",m_animationOffset);
         }
         ScriptLogger.test("\tstart: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s.",m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"));

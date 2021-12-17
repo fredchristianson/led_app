@@ -32,6 +32,9 @@ namespace DevRelief
                 "type": "values",
                 "x": "101"
                 "y": "var(yy)",
+                "timeAnimate": { "start": 10, "end": 200, "speed": 500},
+                "posAnimate": { "start": 10, "end": 200},
+                "posUnfold": { "start": 10, "end": 200, "unfold":true},
             }
             ]
         }       
@@ -108,6 +111,19 @@ namespace DevRelief
             m_result->assertEqual(state.getIntValue("x",0,0),101,"get x from closest values");
             m_result->assertEqual(state.getIntValue("y",0,0),200,"get y from inner var(yy)");
             m_result->assertEqual(state.getIntValue("z",0,0),300,"get z from 2nd values");
+            int timeValue = state.getIntValue("timeAnimate",0,0);
+            m_result->assertNotEqual(timeValue,0,"timeAnimate should not be 0");
+            int posStartValue = state.getIntValue("posAnimate",0,0);
+            m_result->assertEqual(posStartValue,10,"posStartValue should  be 10");
+            int posEndValue = state.getIntValue("posAnimate",1,0);
+            m_result->assertEqual(posEndValue,200,"posEndValue should  be 200");
+            int unfoldStartValue = state.getIntValue("posAnimate",0,0);
+            m_result->assertEqual(unfoldStartValue,10,"unfoldStartValue should  be 10");
+            int unfoldEndValue = state.getIntValue("posAnimate",1,0);
+            m_result->assertEqual(unfoldStartValue,10,"unfoldEndValue should  be 10");
+            int unfoldMidValue = state.getIntValue("posAnimate",0.5,0);
+            m_result->assertEqual(unfoldMidValue,105,"unfoldMidValue should  be 105");
+
         }
 
 
@@ -144,7 +160,7 @@ namespace DevRelief
                     { testPosition(r); });                    
         }
 
-        JsonTestSuite(Logger *logger) : TestSuite("JSON Tests", logger,true)
+        JsonTestSuite(Logger *logger) : TestSuite("JSON Tests", logger,false)
         {
         }
 

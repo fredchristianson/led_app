@@ -368,7 +368,6 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
             
             if (lightness<0 || lightness>100) { return;}
             m_lightness[index] = clamp(0,100,performOperation(op,m_lightness[index],lightness));
-            m_logger->periodic(0, 1000, NULL, "slightness %d",lightness);
         }
 
         void clear() {
