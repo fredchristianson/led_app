@@ -17,7 +17,7 @@ namespace DevRelief {
                 m_end = start;
                 m_start = end;
             }
-            m_logger->test("create Animator on base %f-%f",start,end);
+            m_logger->debug("create Animator on base %f-%f. %s",start,end,unfold?"unfold" : "");
         }
 
         double getValuePercent(double pos) {
@@ -35,7 +35,7 @@ namespace DevRelief {
                     pct = 1 - 2*(pct-0.5);
                 }
             }
-            m_logger->test("\tgot Animator pct %f=%f (base %f-%f)",pos,pct,m_start,m_end);
+            m_logger->debug("\tgot Animator pct %f=%f (base %f-%f)",pos,pct,m_start,m_end);
             return pct;
         }
 
@@ -48,7 +48,7 @@ namespace DevRelief {
             double pct = percent;
             double range = high-low;
             double value = low + pct*range;
-            m_logger->test("getValueAtPercent %f=%f+%f*%f",value,low,pct,range);
+            m_logger->debug("\tgetValueAtPercent %f=%f+%f*%f",value,low,pct,range);
             return value;
         }
         private:

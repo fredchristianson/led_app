@@ -353,15 +353,15 @@ namespace DevRelief
                 }
                 Animator animator(0,durationMsecs, unfold);
                 double value = animator.getValueAt(low,high,timePosition);
-                m_logger->test("\tvalue %f",value);
+                m_logger->debug("\ttime animator value %f",value);
                 return value;
             }
 
             double getPositionValue(ScriptState&state,double low, double high,double percent) {
-                m_logger->test("getPositionValue %f %f %f",low,high,percent);
+                m_logger->debug("getPositionValue %f %f %f",low,high,percent);
                 Animator animate(low,high,isUnfolded(state));
                 double val = animate.getValueAtPercent(low,high,percent);
-                m_logger->test("\tvalue %f",val);
+                m_logger->debug("\tposition animator value %f",val);
                 return val;
             }
 
@@ -1184,13 +1184,13 @@ namespace DevRelief
             for (int i = 0; i < count; i++)
             {
                 double pct = animate.getValuePercent(i);
-                m_logger->never("RGB Led 0x%04, 0x%04, 0x%04",m_red,m_green,m_blue);
+                m_logger->debug("RGB Led 0x%04, 0x%04, 0x%04",m_red,m_green,m_blue);
                 int r = m_red ? m_red->getIntValue(state, pct,0) : 0;
-                m_logger->never("\tred=%d",r);
+                m_logger->debug("\tred=%d",r);
                 int g = m_green? m_green->getIntValue(state, pct,0) : 0;
-                m_logger->never("\tgreen=%d",g);
+                m_logger->debug("\tgreen=%d",g);
                 int b =  m_blue ? m_blue->getIntValue(state, pct,0) : 0;
-                m_logger->never("\tblue=%d",b);
+                m_logger->debug("\tblue=%d",b);
                 CRGB crgb(r,g,b);
                 strip->setRGB(i, crgb, REPLACE);
             }
