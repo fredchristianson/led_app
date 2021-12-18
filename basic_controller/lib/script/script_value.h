@@ -18,6 +18,8 @@ namespace DevRelief
             virtual ~ScriptValue() {}
 
             void destroy() override { delete this;}
+
+            bool isRecursing() override { return false;}
         protected:
             Logger* m_logger;
     };
@@ -336,6 +338,7 @@ namespace DevRelief
             m_logger = &ScriptLogger;
             m_logger->debug("Created ScriptVariableValue %s.", value);
             m_hasDefaultValue = false;
+            m_recurse = false;
         }
 
         virtual ~ScriptVariableValue()
@@ -351,41 +354,49 @@ namespace DevRelief
         void destroy() override { delete this;}
         virtual int getIntValue(IScriptCommand*cmd,  int defaultValue) override
         {
+            m_recurse = true;
             IScriptValue * val = cmd->getValue(m_name);
             int dv = m_hasDefaultValue ? m_defaultValue : defaultValue;
             if (val != NULL) {
-                return val->getIntValue(cmd,dv);
+                dv = val->getIntValue(cmd,dv);
             }
+            m_recurse = false;
             return dv;
         }
 
         virtual double getFloatValue(IScriptCommand*cmd,  double defaultValue) override
         {
+            m_recurse = true;
             IScriptValue * val = cmd->getValue(m_name);
             int dv = m_hasDefaultValue ? m_defaultValue : defaultValue;
             if (val != NULL) {
-                return val->getFloatValue(cmd,dv);
+                dv = val->getFloatValue(cmd,dv);
             }
+            m_recurse = false;
             return dv;
         }
 
         virtual bool getBoolValue(IScriptCommand*cmd,  bool defaultValue) override
         {
+            m_recurse = true;
             IScriptValue * val = cmd->getValue(m_name);
             bool dv = m_hasDefaultValue ? (m_defaultValue != 0) : defaultValue;
             if (val != NULL) {
-                return val->getBoolValue(cmd,dv);
+                dv = val->getBoolValue(cmd,dv);
             }
+            m_recurse = false;
             return dv;
         }
 
         virtual DRString toString() { return DRString("Variable: ").append(m_name); }
 
+        bool isRecursing() { return m_recurse;}
     protected:
         DRString m_name;
         bool m_hasDefaultValue;
         double m_defaultValue;
         Logger *m_logger;
+        bool m_recurse;
     };
 
     class ScriptValueList : public IScriptValueProvider {

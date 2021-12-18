@@ -168,6 +168,12 @@ class ScriptDataLoader : public DataLoader {
                                 cmd->setScriptPosition(pos);
                             }
                         }
+                        JsonObject*valJson = obj->getChild("values");
+                        
+                        if (valJson != NULL) {
+                            m_logger->debug("\tgot values json");
+                            jsonGetValues(valJson,cmd);
+                        }
                         m_logger->debug("\tadd child to script");
                         script->add(cmd);
                         m_logger->debug("\tadded");
@@ -222,7 +228,12 @@ class ScriptDataLoader : public DataLoader {
 
         ScriptValueCommand* jsonToValueCommand(JsonObject* json) {
             ScriptValueCommand* cmd = new ScriptValueCommand();
-            m_logger->debug("created ScriptValueCommand");
+            jsonGetValues(json,cmd);
+            return cmd;
+        }
+
+        void jsonGetValues(JsonObject*json, ScriptCommandBase*cmd) {
+            m_logger->debug("read values");
             json->eachProperty([&](const char* name, JsonElement*value){
                 if (!Util::equal("type",name)) {
                     IScriptValue * scriptValue = jsonToValue(value);
@@ -234,8 +245,8 @@ class ScriptDataLoader : public DataLoader {
                     }
                 }
             });
-            m_logger->debug("\tcreated ScriptValueCommand");
-            return cmd;
+            m_logger->debug("\tdone");
+
         }
        /* */
         RGBCommand* jsonToRGBCommand(JsonObject* json) {

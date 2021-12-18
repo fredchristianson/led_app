@@ -48,8 +48,10 @@ namespace DevRelief
         virtual double getFloatValue(IScriptCommand* cmd,  double defaultValue) = 0; // percent in [0,100]
         virtual bool getBoolValue(IScriptCommand* cmd,  bool defaultValue) = 0; // percent in [0,100]
 
+        virtual bool isRecursing() = 0; // mainly for variable values
         // for debugging
         virtual DRString toString() = 0;
+
     };
 
     class IScriptValueProvider

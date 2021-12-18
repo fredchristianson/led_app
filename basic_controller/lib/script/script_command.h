@@ -120,10 +120,15 @@ namespace DevRelief
 
         IScriptValue *getValue(const char *name) override
         {
+            m_logger->never("getvalue %s",name);
+
             IScriptValue* val =  m_values == NULL ? NULL : m_values->getValue(name);
-            if (val == NULL && m_previousCommand != NULL) {
+            m_logger->never("\tnot found");
+            if ((val == NULL||val->isRecursing()) && m_previousCommand != NULL) {
+                m_logger->never("\tcheck previous");
                 return m_previousCommand->getValue(name);
             }
+            return val;
         }
 
         int getIntValue(const char * name,int defaultValue) {
