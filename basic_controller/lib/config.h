@@ -1,6 +1,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <Adafruit_NeoPixel.h>
 
 #include "./parse_gen.h";
 #include "./logger.h";
@@ -18,6 +19,8 @@ namespace DevRelief {
             number=n;
             ledCount=c;
             reverse=r;
+            pixelType = NEO_GRB;
+            maxBrightness=50;
         }
 
         ~LedPin() {
@@ -27,6 +30,8 @@ namespace DevRelief {
         int number;
         int ledCount;
         bool reverse;
+        uint16_t pixelType;
+        uint8_t maxBrightness;
     };
 
 
@@ -62,14 +67,16 @@ namespace DevRelief {
             }
 
 
-            void addPin(int number,int ledCount,bool reverse=false) {
+            LedPin* addPin(int number,int ledCount,bool reverse=false) {
                 m_logger->debug("addPin %d %d %d",number,ledCount,reverse);
-                pins.add(new LedPin(number,ledCount,reverse));
+                LedPin* pin = new LedPin(number,ledCount,reverse);
+                pins.add(pin);
+                return pin;
             }
             const LedPin* getPin(size_t idx) const { return pins[idx];}
             size_t getPinCount() const { return pins.size();}
             const PtrList<LedPin*>& getPins() { 
-                m_logger->always("return pins");
+                m_logger->debug("return pins");
                 return pins;
             }
 

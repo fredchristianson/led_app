@@ -193,13 +193,15 @@ class ConfigDataLoader : public DataLoader {
             JsonArray* pins = root->createArray();
             json->set("pins",pins);
             m_logger->debug("filling pins from config");
-            config.getPins().each( [logger=m_logger,pins](LedPin* pin) {
+            config.getPins().each( [this,logger=m_logger,pins](LedPin* pin) {
                 logger->debug("\thandle pin 0x%04X",pin); 
                 logger->debug("\tnumber %d",pin->number); 
                 JsonObject* pinElement = pins->createObjectElement();
                 pinElement->set("number",pin->number);
                 pinElement->set("ledCount",pin->ledCount);
                 pinElement->set("reverse",pin->reverse);
+                pinElement->set("maxBrightness",pin->maxBrightness);
+                pinElement->set("pixelType",getPixelType(pin->pixelType));
                 pins->addItem(pinElement);
             });
             m_logger->debug("pins done");
@@ -214,6 +216,27 @@ class ConfigDataLoader : public DataLoader {
             m_logger->debug("scripts done");
 
             return root;
+        }
+
+        neoPixelType getPixelType(const char * name) {
+            if (strcmp(name,"NEO_RGB") == 0) {return NEO_RGB;}
+            if (strcmp(name,"NEO_RBG") == 0) {return NEO_RBG;}
+            if (strcmp(name,"NEO_GRB") == 0) {return NEO_GRB;}
+            if (strcmp(name,"NEO_GBR") == 0) {return NEO_GBR;}
+            if (strcmp(name,"NEO_BRG") == 0) {return NEO_BRG;}
+            if (strcmp(name,"NEO_BGR") == 0) {return NEO_BGR;}
+
+            return NEO_GRB;
+        }
+
+        const char *getPixelType(neoPixelType type) {
+            if (type==NEO_RGB) { return "NEO_RGB";}
+            if (type==NEO_RBG) { return "NEO_RBG";}
+            if (type==NEO_GRB) { return "NEO_GRB";}
+            if (type==NEO_GBR) { return "NEO_GBR";}
+            if (type==NEO_BRG) { return "NEO_BRG";}
+            if (type==NEO_BGR) { return "NEO_BGR";}
+            return "NEO_GRB";
         }
 
         bool loadConfig(Config& config, const char * path = "/config.json"){
@@ -276,7 +299,15 @@ class ConfigDataLoader : public DataLoader {
                     m_logger->debug("\tpin: %s",pin->toJsonString().get());
                     if (pin){
                         m_logger->debug("add pin %d",pin->get("number",-1));
-                        config.addPin(pin->get("number",-1),pin->get("ledCount",0),pin->get("reverse",false)); 
+                        LedPin* configPin = config.addPin(pin->get("number",-1),pin->get("ledCount",0),pin->get("reverse",false)); 
+                        JsonProperty*maxBrightness = pin->getProperty("maxBrightness");
+                        if (maxBrightness&& maxBrightness->getValue()){
+                            configPin->maxBrightness = maxBrightness->getValue()->getInt();
+                        }
+                        JsonProperty*pixelType = pin->getProperty("pixelType");
+                        if (pixelType&& pixelType->getValue()){
+                            configPin->pixelType = getPixelType(pixelType->getValue()->getString());
+                        }
                     } else {
                         m_logger->error("pin is not an Object");
                     }
@@ -286,7 +317,7 @@ class ConfigDataLoader : public DataLoader {
             }
 
             /* scripts are loaded from the filesystem, not stored*/
-            m_logger->always("\tdone reading JSON");
+            m_logger->debug("\tdone reading JSON");
             return true;
         }
 

@@ -57,8 +57,8 @@ HSLOperation TextToHSLOP(const char * text) {
 class IHSLStrip {
     public:
         virtual void setHue(int index, int16_t hue, HSLOperation op=REPLACE)=0;
-        virtual void setSaturation(int index, int16_t hue, HSLOperation op=REPLACE)=0;
-        virtual void setLightness(int index, int16_t hue, HSLOperation op=REPLACE)=0;
+        virtual void setSaturation(int index, int16_t saturation, HSLOperation op=REPLACE)=0;
+        virtual void setLightness(int index, int16_t lightness, HSLOperation op=REPLACE)=0;
         virtual void setRGB(int index, const CRGB& rgb, HSLOperation op=REPLACE)=0;
         virtual size_t getCount()=0;
         virtual size_t getStart()=0;
@@ -95,10 +95,11 @@ class DRLedStrip {
 
 class AdafruitLedStrip : public DRLedStrip {
     public: 
-        AdafruitLedStrip(int pin, uint16_t ledCount){
+        AdafruitLedStrip(int pin, uint16_t ledCount, neoPixelType pixelType=NEO_GRB){
             m_logger = new Logger("AdafruitLED",ADAFRUIT_LED_LOGGER_LEVEL);
             m_logger->debug("create AdafruitLedStrip %d %d",pin,ledCount);
-            m_controller = new Adafruit_NeoPixel(ledCount,pin,NEO_GRB+NEO_KHZ800);
+            
+            m_controller = new Adafruit_NeoPixel(ledCount,pin,pixelType+NEO_KHZ800);
             m_controller->setBrightness(40);
             m_controller->begin();
         }
@@ -134,15 +135,25 @@ class AdafruitLedStrip : public DRLedStrip {
             //m_controller->setPixelColor(10,m_controller->Color(200,100,50));
             m_controller->show();
         }
-    private:
+    protected:
         Adafruit_NeoPixel * m_controller;
 };
 
 class PhyisicalLedStrip : public AdafruitLedStrip {
     public:
-        PhyisicalLedStrip(int pin, uint16_t ledCount): AdafruitLedStrip(pin,ledCount) {
-
+        PhyisicalLedStrip(int pin, uint16_t ledCount, neoPixelType pixelType,uint8_t maxBrightness): AdafruitLedStrip(pin,ledCount,pixelType) {
+            m_maxBrightness = maxBrightness;
         }
+
+        virtual void setBrightness(uint16_t brightness) {
+            if (brightness > m_maxBrightness) {
+                brightness = m_maxBrightness;
+            }
+            m_controller->setBrightness(brightness);
+        }
+
+    private:
+        uint8_t m_maxBrightness;
 };
 
 class CompoundLedStrip : public DRLedStrip {
