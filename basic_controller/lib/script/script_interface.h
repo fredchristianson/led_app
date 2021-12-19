@@ -77,13 +77,15 @@ namespace DevRelief
         virtual void destroy() =0; // cannot delete pure virtual interfaces. they must all implement destroy    
     };
 
-    class IScriptCommand : public IHSLStrip
+    class IScriptCommand 
     {
         public:
             virtual void destroy() =0; // cannot delete pure virtual interfaces. they must all implement destroy            
             virtual ScriptStatus execute(ScriptState*state, IScriptCommand* previous)=0;
             virtual IScriptValue* getValue(const char* name)=0;
             virtual const char * getType()=0;
+            virtual IHSLStrip* getStrip()=0;
+            virtual ScriptState* getState()=0;
     };
 
     class IValueAnimator
@@ -103,6 +105,10 @@ namespace DevRelief
             virtual void destroy()=0;
             virtual void begin(IHSLStrip * ledStrip)=0;
             virtual void step()=0;
+    };
+
+    class IStripModifier : public IHSLStrip {
+        virtual void destroy()=0;
     };
 }
 #endif

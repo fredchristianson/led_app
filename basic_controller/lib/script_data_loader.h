@@ -216,14 +216,24 @@ class ScriptDataLoader : public DataLoader {
             pos->setCountValue(jsonToValue(json,"count"));
             pos->setEndValue(jsonToValue(json,"end"));
             pos->setSkipValue(jsonToValue(json,"skip"));
-            const char * type = json->get("unit","percent");
-            if (Util::equal(type,"pixel")){
+            const char * unit = json->get("unit","percent");
+            if (Util::equal(unit,"pixel")){
                 pos->setUnit(POS_PIXEL);
             }
+            const char * type = json->get("type","relative");
+            pos->setPositionType(positionTypeToInt(type));
             pos->setWrap(jsonToValue(json,"wrap"));
             pos->setReverse(jsonToValue(json,"reverse"));
-           // pos->setAnimator(jsonToPositionAnimator(json,"animate"));
+            pos->setOffset(jsonToValue(json,"offset"));
             return pos;
+        }
+
+        PositionType positionTypeToInt(const char * type){
+            PositionType pt = POS_RELATIVE;
+            if (Util::equal(type,"absolute")){
+                pt = POS_ABSOLUTE;
+            }
+            return pt;
         }
 
         ScriptValueCommand* jsonToValueCommand(JsonObject* json) {
@@ -295,7 +305,7 @@ class ScriptDataLoader : public DataLoader {
             m_logger->test("return value animator 0x%04X",animator);
             return animator;
         }
- /**/       
+ /*       
         PositionAnimator* jsonToPositionAnimator(JsonObject* json, const char * name) {
             m_logger->test("get PositionAnimator from %s",json->toJsonString().get());
             JsonElement * jsonValue = json->getPropertyValue(name);
@@ -313,7 +323,7 @@ class ScriptDataLoader : public DataLoader {
             m_logger->test("return animator 0x%04X",animator);
             return animator;
         }
-        
+ */       
         IScriptValue* jsonToValue(JsonObject* json, const char * name) {
             JsonElement * jsonValue = json->getPropertyValue(name);
             if (jsonValue == NULL) {

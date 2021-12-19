@@ -53,6 +53,7 @@ HSLOperation TextToHSLOP(const char * text) {
     return REPLACE;
 }
 
+class CompoundLedStrip;
 
 class IHSLStrip {
     public:
@@ -64,6 +65,7 @@ class IHSLStrip {
         virtual size_t getStart()=0;
         virtual void clear()=0;
         virtual void show()=0;
+        virtual IHSLStrip* getFirstHSLStrip()=0;  // for series of strips that all can adjust HSL and/or position
 };
 
 class DRLedStrip {
@@ -88,6 +90,9 @@ class DRLedStrip {
         }
 
         long validCheck;
+        // use getCompoundLedStrip to find a base virtual strip made of multiple other strips
+        virtual CompoundLedStrip* getCompoundLedStrip()=0; 
+
 
     protected:
         Logger* m_logger;
@@ -135,6 +140,8 @@ class AdafruitLedStrip : public DRLedStrip {
             //m_controller->setPixelColor(10,m_controller->Color(200,100,50));
             m_controller->show();
         }
+
+        virtual CompoundLedStrip* getCompoundLedStrip() { return NULL;}
     protected:
         Adafruit_NeoPixel * m_controller;
 };
@@ -251,6 +258,8 @@ class CompoundLedStrip : public DRLedStrip {
             }
         }
 
+        virtual CompoundLedStrip* getCompoundLedStrip() { return this;}
+
     private:
         DRLedStrip* strips[4]; // max of 4 strips;
         size_t      count;
@@ -280,6 +289,7 @@ class AlteredStrip : public DRLedStrip {
 
         virtual size_t getCount() { return translateCount(m_base->getCount());}
         virtual void show() {m_base->show();}
+        virtual CompoundLedStrip* getCompoundLedStrip() { return m_base ? m_base->getCompoundLedStrip() : NULL;}
 
     protected:
         virtual uint16_t translateIndex(uint16_t index) { return index;}
@@ -423,6 +433,8 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
         }
 
         size_t getCount() { return AlteredStrip::getCount();}
+        virtual IHSLStrip* getFirstHSLStrip() { return this;}
+        virtual CompoundLedStrip* getCompoundLedStrip() { return m_base?m_base->getCompoundLedStrip() : NULL;}
 
     protected:
         void reallocHSLData(int count) {

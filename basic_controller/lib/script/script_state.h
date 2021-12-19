@@ -1,4 +1,4 @@
-#ifndef DRSCRIPT__STATE_H
+#ifndef DRSCRIPT_STATE_H
 #define DRSCRIPT_STATE_H
 
 #include "../parse_gen.h";
@@ -9,7 +9,6 @@
 #include "../list.h";
 #include "../led_strip.h";
 #include "./script_interface.h";
-#include "./script_value.h";
 
 namespace DevRelief
 {

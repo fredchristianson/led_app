@@ -33,11 +33,23 @@ namespace DevRelief
 
         void destroy() override { delete this; }
 
+        IHSLStrip* getStrip() override {
+            if (m_position) {
+                return m_position;
+            } else if (m_previousCommand) {
+                return m_previousCommand->getStrip();
+            }
+            return NULL;
+        }
 
         ScriptStatus execute(ScriptState *state, IScriptCommand *previous) override
         {
             m_logger->never("execute command %s state=0x%04X  previous=0x%04X",getType(),state,previous);
+            m_state = state;
             m_previousCommand = previous;
+            if (m_position) {
+                m_position->updateValues(this,previous->getStrip());
+            }
             ScriptStatus status = doCommand(state);
             return status;
         }
@@ -55,62 +67,7 @@ namespace DevRelief
         }
 
 
-        /* IHSLStrip interface - pass to previous command */
-        void setHue(int index, int16_t hue, HSLOperation op = REPLACE)
-        {
-            if (m_previousCommand)
-            {
-                m_previousCommand->setHue(modifyPosition(index), modifyHue(hue), modifyOperation(op));
-            }
-        };
-        void setSaturation(int index, int16_t saturation, HSLOperation op = REPLACE)
-        {
-            if (m_previousCommand)
-            {
-                m_previousCommand->setSaturation(modifyPosition(index), modifySaturation(saturation), modifyOperation(op));
-            }
-        };
-        void setLightness(int index, int16_t lightness, HSLOperation op = REPLACE)
-        {
-            if (m_previousCommand)
-            {
-                m_previousCommand->setLightness(modifyPosition(index), modifyLightness(lightness), modifyOperation(op));
-            }
-        };
-        void setRGB(int index, const CRGB &rgb, HSLOperation op = REPLACE)
-        {
-            if (m_previousCommand)
-            {
-                m_previousCommand->setRGB(modifyPosition(index), modifyRGB(rgb), modifyOperation(op));
-            }
-        };
-        size_t getCount()
-        {
-            m_logger->never("getCount() for ScriptCommandBase");
-            return m_position ? m_position->getCount() : m_previousCommand->getCount();
-        };
-        size_t getStart()
-        {
-            if (!Ensure::notNull(m_previousCommand, NULL, "ScriptCommandBase.getStart() needs m_previousCommand"))
-            {
-                return 0;
-            }
-            return m_position ? m_position->getStart() : m_previousCommand->getStart();
-        };
-        void clear()
-        {
-            if (m_previousCommand)
-            {
-                m_previousCommand->clear();
-            }
-        }
-        void show()
-        {
-            if (m_previousCommand)
-            {
-                m_previousCommand->show();
-            }
-        }
+     
 
         /* IScriptValueProvider */
         bool hasValue(const char *name) override
@@ -142,6 +99,8 @@ namespace DevRelief
         void setScriptPosition(ScriptPosition* pos) {
             m_position = pos;
         }
+
+        ScriptState* getState() { return m_state;}
     protected:
         virtual ScriptStatus doCommand(ScriptState *state) = 0;
 
@@ -157,6 +116,7 @@ namespace DevRelief
         IScriptCommand *m_previousCommand;
         ScriptValueList *m_values;
         DRString m_type;
+        ScriptState* m_state;
     };
 
     /* the first command in a CommandList.  It does not have a previous command like others */
@@ -178,6 +138,7 @@ namespace DevRelief
             void destroy() override { delete this;}
             ScriptStatus execute(ScriptState *state, IScriptCommand *previous) override
             {
+                this->m_state = state;
                 return SCRIPT_RUNNING;
             }
 
@@ -232,8 +193,12 @@ namespace DevRelief
 
             const char *getType() override { return "ScriptStartCommand"; }
             void setStrip(IHSLStrip* strip) { m_strip = strip;}
+            IHSLStrip* getStrip() override { return m_strip;}
+            ScriptState* getState() { return m_state;}
+
         private: 
             IHSLStrip* m_strip;
+            ScriptState* m_state;
             Logger* m_logger;
 
     };
@@ -302,10 +267,52 @@ namespace DevRelief
         }
     };
 
-    class HSLCommand : public ScriptCommandBase
+    class LEDCommand : public ScriptCommandBase
     {
     public:
-        HSLCommand(IScriptValue *h = NULL, IScriptValue *s = NULL, IScriptValue *l = NULL) : ScriptCommandBase("HSLCommand")
+        LEDCommand(const char * type) : ScriptCommandBase(type)
+        {
+            memLogger->debug("LEDCommand()");
+        }
+
+        virtual ~LEDCommand()
+        {
+            memLogger->debug("~LEDCommand() ");
+        }
+
+        ScriptStatus doCommand(ScriptState* state) override
+        {
+            if (m_previousCommand == NULL) {
+                m_logger->periodic(ERROR_LEVEL,1000,NULL,"LEDCommand.doCommand does not have a previousCommand");
+            }
+            auto *strip = getStrip();
+            int count = strip->getCount();
+            if (count == 0)
+            {
+                m_logger->periodic(0, 1000, NULL, "strip has 0 LEDS");
+                return SCRIPT_ERROR;
+            }
+            m_logger->never("LEDCommand count=%d",count);
+            for (int i = 0; i < count; i++)
+            {
+                state->setLedPosition(i,0,count);
+                updateLED(i,strip);
+            }
+            return SCRIPT_RUNNING;
+        }
+
+    protected:
+        virtual void updateLED(int index, IHSLStrip* strip)=0;
+    private:
+        IScriptValue *m_hue;
+        IScriptValue *m_saturation;
+        IScriptValue *m_lightness;
+    };
+
+   class HSLCommand : public LEDCommand
+    {
+    public:
+        HSLCommand(IScriptValue *h = NULL, IScriptValue *s = NULL, IScriptValue *l = NULL) : LEDCommand("HSLCommand")
         {
             memLogger->debug("HSLCommand()");
             m_hue = h;
@@ -329,29 +336,14 @@ namespace DevRelief
         void setSaturation(IScriptValue *saturation) { m_saturation = saturation; }
         IScriptValue *getSaturation(IScriptValue *saturation) { return m_saturation; }
 
-        ScriptStatus doCommand(ScriptState* state) override
-        {
-            if (m_previousCommand == NULL) {
-                m_logger->periodic(ERROR_LEVEL,1000,NULL,"HSLCommand.doCommand does not have a previousCommand");
-            }
-            auto *strip = m_previousCommand;
-            int count = m_previousCommand->getCount();
-            if (count == 0)
-            {
-                m_logger->periodic(0, 1000, NULL, "strip has 0 LEDS");
-                return SCRIPT_ERROR;
-            }
-            for (int i = 0; i < count; i++)
-            {
-                state->setLedPosition(i,0,count);
-               int h = m_hue ? m_hue->getIntValue(this,  -1) : -1;
-                strip->setHue(i, h, REPLACE);
-                int l = m_lightness ? m_lightness->getIntValue(this, -1) : -1;
-                strip->setLightness(i, l, REPLACE);
-                int s = m_saturation ? m_saturation->getIntValue(this, -1) : -1;
-                strip->setSaturation(i, s, REPLACE);
-            }
-            return SCRIPT_RUNNING;
+        void updateLED(int index, IHSLStrip* strip) override {
+            int h = m_hue ? m_hue->getIntValue(this,  -1) : -1;
+            strip->setHue(index, h, REPLACE);
+            int l = m_lightness ? m_lightness->getIntValue(this, -1) : -1;
+            strip->setLightness(index, l, REPLACE);
+            int s = m_saturation ? m_saturation->getIntValue(this, -1) : -1;
+            strip->setSaturation(index, s, REPLACE);
+
         }
 
     private:
@@ -360,10 +352,10 @@ namespace DevRelief
         IScriptValue *m_lightness;
     };
 
-    class RGBCommand : public ScriptCommandBase
+    class RGBCommand : public LEDCommand
     {
     public:
-        RGBCommand(IScriptValue *r = 0, IScriptValue *g = 0, IScriptValue *b = 0) : ScriptCommandBase("RGBCommand")
+        RGBCommand(IScriptValue *r = 0, IScriptValue *g = 0, IScriptValue *b = 0) : LEDCommand("RGBCommand")
         {
             memLogger->debug("RGBCommand()");
             m_red = r;
@@ -387,24 +379,7 @@ namespace DevRelief
         void setBlue(IScriptValue *blue) { m_blue = blue; }
         IScriptValue *getBlue(IScriptValue *blue) { return m_blue; }
 
-        ScriptStatus doCommand(ScriptState* state) override
-        {
-            m_logger->never("RGBCommand.doCommand()");
-
-            if (m_previousCommand == NULL) {
-                m_logger->periodic(ERROR_LEVEL,1000,NULL,"RGBCommand::doCommand requires previouscommand");
-            }
-            IHSLStrip *strip = m_previousCommand;
-            m_logger->never("\tget count from strip");
-            int count = strip->getCount();
-            if (count == 0)
-            {
-                m_logger->periodic(0, 1000, NULL, "strip has 0 LEDS");
-                return SCRIPT_ERROR;
-            }
-            for (int i = 0; i < count; i++)
-            {
-                state->setLedPosition(i,0,count-1);
+        void updateLED(int index, IHSLStrip* strip) override {
                 m_logger->never("RGB Led 0x%04, 0x%04, 0x%04", m_red, m_green, m_blue);
                 int r = m_red ? m_red->getIntValue(this, 0) : 0;
                 m_logger->never("\tred=%d", r);
@@ -413,12 +388,8 @@ namespace DevRelief
                 int b = m_blue ? m_blue->getIntValue(this, 0) : 0;
                 m_logger->never("\tblue=%d", b);
                 CRGB crgb(r, g, b);
-                strip->setRGB(i, crgb, REPLACE);
-            }
-            return SCRIPT_RUNNING;
+                strip->setRGB(index, crgb, REPLACE);
         }
-
-
 
     private:
         IScriptValue *m_red;
@@ -449,7 +420,7 @@ namespace DevRelief
                 m_logger->never("ScriptCommandList.execute()");
                 m_start->setStrip(m_strip);
                 m_commands.each([&](IScriptCommand*cmd) {
-                    m_logger->never("\tcommand 0x%04X - %s",cmd,cmd->getType());
+                    m_logger->never("\tcommand 0x%04X - %s - %d",cmd,cmd->getType(),(int)status);
                     if (status == SCRIPT_RUNNING) {
                         status = cmd->execute(state,previous);
                     } else {

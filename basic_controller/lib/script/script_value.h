@@ -6,6 +6,7 @@
 #include "../list.h"
 #include "../ensure.h"
 #include "./script_interface.h"
+#include "./animation.h"
 
 namespace DevRelief
 {
@@ -238,7 +239,27 @@ namespace DevRelief
 
         virtual double getFloatValue(IScriptCommand* cmd,  double defaultValue)
         {
+            if (m_start == NULL)
+            {
+                m_logger->debug("\tno start.  return end %f");
+                return m_end ? m_end->getIntValue(cmd, defaultValue) : defaultValue;
+            }
+            else if (m_end == NULL)
+            {
+                m_logger->debug("\tno end.  return start %f");
+                return m_start ? m_start->getIntValue(cmd, defaultValue) : defaultValue;
+            }
+            double start = m_start->getIntValue(cmd, 0);
+            double end = m_end->getIntValue(cmd,  1);
+
+            ScriptState * state = cmd->getState();
+            PositionDomain domain(state);
+            AnimationRange range(start,end,false);
+            Animator animator(domain);
+            double value = animator.get(range);
+            return value;
             /*
+            IValueAnimator* a = m_animate;
             int percent = 0;  // todo: fix for new command/state impl
             if (m_start == NULL)
             {

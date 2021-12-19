@@ -167,11 +167,15 @@ class ConfigDataLoader : public DataLoader {
 
         bool updateConfig(Config& config, const char * jsonText){
             JsonParser parser;
+            m_logger->always("read config");
             JsonRoot * root = parser.read(jsonText);
             if (root == NULL) {
+                m_logger->always("no JSON");
                 return false;
             } else {
+                m_logger->always("get Config from JSON");
                 if (readJson(config,root)) {
+                    m_logger->always("save Config");
                     return saveConfig(config);
                 }
             }
