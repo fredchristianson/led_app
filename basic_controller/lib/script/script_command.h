@@ -194,7 +194,7 @@ namespace DevRelief
             const char *getType() override { return "ScriptStartCommand"; }
             void setStrip(IHSLStrip* strip) { m_strip = strip;}
             IHSLStrip* getStrip() override { return m_strip;}
-            ScriptState* getState() { return m_state;}
+            IScriptState* getState() { return m_state;}
 
         private: 
             IHSLStrip* m_strip;
@@ -380,7 +380,7 @@ namespace DevRelief
         IScriptValue *getBlue(IScriptValue *blue) { return m_blue; }
 
         void updateLED(int index, IHSLStrip* strip) override {
-                m_logger->never("RGB Led 0x%04, 0x%04, 0x%04", m_red, m_green, m_blue);
+                m_logger->never("RGB Led %d (0x%04, 0x%04, 0x%04)",index, m_red, m_green, m_blue);
                 int r = m_red ? m_red->getIntValue(this, 0) : 0;
                 m_logger->never("\tred=%d", r);
                 int g = m_green ? m_green->getIntValue(this, 0) : 0;

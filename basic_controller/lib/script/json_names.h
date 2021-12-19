@@ -3,6 +3,7 @@
 
 namespace DevRelief {
 const char * S_NAME="name";
+const char * S_FREQUENCY="frequency";
 const char * S_COMMANDS="commands";
 const char * S_TYPE = "type";
 const char * S_RGB = "rgb";

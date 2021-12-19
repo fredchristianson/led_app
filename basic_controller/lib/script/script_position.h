@@ -79,7 +79,7 @@ namespace DevRelief
                 m_offset = offset;
                 ScriptLogger.test("offset %d %d.  %s",offset,m_offset,m_offsetValue->toString().get());
             } else {
-                m_offset = 1;
+                m_offset = 0;
             }
 
             if (m_type == POS_ABSOLUTE){
@@ -182,14 +182,14 @@ namespace DevRelief
                 m_logger->never("\tskip %d. index=%d",m_skip,index*m_skip);
                 index = index * m_skip;
             } else {
-                m_logger->test("\tno skip");
+                m_logger->never("\tno skip");
             }
             index = index + m_offset;
             if (index < 0) {
                 if (m_wrap) {
                     index = m_count + (index%m_count);
                 } else {
-                    m_logger->test("clip");
+                    m_logger->never("clip");
                     return false;
                 }
             }
@@ -197,7 +197,7 @@ namespace DevRelief
                 if (m_wrap) {
                     index = index%m_count;
                 } else {
-                    m_logger->test("clip");
+                    m_logger->never("clip");
                     return false;
                 }
             }

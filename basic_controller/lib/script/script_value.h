@@ -251,43 +251,19 @@ namespace DevRelief
             }
             double start = m_start->getIntValue(cmd, 0);
             double end = m_end->getIntValue(cmd,  1);
-
-            ScriptState * state = cmd->getState();
-            PositionDomain domain(state);
-            AnimationRange range(start,end,false);
-            Animator animator(domain);
-            double value = animator.get(range);
-            return value;
-            /*
-            IValueAnimator* a = m_animate;
-            int percent = 0;  // todo: fix for new command/state impl
-            if (m_start == NULL)
-            {
-                return m_end ? m_end->getIntValue(cmd, defaultValue) : defaultValue;
-            }
-            else if (m_end == NULL)
-            {
-                return m_start ? m_start->getIntValue(cmd, defaultValue) : defaultValue;
-            }
-            double start = m_start->getIntValue(cmd, 0);
-            double end = m_end->getIntValue(cmd,  1);
-            m_logger->test("check canAnimateOverTime");
-            if (m_animate == NULL) {
-                int diff = end - start;
-                int result = start + diff * percent;
-                return result;
+            double value = 0;
+            IScriptState* state = cmd->getState();
+            if (m_animate) {
+                AnimationRange range(start,end);
+                value = m_animate->get(cmd,range);
             } else {
-                if (m_animate->canAnimateOverTime()){
-                    m_logger->test("animator has speed (animate over time");
-                    return m_animate->getTimeValue(state,start,end);
-                } else {
-                    m_logger->test("\tuse position 0x%04X",m_animate);
-                    return m_animate->getPositionValue(state,start,end,percent);
-
-                }
+                AnimationRange range(start,end,false);
+                Animator animator(*(state->getAnimationPositionDomain()));
+                value = animator.get(range);
+                
             }
-            */
-           return 0;
+            return value;
+  
         }
         virtual bool getBoolValue(IScriptCommand* cmd,  bool defaultValue)
         {

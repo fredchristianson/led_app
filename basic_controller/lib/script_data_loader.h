@@ -130,6 +130,7 @@ class ScriptDataLoader : public DataLoader {
             
             m_logger->debug("convert JSON object to Script");
             script->setName(jsonString(obj,S_NAME,"unnamed"));
+            script->setFrequencyMSec(jsonInt(obj,S_FREQUENCY,0));
 
             JsonArray * arr = obj->getArray("commands");
             arr->each([&](JsonElement*item) {
@@ -199,6 +200,16 @@ class ScriptDataLoader : public DataLoader {
             }
             return defaultValue;
         }
+
+        int jsonInt(JsonObject* obj,const char * name, int defaultValue) {
+            JsonProperty* prop = obj->getProperty(name);
+            if (prop){
+                int val = prop->get(defaultValue);
+                return val;
+            }
+            return defaultValue;
+        }
+
 
 
         PositionCommand* jsonToPositionCommand(JsonObject* json) {
@@ -352,7 +363,7 @@ class ScriptDataLoader : public DataLoader {
                 }
                 IScriptValue * end = jsonToValue(valueObject,"end");
                 auto rangeValue = new ScriptRangeValue(start,end);
-               // rangeValue->setAnimator(jsonToValueAnimator(valueObject));
+                rangeValue->setAnimator(jsonToValueAnimator(valueObject));
                 scriptValue = rangeValue;
             } else if (jsonValue->isBool()) {
                 m_logger->debug("creating ScriptBoolValue()");

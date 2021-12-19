@@ -35,7 +35,10 @@ namespace DevRelief
     class ScriptState;
     class Script;
     class ScriptCommand;
-
+    class AnimationDomain;
+    class AnimationRange;
+    class TimeDomain;
+    class PositionDomain;
 
     Logger *memLogger = &ScriptMemoryLogger;
     class IScriptCommand;
@@ -77,6 +80,17 @@ namespace DevRelief
         virtual void destroy() =0; // cannot delete pure virtual interfaces. they must all implement destroy    
     };
 
+
+    class IScriptState {
+        public:
+        virtual void destroy() =0; // cannot delete pure virtual interfaces. they must all implement destroy    
+        virtual void setLedPosition(int pos, int min, int max)=0;
+
+        virtual int getStepStartTime()=0;
+        virtual TimeDomain* getAnimationTimeDomain()=0;
+        virtual PositionDomain* getAnimationPositionDomain()=0;
+    };
+    
     class IScriptCommand 
     {
         public:
@@ -85,20 +99,17 @@ namespace DevRelief
             virtual IScriptValue* getValue(const char* name)=0;
             virtual const char * getType()=0;
             virtual IHSLStrip* getStrip()=0;
-            virtual ScriptState* getState()=0;
+            virtual IScriptState* getState()=0;
     };
 
     class IValueAnimator
     {
         public:
         virtual void destroy() =0; // cannot delete pure virtual interfaces. they must all implement destroy    
+        virtual bool isUnfolded(IScriptCommand *cmd)=0;
+        virtual double get(IScriptCommand*cmd, AnimationRange&range)=0;
     };
 
-    class IScriptState {
-        public:
-        virtual void destroy() =0; // cannot delete pure virtual interfaces. they must all implement destroy    
-    };
-    
   
     class IScript {
         public:

@@ -351,8 +351,9 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
 
         void setRGB(int index, const CRGB& rgb,HSLOperation op) {
             CHSL hsl = RGBToHSL(rgb);
+            m_logger->always("setRGB %d (%d,%d,%d)->(%d,%d,%d)",index,rgb.red,rgb.green,rgb.blue,hsl.hue,hsl.saturation,hsl.lightness);
             setHue(index,hsl.hue,op);
-            setLightness(index,hsl.saturation,op);
+            setSaturation(index,hsl.saturation,op);
             setLightness(index,hsl.lightness,op);
         }
 

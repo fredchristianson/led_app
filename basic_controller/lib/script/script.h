@@ -26,7 +26,7 @@ namespace DevRelief
             memLogger->debug("Script()");
             m_logger = &ScriptLogger;
             m_logger->debug("Create Script()");
-            m_frequencyMSecs = 1000;
+            m_frequencyMSecs = 50;
             m_state = NULL;
         }
 
@@ -54,7 +54,7 @@ namespace DevRelief
             m_state = new ScriptState();
             m_commandList.setStrip(ledStrip);
             m_state->beginScript(this,ledStrip);
-            
+
         }
 
         void step() override
