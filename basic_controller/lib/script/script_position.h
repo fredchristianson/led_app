@@ -82,11 +82,8 @@ namespace DevRelief
             }
             
             if (m_offsetValue) {
-                m_logger->always("get offset 0x%04X",m_offsetValue);
                 int offset  = m_offsetValue->getIntValue(cmd,1);
-                m_logger->always("\tgot offset");
                 m_offset = offset;
-                ScriptLogger.always("offset %d %d.",offset,m_offset);
             } else {
                 m_offset = 0;
             }
@@ -101,14 +98,12 @@ namespace DevRelief
             } else if (m_type == POS_AFTER){
                 m_parentStrip = previousStrip->getParentStrip();
                 m_positionStrip = previousStrip;
-                m_positionOffset = previousStrip->getStart() + previousStrip->getCount();
-                m_logger->always("\mafter offset %d",m_positionOffset);
+                m_positionOffset = previousStrip->getStart() + previousStrip->getCount()+previousStrip->getOffset()+previousStrip->getPositionOffset();
             } else if (m_type == POS_STRIP){
                 m_parentStrip = previousStrip->getFirstStrip();
                 m_positionStrip = m_parentStrip;
                 int number = m_stripNumber ? m_stripNumber->getIntValue(cmd,0) : 0;
                 m_positionOffset = getPhysicalStripOffset(number);
-                m_logger->always("\mstrip offset %d %d",m_stripNumber, m_positionOffset);
             }
             m_start = 0;
             if (m_startValue != NULL)
@@ -141,7 +136,7 @@ namespace DevRelief
                 ScriptLogger.debug("\tadjusted: base: %f. start: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s.",baseCount, m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"));
             }
 
-            ScriptLogger.always("\tstart: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s. offset=%d.  positionOffset=%d",m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"),m_offset,m_positionOffset);
+            ScriptLogger.never("\tstart: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s. offset=%d.  positionOffset=%d",m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"),m_offset,m_positionOffset);
         }
 
         int getPhysicalStripOffset(int stripNumber){
@@ -266,6 +261,10 @@ namespace DevRelief
             }
             return m_unit;
         }
+
+        int getOffset() override { return m_offset;}
+        int getPositionOffset() override { return m_positionOffset;}
+
     private:
         // values that may be variables
         IScriptValue* m_wrapValue;

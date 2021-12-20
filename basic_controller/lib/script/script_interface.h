@@ -91,6 +91,7 @@ namespace DevRelief
         virtual int getStepStartTime()=0;
         virtual TimeDomain* getAnimationTimeDomain()=0;
         virtual PositionDomain* getAnimationPositionDomain()=0;
+        virtual int getStepNumber()=0;
     };
     
     class IScriptCommand 
@@ -128,6 +129,8 @@ namespace DevRelief
             virtual IStripModifier* getPositionStrip()=0; // strip to calculate position
             virtual IStripModifier* getFirstStrip()=0; // ancestor of all strips
             virtual PositionUnit getPositionUnit()=0;
+            virtual int getOffset()=0;
+            virtual int getPositionOffset()=0;
     };
 }
 #endif

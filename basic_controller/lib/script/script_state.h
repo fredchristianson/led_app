@@ -24,6 +24,7 @@ namespace DevRelief
             m_logger = &ScriptStateLogger;
             m_stepNumber=0;
             m_lastStepTime = 0;
+            m_stepNumber=0;
         }
 
         virtual ~ScriptState()
@@ -73,6 +74,7 @@ namespace DevRelief
         PositionDomain* getAnimationPositionDomain(){
             return &m_positionDomain;
         }
+        int getStepNumber() override { return m_stepNumber;}
     private:
         friend Script;
         void beginScript(Script *script, IHSLStrip *strip)

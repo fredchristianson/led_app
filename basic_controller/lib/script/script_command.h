@@ -146,7 +146,7 @@ namespace DevRelief
             }
 
             PositionUnit getPositionUnit() override { return POS_PERCENT;}
-            
+
             void setHue(int index, int16_t hue, HSLOperation op=REPLACE) {
                 if (m_strip) {
                     m_strip->setHue(index,hue,op);
@@ -205,7 +205,8 @@ namespace DevRelief
             IStripModifier* getPositionStrip() { return this;}
             IStripModifier* getFirstStrip() {return this;}
             IStripModifier* getStrip() {return this;}
-
+            int getOffset() override { return 0;}
+            int getPositionOffset() override { return 0;}
         private: 
             IHSLStrip* m_strip;
             ScriptState* m_state;

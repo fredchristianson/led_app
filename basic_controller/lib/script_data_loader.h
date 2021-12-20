@@ -325,7 +325,7 @@ class ScriptDataLoader : public DataLoader {
                 animator->setRepeatDelay(jsonToValue(obj,"delay"));
                 animator->setUnfold(jsonToValue(obj,"unfold"));
             }
-            m_logger->test("return value animator 0x%04X",animator);
+            m_logger->debug("return value animator 0x%04X",animator);
             return animator;
         }
  /*       
@@ -362,21 +362,14 @@ class ScriptDataLoader : public DataLoader {
                 const char * val = jsonValue->getString();
                 if (Util::startsWith(val,"var(")){
                     scriptValue = parseVarName(val);
-                } else if (Util::startsWith(val,"func:")){
-                    scriptValue = parseFunctionName(val);
+                } else if (Util::startsWith(val,"sys(")){
+                    scriptValue = parseSysVarName(val);
                 } else {
                     scriptValue = new ScriptStringValue(val);
                 }
             } else if (jsonValue->isObject()) {
-                JsonObject*valueObject = jsonValue->asObject();
-                IScriptValue * start = jsonToValue(valueObject,"start");
-                if (start == NULL) {
-                    start = jsonToValue(valueObject,"value");
-                }
-                IScriptValue * end = jsonToValue(valueObject,"end");
-                auto rangeValue = new ScriptRangeValue(start,end);
-                rangeValue->setAnimator(jsonToValueAnimator(valueObject));
-                scriptValue = rangeValue;
+                scriptValue = jsonObjectToValue(jsonValue->asObject());
+               
             } else if (jsonValue->isBool()) {
                 m_logger->debug("creating ScriptBoolValue()");
                 scriptValue = new ScriptBoolValue(jsonValue->getBool());
@@ -385,8 +378,62 @@ class ScriptDataLoader : public DataLoader {
                 m_logger->debug("%s",scriptValue->toString().get());
             } else if (jsonValue->isNumber()) {
                 scriptValue = new ScriptNumberValue(jsonValue->getFloat());
+            } else if (jsonValue->isArray()) {
+                scriptValue = jsonArrayToFunction(jsonValue->asArray());
             }
             return scriptValue;
+        }
+
+        IScriptValue* jsonArrayToFunction(JsonArray* arr) {
+            int cnt = arr->getCount();
+            if (cnt == 0) { return NULL;}
+            JsonElement* jsonName = arr->getAt(0);
+            const char * name = jsonName->getString();
+            if (name == NULL) {
+                m_logger->error("function array needs a string as first element");
+                return NULL;
+            }
+            FunctionArgs* args = getFunctionArgs(arr,1);
+            return new ScriptFunction(name,args);
+        }
+
+        IScriptValue* jsonObjectToValue(JsonObject* obj) {
+            JsonObject*valueObject = obj;
+            JsonElement * funcName = obj->getPropertyValue("function");
+            IScriptValue* scriptValue = NULL;
+            if (funcName) {
+                FunctionArgs* args = jsonObjectToFunctionArgs(obj);
+                scriptValue = new ScriptFunction(funcName->getString(),args);
+            } else {
+                IScriptValue * start = jsonToValue(valueObject,"start");
+                if (start == NULL) {
+                    start = jsonToValue(valueObject,"value");
+                }
+                IScriptValue * end = jsonToValue(valueObject,"end");
+                auto rangeValue = new ScriptRangeValue(start,end);
+                rangeValue->setAnimator(jsonToValueAnimator(valueObject));
+                scriptValue = rangeValue;
+            }
+            return scriptValue;
+        }
+
+        FunctionArgs* jsonObjectToFunctionArgs(JsonObject* obj) {
+            JsonArray* argArray = obj->getArray("args");
+            return getFunctionArgs(argArray);
+        }
+
+        FunctionArgs* getFunctionArgs(JsonArray* argArray,int skip=0) {
+            if (argArray == NULL) { return NULL;}
+            FunctionArgs* args = new FunctionArgs();
+            argArray->each([&](JsonElement*element){
+                if (skip == 0){
+                    IScriptValue*val = jsonToValue(element);
+                    args->add(val);
+                } else {
+                    skip -= 1;
+                }
+            });
+            return args;
         }
 /**/
         ScriptVariableValue* parseVarName(const char * val) {
@@ -429,9 +476,21 @@ class ScriptDataLoader : public DataLoader {
             return varValue;
         }
 
-        ScriptFunctionValue* parseFunctionName(const char * val) {
-            return new ScriptFunctionValue(val);
+        ScriptValue* parseSysVarName(const char * val) {
+            if (val == NULL) { return NULL;}
+            const char * lparen = strchr(val,'(');
+            const char * rparen = strchr(val,')');
+            if (lparen == NULL || rparen == NULL) {
+                m_logger->error("bad variable name: %s",val);
+                return NULL;
+            }
+            auto result = DRString(lparen+1,(rparen-lparen)-1);
+            m_logger->debug("got system variable name %s",result.text());
+            auto varValue = new ScriptSystemValue(result.text());
+
+            return varValue;
         }
+
       
     protected:
         void setDefaults() {

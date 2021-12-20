@@ -24,6 +24,45 @@ namespace DevRelief
         protected:
             Logger* m_logger;
     };
+
+    class ScriptSystemValue : public ScriptValue {
+        public:
+            ScriptSystemValue(const char* name) {
+                m_name = name;
+            }
+
+            int getIntValue(IScriptCommand* cmd,  int defaultValue) override
+            {
+                return (int)getFloatValue(cmd,(double)defaultValue);
+            }
+
+            double getFloatValue(IScriptCommand* cmd,  double defaultValue) override
+            {
+                return get(cmd,defaultValue);
+            }
+
+        bool getBoolValue(IScriptCommand* cmd,  bool defaultValue) override
+            {
+                double d = getFloatValue(cmd,0);
+                return d != 0;
+            }
+        
+        DRString toString() { return DRString("System Value: ").append(m_name); }
+        private:
+            double get(IScriptCommand* cmd, double defaultValue){
+                if (Util::equal(m_name,"start")) {
+                    return cmd->getStrip()->getStart();
+                }
+                if (Util::equal(m_name,"count")) {
+                    return cmd->getStrip()->getCount();
+                }
+                if (Util::equal(m_name,"step")) {
+                    return cmd->getState()->getStepNumber();
+                }
+                return defaultValue;
+            }
+            DRString m_name;
+    };
   
     class NameValue
     {
@@ -49,39 +88,138 @@ namespace DevRelief
         IScriptValue *m_value;
     };
     // ScriptVariableGenerator: ??? rand, trig, ...
+    class FunctionArgs {
+        public:
+            FunctionArgs() {}
+            virtual ~FunctionArgs() {}
 
-    class ScriptFunctionValue : public ScriptValue
+            void add(IScriptValue* val) { args.add(val);}
+            IScriptValue* get(int index) { return args.get(index);}
+        PtrList<IScriptValue*> args;
+    };
+
+    class ScriptFunction : public ScriptValue
     {
-        // todo: named functions, call?
     public:
-        ScriptFunctionValue(const char *value) : m_value(value)
+        ScriptFunction(const char *name, FunctionArgs* args) : m_name(name), m_args(args)
         {
             memLogger->debug("ScriptVariableValue()");
+            randomSeed(analogRead(0)+millis());
         }
 
-        virtual ~ScriptFunctionValue()
+        virtual ~ScriptFunction()
         {
-            memLogger->debug("~ScriptFunctionValue()");
+            memLogger->debug("~ScriptFunction()");
         }
         int getIntValue(IScriptCommand* cmd,  int defaultValue) override
         {
-            return defaultValue;
+            return (int)getFloatValue(cmd,(double)defaultValue);
         }
 
         double getFloatValue(IScriptCommand* cmd,  double defaultValue) override
         {
-            return defaultValue;
+            return invoke(cmd,defaultValue);
         }
 
        bool getBoolValue(IScriptCommand* cmd,  bool defaultValue) override
         {
-            return defaultValue;
+            double d = getFloatValue(cmd,0);
+            return d != 0;
         }
 
-        DRString toString() { return DRString("Function: ").append(m_value); }
+        DRString toString() { return DRString("Function: ").append(m_name); }
 
     protected:
-        DRString m_value;
+        double invoke(IScriptCommand * cmd,double defaultValue) {
+            double result = 0;
+            const char * name = m_name.get();
+            if (Util::equal("rand",name)){
+                result = invokeRand(cmd,defaultValue);
+            } else if (Util::equal("add",name) || Util::equal("+",name)) {
+                result = invokeAdd(cmd,defaultValue);
+            } else if (Util::equal("subtract",name) ||Util::equal("sub",name) || Util::equal("-",name)) {
+                result = invokeSubtract(cmd,defaultValue);
+            } else if (Util::equal("multiply",name) || Util::equal("mult",name) || Util::equal("*",name)) {
+                result = invokeMultiply(cmd,defaultValue);
+            } else if (Util::equal("divide",name) || Util::equal("div",name) || Util::equal("/",name)) {
+                result = invokeDivide(cmd,defaultValue);
+            } else if (Util::equal("mod",name) || Util::equal("%",name)) {
+                result = invokeMod(cmd,defaultValue);
+            } else if (Util::equal("min",name)) {
+                result = invokeMin(cmd,defaultValue);
+            } else if (Util::equal("max",name)) {
+                result = invokeMax(cmd,defaultValue);
+            } else {
+                m_logger->error("unknown function: %s",name);
+            }
+            m_logger->never("function: %s=%f",m_name.get(),result);
+            return result;
+        }
+
+        double invokeRand(IScriptCommand*cmd ,double defaultValue) {
+            double low = getArgValue(cmd,0,0);
+            double high = getArgValue(cmd, 1,low);
+            if (high == low) {
+                return random(high);
+            } else {
+                return random(low,high+1);
+            }
+        }
+
+        double invokeAdd(IScriptCommand*cmd,double defaultValue) {
+            double first = getArgValue(cmd,0,defaultValue);
+            double second = getArgValue(cmd,1,defaultValue);
+            return first + second;
+        }
+
+        double invokeSubtract(IScriptCommand*cmd,double defaultValue) {
+            double first = getArgValue(cmd,0,defaultValue);
+            double second = getArgValue(cmd,1,defaultValue);
+            return first - second;
+        }
+
+        double invokeMultiply(IScriptCommand*cmd,double defaultValue) {
+            double first = getArgValue(cmd,0,defaultValue);
+            double second = getArgValue(cmd,1,defaultValue);
+            return first * second;
+        }
+
+        double invokeDivide(IScriptCommand*cmd,double defaultValue) {
+            double first = getArgValue(cmd,0,defaultValue);
+            double second = getArgValue(cmd,1,defaultValue);
+            return (second == 0) ? 0 : first / second;
+        }
+
+        
+        double invokeMod(IScriptCommand*cmd,double defaultValue) {
+            double first = getArgValue(cmd,0,defaultValue);
+            double second = getArgValue(cmd,1,defaultValue);
+            return (double)((int)first % (int)second);
+        }
+        
+        double invokeMin(IScriptCommand*cmd,double defaultValue) {
+            double first = getArgValue(cmd,0,defaultValue);
+            double second = getArgValue(cmd,1,defaultValue);
+            return first < second ? first : second;
+        }
+        
+        double invokeMax(IScriptCommand*cmd,double defaultValue) {
+            double first = getArgValue(cmd,0,defaultValue);
+            double second = getArgValue(cmd,1,defaultValue);
+            return first > second ? first : second;
+        }
+
+        double getArgValue(IScriptCommand*cmd, int idx, double defaultValue){
+            if (m_args == NULL) {
+                return defaultValue;
+            }
+            IScriptValue* val = m_args->get(idx);
+            if (val == NULL) { return defaultValue;}
+            return val->getFloatValue(cmd,defaultValue);
+        }
+
+        DRString m_name;
+        FunctionArgs * m_args;
     };
 
     class ScriptNumberValue : public ScriptValue
