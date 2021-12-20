@@ -15,7 +15,8 @@ enum LogLevel {
     WARN_LEVEL=60,
     ERROR_LEVEL=40,
     ALWAYS=1,
-    TEST_LEVEL=-1
+    TEST_LEVEL=-1,
+    NEVER=-2
 };
 
 #if LOGGING_ON==1
@@ -90,7 +91,7 @@ public:
         this->info("serial restarted");
     }
     void write(int level, const char * message, va_list args ){
-        if (level > m_level) {
+        if (level > m_level || level == NEVER) {
             return;
         }
 
@@ -200,6 +201,21 @@ public:
         va_start(args,message);
         write(20,message,args);
     }
+    void periodicNever(int level,long frequencyMS, const char * message,...){}
+    void periodicNever(int level,long frequencyMS, long*, const char * message,...){}
+
+    void periodic(int level,long frequencyMS, const char * message,...){
+       long* lastTimer = &m_periodicTimer;
+        
+        if (millis() > (*lastTimer + frequencyMS))
+        {
+            *lastTimer = millis();
+            va_list args;
+            va_start(args, message);
+            write(level, message, args);
+            
+        }
+    }
 
     void periodic(int level,long frequencyMS, long * lastTimer,const char * message,...){
         if (lastTimer == NULL) {
@@ -273,6 +289,9 @@ private:
         void never(const char *,...){}
         void errorNoRepeat(const char * message,...) {}
         void periodic(int level,long frequencyMS, long * lastTimer,const char * message,...){}
+        void periodic(int level,long frequencyMS,const char * message,...){}
+        void periodicNever(int level,long frequencyMS, const char * message,...){}
+        void periodic(int level,long frequencyMS, long*, const char * message,...){}
         const char * getLevelName(int level) {return NULL;}
         void showMemory(const char*ignore=NULL) {}
     };

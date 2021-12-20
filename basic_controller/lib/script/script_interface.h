@@ -15,14 +15,15 @@ namespace DevRelief
     typedef enum PositionUnit
     {
         POS_PERCENT = 0,
-        POS_PIXEL = 1
+        POS_PIXEL = 1,
+        POS_INHERIT = 2
     };
     typedef enum PositionType
     {
         POS_RELATIVE = 0,
         POS_ABSOLUTE = 1,
         POS_AFTER = 3,
-        POS_STRIP = 3
+        POS_STRIP = 4
     };
 
     typedef enum ScriptStatus {
@@ -39,6 +40,7 @@ namespace DevRelief
     class AnimationRange;
     class TimeDomain;
     class PositionDomain;
+    class IStripModifier;
 
     Logger *memLogger = &ScriptMemoryLogger;
     class IScriptCommand;
@@ -98,7 +100,8 @@ namespace DevRelief
             virtual ScriptStatus execute(ScriptState*state, IScriptCommand* previous)=0;
             virtual IScriptValue* getValue(const char* name)=0;
             virtual const char * getType()=0;
-            virtual IHSLStrip* getStrip()=0;
+            virtual IHSLStrip * getHSLStrip()=0;
+            virtual IStripModifier* getStrip()=0;
             virtual IScriptState* getState()=0;
     };
 
@@ -119,7 +122,12 @@ namespace DevRelief
     };
 
     class IStripModifier : public IHSLStrip {
-        virtual void destroy()=0;
+        public:
+            virtual void destroy()=0;
+            virtual IStripModifier* getParentStrip()=0; // strip to set modified values on
+            virtual IStripModifier* getPositionStrip()=0; // strip to calculate position
+            virtual IStripModifier* getFirstStrip()=0; // ancestor of all strips
+            virtual PositionUnit getPositionUnit()=0;
     };
 }
 #endif

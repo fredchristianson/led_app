@@ -54,17 +54,19 @@ HSLOperation TextToHSLOP(const char * text) {
     return REPLACE;
 }
 
+class CompoundLedStrip;
 
 class IHSLStrip {
     public:
         virtual void setHue(int index, int16_t hue, HSLOperation op=REPLACE)=0;
-        virtual void setSaturation(int index, int16_t hue, HSLOperation op=REPLACE)=0;
-        virtual void setLightness(int index, int16_t hue, HSLOperation op=REPLACE)=0;
+        virtual void setSaturation(int index, int16_t saturation, HSLOperation op=REPLACE)=0;
+        virtual void setLightness(int index, int16_t lightness, HSLOperation op=REPLACE)=0;
         virtual void setRGB(int index, const CRGB& rgb, HSLOperation op=REPLACE)=0;
         virtual size_t getCount()=0;
         virtual size_t getStart()=0;
         virtual void clear()=0;
         virtual void show()=0;
+        virtual IHSLStrip* getFirstHSLStrip()=0;  // for series of strips that all can adjust HSL and/or position
 };
 
 class DRLedStrip {
@@ -89,6 +91,9 @@ class DRLedStrip {
         }
 
         long validCheck;
+        // use getCompoundLedStrip to find a base virtual strip made of multiple other strips
+        virtual CompoundLedStrip* getCompoundLedStrip()=0; 
+
 
     protected:
         Logger* m_logger;
@@ -96,10 +101,11 @@ class DRLedStrip {
 
 class AdafruitLedStrip : public DRLedStrip {
     public: 
-        AdafruitLedStrip(int pin, uint16_t ledCount){
+        AdafruitLedStrip(int pin, uint16_t ledCount, neoPixelType pixelType=NEO_GRB){
             m_logger = new Logger("AdafruitLED",ADAFRUIT_LED_LOGGER_LEVEL);
             m_logger->debug("create AdafruitLedStrip %d %d",pin,ledCount);
-            m_controller = new Adafruit_NeoPixel(ledCount,pin,NEO_GRB+NEO_KHZ800);
+            
+            m_controller = new Adafruit_NeoPixel(ledCount,pin,pixelType+NEO_KHZ800);
             m_controller->setBrightness(40);
             m_controller->begin();
         }
@@ -135,15 +141,27 @@ class AdafruitLedStrip : public DRLedStrip {
             //m_controller->setPixelColor(10,m_controller->Color(200,100,50));
             m_controller->show();
         }
-    private:
+
+        virtual CompoundLedStrip* getCompoundLedStrip() { return NULL;}
+    protected:
         Adafruit_NeoPixel * m_controller;
 };
 
 class PhyisicalLedStrip : public AdafruitLedStrip {
     public:
-        PhyisicalLedStrip(int pin, uint16_t ledCount): AdafruitLedStrip(pin,ledCount) {
-
+        PhyisicalLedStrip(int pin, uint16_t ledCount, neoPixelType pixelType,uint8_t maxBrightness): AdafruitLedStrip(pin,ledCount,pixelType) {
+            m_maxBrightness = maxBrightness;
         }
+
+        virtual void setBrightness(uint16_t brightness) {
+            if (brightness > m_maxBrightness) {
+                brightness = m_maxBrightness;
+            }
+            m_controller->setBrightness(brightness);
+        }
+
+    private:
+        uint8_t m_maxBrightness;
 };
 
 class CompoundLedStrip : public DRLedStrip {
@@ -241,6 +259,8 @@ class CompoundLedStrip : public DRLedStrip {
             }
         }
 
+        virtual CompoundLedStrip* getCompoundLedStrip() { return this;}
+
     private:
         DRLedStrip* strips[4]; // max of 4 strips;
         size_t      count;
@@ -270,6 +290,7 @@ class AlteredStrip : public DRLedStrip {
 
         virtual size_t getCount() { return translateCount(m_base->getCount());}
         virtual void show() {m_base->show();}
+        virtual CompoundLedStrip* getCompoundLedStrip() { return m_base ? m_base->getCompoundLedStrip() : NULL;}
 
     protected:
         virtual uint16_t translateIndex(uint16_t index) { return index;}
@@ -331,8 +352,9 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
 
         void setRGB(int index, const CRGB& rgb,HSLOperation op) {
             CHSL hsl = RGBToHSL(rgb);
+            m_logger->never("setRGB %d (%d,%d,%d)->(%d,%d,%d)",index,rgb.red,rgb.green,rgb.blue,hsl.hue,hsl.saturation,hsl.lightness);
             setHue(index,hsl.hue,op);
-            setLightness(index,hsl.saturation,op);
+            setSaturation(index,hsl.saturation,op);
             setLightness(index,hsl.lightness,op);
         }
 
@@ -357,6 +379,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
                 m_logger->error("HSL saturation index out of range %d (0-%d)",index,m_count);
                 return;
             } 
+            if (saturation<0 || saturation>100) { return;}
             m_saturation[index] = clamp(0,100,performOperation(op,m_saturation[index],saturation));
         }
 
@@ -365,6 +388,8 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
                 m_logger->error("HSL lightness index out of range %d (0-%d)",index,m_count);
                 return;
             } 
+            
+            if (lightness<0 || lightness>100) { return;}
             m_lightness[index] = clamp(0,100,performOperation(op,m_lightness[index],lightness));
         }
 
@@ -399,7 +424,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
                 if (false && idx < 20) {
                     m_logger->always("light: %d",light);
                 }
-                CHSL hsl(clamp(0,360,hue),defaultValue(0,100,sat,100),defaultValue(0,100,light,0));
+                CHSL hsl(clamp(0,360,hue),defaultValue(0,100,sat,100),defaultValue(0,100,light,50));
                 if (idx == 0) {
                     const CRGB rgb = HSLToRGB(hsl);
                     m_logger->debug("hsl(%d,%d,%d)->RGB(%d,%d,%d)",hsl.hue,hsl.saturation,hsl.lightness,rgb.red,rgb.green,rgb.blue);
@@ -410,6 +435,8 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
         }
 
         size_t getCount() { return AlteredStrip::getCount();}
+        virtual IHSLStrip* getFirstHSLStrip() { return this;}
+        virtual CompoundLedStrip* getCompoundLedStrip() { return m_base?m_base->getCompoundLedStrip() : NULL;}
 
     protected:
         void reallocHSLData(int count) {

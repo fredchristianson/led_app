@@ -9,6 +9,8 @@
 #include "./file_system.h"
 #include "./config.h"
 #include "./script/script.h"
+#include "./script/script_position.h"
+#include "./script/json_names.h"
 #include "./data_loader.h"
 #include "./util.h"
 
@@ -92,36 +94,7 @@ class ScriptDataLoader : public DataLoader {
         SharedPtr<JsonRoot> toJson(Script& script) {
             JsonRoot* root=new JsonRoot;  
             JsonObject * json = root->createObject();
-            /*
-            json->set("buildVersion",config.getBuildVersion());
-            json->set("buildDate",config.getBuildDate());
-            json->set("buildTime",config.getBuildTime());
-            json->set("hostname",config.getHostname());
-
-            json->set("ipAddress",config.getAddr());
-            json->set("brightness",config.getBrightness());
-            json->set("maxBrightness",config.getMaxBrightness());
-            json->set("runningScript",config.getRunningScript());
-            JsonArray* pins = root->createArray();
-            json->set("pins",pins);
-            config.getPins().each( [&](LedPin* &pin) {
-                m_logger->debug("handle pin %d",pin->number); 
-                JsonObject* pinElement = pins->createObjectElement();
-                pinElement->set("number",pin->number);
-                pinElement->set("ledCount",pin->ledCount);
-                pinElement->set("reverse",pin->reverse);
-                pins->addItem(pinElement);
-            });
-            m_logger->debug("pins done");
-
-            JsonArray* scripts = root->createArray();
-            json->set("scripts",scripts);
-            config.getScripts().each( [&](DRString &script) {
-                m_logger->debug("handle script %s",script.get()); 
-                
-                scripts->add(script.get());
-            });
-            */
+          
             m_logger->debug("scripts done");
 
             return root;
@@ -147,52 +120,77 @@ class ScriptDataLoader : public DataLoader {
             return jsonToScript(load.getJsonRoot());
         }
         Script* jsonToScript(JsonRoot* jsonRoot){
+            m_logger->debug("jsonToScript");
+
             if (jsonRoot == NULL || jsonRoot->getTopObject()== NULL) {
                 return NULL;
             }
+            
             JsonObject* obj = jsonRoot->getTopObject();
             Script* script = new Script();
+            
             m_logger->debug("convert JSON object to Script");
             script->setName(jsonString(obj,S_NAME,"unnamed"));
+            script->setFrequencyMSec(jsonInt(obj,S_FREQUENCY,0));
 
             JsonArray * arr = obj->getArray("commands");
             arr->each([&](JsonElement*item) {
+            
                 m_logger->debug("\tgot json command");
                 JsonObject*obj = item->asObject();
+                
                 if (obj) {
                     const char * type = obj->get("type","unknown");
                     m_logger->debug("\t\ttype: %s",type);
-                    ScriptCommand* cmd = NULL;
+                    ScriptCommandBase* cmd = NULL;
                     if (matchName(S_RGB,type)) {
                         cmd= jsonToRGBCommand(obj);
                     } else if (matchName(S_HSL,type)) {
                         cmd=jsonToHSLCommand(obj);
                     }  else if (matchName(S_VALUES,type)) {
+                        m_logger->debug("read Values command");
                         cmd=jsonToValueCommand(obj);
-                    }  else if (matchName(S_POSITION,type)) {
-                        cmd=jsonToPositionCommand(obj);
+                    } else if (matchName(S_POSITION,type)) {
+                       cmd=jsonToPositionCommand(obj);
+                    
                     } else {
                         m_logger->error("unknown ScriptCommand type %s",type);
                         m_logger->info(obj->toJsonString().text());
                     }
+                    
                     if (cmd != NULL) {
+                        m_logger->debug("add command %s",cmd->getType());
                         JsonObject*posJson = obj->getChild("position");
                         
                         if (posJson != NULL) {
-                            m_logger->debug("got position json");
-                            IScriptPosition*pos = jsonToPosition(posJson);
+                            m_logger->debug("\tgot position json");
+                            ScriptPosition*pos = jsonToPosition(posJson);
                             if (pos != NULL) {
                                 m_logger->debug("got position object");
                                 cmd->setScriptPosition(pos);
                             }
                         }
+                        JsonObject*valJson = obj->getChild("values");
+                        
+                        if (valJson != NULL) {
+                            m_logger->debug("\tgot values json");
+                            jsonGetValues(valJson,cmd);
+                        }
+                        m_logger->debug("\tadd child to script");
                         script->add(cmd);
+                        m_logger->debug("\tadded");
                     }
+                    
                 } else {
                     m_logger->error("\t\tcommand is not an object");
                 }
+                
+                
             });
+            
+            m_logger->debug("created Script");
             return script;
+
         }
 
         const char * jsonString(JsonObject* obj,const char * name, const char * defaultValue) {
@@ -204,43 +202,75 @@ class ScriptDataLoader : public DataLoader {
             return defaultValue;
         }
 
+        int jsonInt(JsonObject* obj,const char * name, int defaultValue) {
+            JsonProperty* prop = obj->getProperty(name);
+            if (prop){
+                int val = prop->get(defaultValue);
+                return val;
+            }
+            return defaultValue;
+        }
+
+
 
         PositionCommand* jsonToPositionCommand(JsonObject* json) {
             m_logger->debug("create PositionCommand");
             PositionCommand* cmd = new PositionCommand();
-            IScriptPosition* pos = jsonToPosition(json);
+            ScriptPosition* pos = jsonToPosition(json);
             cmd->setScriptPosition(pos);
             return cmd;
         }
 
-
+/**/
         ScriptPosition* jsonToPosition(JsonObject* json) {
             ScriptPosition* pos = new ScriptPosition();
             pos->setStartValue(jsonToValue(json,"start"));
             pos->setCountValue(jsonToValue(json,"count"));
             pos->setEndValue(jsonToValue(json,"end"));
-            const char * type = json->get("unit","percent");
-            if (Util::equal(type,"pixel")){
+            pos->setSkipValue(jsonToValue(json,"skip"));
+            const char * unit = json->get("unit","percent");
+            if (Util::equal(unit,"pixel")){
                 pos->setUnit(POS_PIXEL);
             }
+            const char * type = json->get("type","relative");
+            pos->setPositionType(positionTypeToInt(type));
+            pos->setWrap(jsonToValue(json,"wrap"));
+            pos->setReverse(jsonToValue(json,"reverse"));
+            pos->setOffset(jsonToValue(json,"offset"));
             return pos;
+        }
+
+        PositionType positionTypeToInt(const char * type){
+            PositionType pt = POS_RELATIVE;
+            if (Util::equal(type,"absolute")){
+                pt = POS_ABSOLUTE;
+            }
+            return pt;
         }
 
         ScriptValueCommand* jsonToValueCommand(JsonObject* json) {
             ScriptValueCommand* cmd = new ScriptValueCommand();
+            jsonGetValues(json,cmd);
+            return cmd;
+        }
+
+        void jsonGetValues(JsonObject*json, ScriptCommandBase*cmd) {
+            m_logger->debug("read values");
             json->eachProperty([&](const char* name, JsonElement*value){
                 if (!Util::equal("type",name)) {
                     IScriptValue * scriptValue = jsonToValue(value);
                     if (scriptValue == NULL) {
-                        m_logger->error("unable to get IScriptValue from %s",value->toJsonString().text());
+                        m_logger->error("unable to get ScriptValue from %s",value->toJsonString().text());
                     } else {
-                        cmd->add(name,scriptValue);
+                        m_logger->debug("\tadd ScriptValue for %s",name);
+                        cmd->addValue(name,scriptValue);
                     }
                 }
             });
-   
-            return cmd;
+            m_logger->debug("\tdone");
+
         }
+       /* */
         RGBCommand* jsonToRGBCommand(JsonObject* json) {
             RGBCommand* cmd = new RGBCommand();
             cmd->setRed(jsonToValue(json,"red"));
@@ -258,10 +288,58 @@ class ScriptDataLoader : public DataLoader {
             return cmd;
         }
 
+
+
+        ValueAnimator* jsonToValueAnimator(JsonObject* json) {
+            m_logger->test("get ValueAnimator from %s",json->toJsonString().get());
+            JsonElement * jsonValue = json->getPropertyValue("animate");
+            JsonObject* animate = NULL;
+            if (jsonValue == NULL) {
+                // see if the animate properties are promoted ot parent
+                if (json->getProperty("duration") || json->getProperty("speed") || json->getProperty("unfold")) {
+                    animate = json;
+                }
+            } else {
+                animate = jsonValue->asObject();
+            }
+            m_logger->test("use animate object 0x%04X",animate);
+            ValueAnimator* animator = NULL;
+            if (animate) {
+                m_logger->debug("create ValueAnimator");
+                JsonObject* obj = animate;
+                animator = new ValueAnimator();
+                animator->setDuration(jsonToValue(obj,"duration"));
+                animator->setSpeed(jsonToValue(obj,"speed"));
+                animator->setRepeat(jsonToValue(obj,"repeat"));
+                animator->setRepeatDelay(jsonToValue(obj,"delay"));
+                animator->setUnfold(jsonToValue(obj,"unfold"));
+            }
+            m_logger->test("return value animator 0x%04X",animator);
+            return animator;
+        }
+ /*       
+        PositionAnimator* jsonToPositionAnimator(JsonObject* json, const char * name) {
+            m_logger->test("get PositionAnimator from %s",json->toJsonString().get());
+            JsonElement * jsonValue = json->getPropertyValue(name);
+            m_logger->test("got %s property 0x%04X",name,jsonValue);
+            PositionAnimator* animator = NULL;
+            if (jsonValue != NULL && jsonValue->asObject()) {
+                m_logger->debug("create PositionAnimator");
+                JsonObject* obj = jsonValue->asObject();
+                animator = new PositionAnimator();
+                animator->setDuration(jsonToValue(obj,"duration"));
+                animator->setSpeed(jsonToValue(obj,"speed"));
+                animator->setRepeat(jsonToValue(obj,"repeat"));
+                animator->setRepeatDelay(jsonToValue(obj,"delay"));
+            }
+            m_logger->test("return animator 0x%04X",animator);
+            return animator;
+        }
+ */       
         IScriptValue* jsonToValue(JsonObject* json, const char * name) {
             JsonElement * jsonValue = json->getPropertyValue(name);
             if (jsonValue == NULL) {
-                //m_logger->debug("No value found for %s",name);
+                m_logger->debug("No value found for %s",name);
                 return NULL;
             }
             return jsonToValue(jsonValue);
@@ -285,13 +363,21 @@ class ScriptDataLoader : public DataLoader {
                     start = jsonToValue(valueObject,"value");
                 }
                 IScriptValue * end = jsonToValue(valueObject,"end");
-                scriptValue = new ScriptRangeValue(start,end);
+                auto rangeValue = new ScriptRangeValue(start,end);
+                rangeValue->setAnimator(jsonToValueAnimator(valueObject));
+                scriptValue = rangeValue;
+            } else if (jsonValue->isBool()) {
+                m_logger->debug("creating ScriptBoolValue()");
+                scriptValue = new ScriptBoolValue(jsonValue->getBool());
+                m_logger->debug("\tdone ScriptBoolValue()");
+                m_logger->debug("\ttoString()");
+                m_logger->debug("%s",scriptValue->toString().get());
             } else if (jsonValue->isNumber()) {
                 scriptValue = new ScriptNumberValue(jsonValue->getFloat());
             }
             return scriptValue;
         }
-
+/**/
         ScriptVariableValue* parseVarName(const char * val) {
             if (val == NULL) { return NULL;}
             const char * lparen = strchr(val,'(');
@@ -304,19 +390,32 @@ class ScriptDataLoader : public DataLoader {
             m_logger->debug("got variable name %s",result.text());
             double defaultValue = 0;
             const char * def = strchr(val,'|');
+            auto varValue = new ScriptVariableValue(result.text());
             if (def != NULL) {
                 m_logger->debug("found default value %s",def);
-                while(*def != 0 && !isdigit(*def)) {
-                    def++;
+                const char * digit = def;
+                while(*digit != 0 && !isdigit(*digit)) {
+                    digit++;
                 }
-                if (*def != 0) {
-                    m_logger->debug("convert to float %s",def);
-                    defaultValue = atof(def);
+                if (*digit != 0) {
+                    m_logger->debug("convert to float %s",digit);
+                    defaultValue = atof(digit);
+                    varValue->setDefaultValue(defaultValue);
+
+                } else {
+                    const char * tf = def;
+                    // look for string starting with  't' (true) or 'f' (false)
+                    while(*tf != 0 && *tf != 't' && *tf != 'f') {
+                        tf++;
+                    }
+                    if (*tf != 0) {
+                        varValue->setDefaultValue((*tf == 't'?1 : 0));
+                    }
                 }
             } else {
                 m_logger->debug("no defaul value");
             }
-            return new ScriptVariableValue(result.text(),defaultValue);
+            return varValue;
         }
 
         ScriptFunctionValue* parseFunctionName(const char * val) {

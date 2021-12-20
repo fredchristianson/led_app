@@ -5,6 +5,8 @@
 #include <cstdarg>
 #include <stdio.h>
 #include <time.h>
+#include "../env.h"
+
 extern EspClass ESP;
 
 namespace DevRelief {
@@ -13,7 +15,8 @@ enum LogLevel {
     INFO_LEVEL=80,
     WARN_LEVEL=60,
     ERROR_LEVEL=40,
-    ALWAYS=1
+    ALWAYS=1,
+    TEST_LEVEL=-1
 };
 
 #if LOGGING_ON==1
@@ -41,6 +44,7 @@ int MAX_TAB_COUNT = 5;
 char lastErrorMessage[100];
 long lastErrorTime=0;
 int loggerIndent=0;
+bool logTestingMessage = false;
 
 class Logger {
 public:
@@ -51,6 +55,8 @@ public:
         m_level = level;
         //this->always("create Logger %s",name);
     }
+
+    static void setTesting(bool on) { logTestingMessage = on;}
 
     virtual ~Logger() {
         //this->always("destroy Logger %s",m_name.c_str());
@@ -106,6 +112,14 @@ public:
         va_start(args,message);
         write(level,message,args);
     }
+
+    void test(const char * message,...) {
+        if (!logTestingMessage) { return;}
+        va_list args;
+        va_start(args,message);
+        write(TEST_LEVEL,message,args);
+    }
+
 
     // void debug(String message,...) {
     //     va_list args;
@@ -219,6 +233,8 @@ public:
         }
         if (level ==  ALWAYS) {
             return "ALWAYS";
+        } else if (level == TEST_LEVEL) {
+            return "TEST";
         }
         return "ERROR";
         
@@ -247,6 +263,8 @@ private:
         void restart() {}
         void write(int,const char*,va_list){}
         void write(int level,const char*,...){}
+        void test(const char * message,...) {}
+
         void write(const char * message,...) {}
         void debug(const char *,...){}
         void info(const char *,...){}

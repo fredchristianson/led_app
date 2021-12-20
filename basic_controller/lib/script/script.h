@@ -49,7 +49,7 @@ namespace DevRelief
         }
 
         void begin(IHSLStrip * ledStrip) override {
-            m_logger->debug("begin Script");
+            m_logger->always("begin Script.  frequency %d",m_frequencyMSecs);
             delete m_state;
             m_state = new ScriptState();
             m_commandList.setStrip(ledStrip);

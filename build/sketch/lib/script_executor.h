@@ -11,17 +11,20 @@
 #include "./script/script.h";
 namespace DevRelief {
 
+    Logger ScriptExecutorLogger("ScriptExecutor",SCRIPT_EXECUTOR_LOGGER_LEVEL);
+
     class ScriptExecutor {
         public:
             ScriptExecutor() {
-                m_logger = new Logger("ScriptExecutor",SCRIPT_EXECUTOR_LOGGER_LEVEL);
+                m_logger = &ScriptExecutorLogger;
                 m_script = NULL;
                 m_ledStrip = NULL;
             }
 
             ~ScriptExecutor() { 
-                delete m_logger;
+                endScript();
                 delete m_ledStrip;
+                delete m_logger;
             }
 
             void turnOff() {
@@ -69,7 +72,14 @@ namespace DevRelief {
             void setScript(Script * script) {
                 endScript();
                 m_script = script;
-                m_state.beginScript(script,m_ledStrip);
+                if (script != NULL) {
+                    script->begin(m_ledStrip);
+                }
+            }
+
+            void endScript() {
+                delete m_script;
+                m_script = NULL;
             }
 
             void configChange(Config& config) {
@@ -81,13 +91,11 @@ namespace DevRelief {
                 if (m_ledStrip == NULL || m_script == NULL) {
                     return;
                 }
-                m_script->step(m_state);
+                m_script->step();
 
             }
         private:
-            void endScript() {
-                m_script = NULL;
-            }
+
             void setupLeds(Config& config) {
                 m_logger->debug("setup HSL Strip");
                 if (m_ledStrip) {
@@ -99,7 +107,8 @@ namespace DevRelief {
                 pins.each([&](LedPin* pin) {
                     m_logger->debug("\tadd pin 0x%04X %d %d %d",pin,pin->number,pin->ledCount,pin->reverse);
                     if (pin->number >= 0) {
-                        DRLedStrip * real = new PhyisicalLedStrip(pin->number,pin->ledCount);
+                        DRLedStrip * real = new PhyisicalLedStrip(pin->number,pin->ledCount,pin->pixelType,pin->maxBrightness);
+                        
                         if (pin->reverse) {
                             auto* reverse = new ReverseStrip(real);
                             compound->add(reverse);
@@ -118,7 +127,6 @@ namespace DevRelief {
             Logger* m_logger;
             Script* m_script;
             HSLStrip* m_ledStrip;
-            ScriptState m_state;
     };
 
 }

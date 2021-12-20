@@ -23,6 +23,10 @@ class Util {
             if ((s1 == NULL && s2 != NULL) || (s1 != NULL && s2 == NULL)) { return false;}
             return strcmp(s1,s2) == 0;
         }
+
+        static bool isEmpty(const char * s) {
+            return s == NULL || s[0] == 0;
+        }
 };
 
 

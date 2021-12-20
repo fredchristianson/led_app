@@ -31,8 +31,32 @@ namespace DevRelief
             },
             {
                 "type": "values",
-                "x": 101
+                "x": "101"
                 "y": "var(yy)",
+                "timeAnimate": { "start": 10, "end": 200, "speed": 500},
+                "posAnimate": { "start": 10, "end": 200},
+                "posUnfold": { "start": 10, "end": 200, "unfold":true}
+            }
+            ]
+        }       
+        )script";
+
+    const char *POSITION_SCRIPT = R"script(
+        {
+            "commands": [
+            {
+                "type": "position",
+                "unit": "pixel",
+                "start": 5,
+                "count": 10,
+                "wrap": true,
+                "reverse": true,
+                "skip": 3,
+                "animate": {"speed":20}
+            },
+            {
+                "type": "rgb",
+                "red": 255
             }
             ]
         }       
@@ -50,28 +74,57 @@ namespace DevRelief
         virtual void setSaturation(int index, int16_t hue, HSLOperation op = REPLACE) {}
         virtual void setLightness(int index, int16_t hue, HSLOperation op = REPLACE) {}
         virtual void setRGB(int index, const CRGB &rgb, HSLOperation op = REPLACE) {}
-        virtual size_t getCount() { return 10; };
+        virtual size_t getCount() { return 100; };
         virtual size_t getStart() { return 0; };
         virtual void clear() {}
         virtual void show() {}
-    private:
+    protected:
         Logger *m_logger;
     };
 
-    class TestValuesCommand : public ScriptCommand
+    class TestPositionStrip : public TestStrip {
+        public:
+            TestPositionStrip(Logger*logger,TestResult* result) : TestStrip(logger){
+                m_result = result;
+            }
+            virtual void setRGB(int index, const CRGB &rgb, HSLOperation op = REPLACE) {
+                m_logger->debug("TestPositionStrip got index %d",index);
+                m_result->assertBetween(index,5,14,"index in range 5-14");   
+            }
+
+        private:
+            TestResult* m_result;
+
+    };
+
+    class TestValuesCommand : public ScriptCommandBase
     {
     public:
-        TestValuesCommand(TestResult *result, Logger *logger): ScriptCommand("test")
+        TestValuesCommand(TestResult *result, Logger *logger): ScriptCommandBase("test")
         {
             m_logger = logger;
             m_result = result;
         }
 
-        void step(ScriptState &state)
+        ScriptStatus doCommand(ScriptState *state) override
         {
-            m_result->assertEqual(state.getIntValue("x",0,0),101,"get x from closest values");
-            m_result->assertEqual(state.getIntValue("y",0,0),200,"get y from inner var(yy)");
-            m_result->assertEqual(state.getIntValue("z",0,0),300,"get z from 2nd values");
+            m_logger->debug("TestValuesCommand step");
+            m_result->assertEqual(getIntValue("x",0),101,"get x from closest values");
+            m_result->assertEqual(getIntValue("y",0),200,"get y from inner var(yy)");
+            m_result->assertEqual(getIntValue("z",0),300,"get z from 2nd values");
+            int timeValue = getIntValue("timeAnimate",0);
+            m_result->assertNotEqual(timeValue,0,"timeAnimate should not be 0");
+            int posStartValue = getIntValue("posAnimate",0);
+            m_result->assertEqual(posStartValue,10,"posStartValue should  be 10");
+            int posEndValue = getIntValue("posAnimate",1);
+            m_result->assertEqual(posEndValue,200,"posEndValue should  be 200");
+            int unfoldStartValue = getIntValue("posAnimate",0);
+            m_result->assertEqual(unfoldStartValue,10,"unfoldStartValue should  be 10");
+            int unfoldEndValue = getIntValue("posAnimate",1);
+            m_result->assertEqual(unfoldStartValue,10,"unfoldEndValue should  be 10");
+            int unfoldMidValue = getIntValue("posAnimate",0.5);
+            m_result->assertEqual(unfoldMidValue,105,"unfoldMidValue should  be 105");
+            return SCRIPT_RUNNING;
         }
 
 
@@ -98,15 +151,20 @@ namespace DevRelief
 
         void run()
         {
-            runTest("testJsonMemoryFree", [&](TestResult &r)
-                    { testJsonMemory(r); });
             runTest("testJsonValue", [&](TestResult &r)
                     { testJsonValue(r); });
+                    
+            runTest("testJsonMemoryFree", [&](TestResult &r)
+                    { testJsonMemory(r); });
+
             runTest("testSimpleJson", [&](TestResult &r)
                     { testParseSimple(r); });
+            runTest("testPosition", [&](TestResult &r)
+                    { testPosition(r); });    
+                                  
         }
 
-        JsonTestSuite(Logger *logger) : TestSuite("JSON Tests", logger)
+        JsonTestSuite(Logger *logger) : TestSuite("JSON Tests", logger,false)
         {
         }
 
@@ -114,6 +172,7 @@ namespace DevRelief
         void testJsonMemory(TestResult &result);
         void testJsonValue(TestResult &result);
         void testParseSimple(TestResult &result);
+        void testPosition(TestResult &result);
     };
 
     void JsonTestSuite::testJsonMemory(TestResult &result)
@@ -145,14 +204,20 @@ namespace DevRelief
         JsonParser parser;
         m_logger->info("\tParse JSON");
         SharedPtr<JsonRoot> root = parser.read(VALUES_SCRIPT);
-        m_logger->info("\tConverto to script");
+        m_logger->info("\tConvert to script");
         SharedPtr<Script> script = loader.jsonToScript(root.get());
+        m_logger->debug("got script");
+
         TestStrip strip(m_logger);
-        ScriptState state;
-        state.beginScript(script.get(),&strip);
+        m_logger->debug("created strip");
+        script->begin(&strip);
         TestValuesCommand* cmd=new TestValuesCommand(&result, m_logger);
+        m_logger->debug("created TestValuesCommand");
         script->add(cmd);
-        script->step(state);
+        m_logger->debug("added command");
+        
+        m_logger->debug("began strip");
+        script->step();
         m_logger->info("\tdone");
     }
 
@@ -166,6 +231,20 @@ namespace DevRelief
         SharedPtr<JsonRoot> root = parser.read(SIMPLE_SCRIPT);
         m_logger->info("\tConvert to script");
         SharedPtr<Script> script = loader.jsonToScript(root.get());
+        m_logger->info("\tdone");
+    }
+
+    void JsonTestSuite::testPosition(TestResult &result)
+    {
+        m_logger->info("Parse position JSON Script");
+        m_logger->debug(POSITION_SCRIPT);
+        ScriptDataLoader loader;
+        JsonParser parser;
+        SharedPtr<JsonRoot> root = parser.read(POSITION_SCRIPT);
+        SharedPtr<Script> script = loader.jsonToScript(root.get());
+        TestPositionStrip strip(m_logger,&result);
+        script->begin(&strip);
+        script->step();
         m_logger->info("\tdone");
     }
 

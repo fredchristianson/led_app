@@ -1056,8 +1056,9 @@ class TokenParser {
                 m_token = TOK_OBJECT_END;
             }  else if (c == '"'){
                 m_token = TOK_STRING;
-            }  else if (isdigit(c)){
+            }  else if (isdigit(c) || (c)=='-' && isdigit(*m_pos)){
                 const char * n = m_tokPos;
+                if (*n == '-') { n+= 1;}
                 while(*n !=0 && isdigit(*n)){
                     n++;
                 }

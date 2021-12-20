@@ -227,22 +227,34 @@ class ScriptDataLoader : public DataLoader {
             pos->setCountValue(jsonToValue(json,"count"));
             pos->setEndValue(jsonToValue(json,"end"));
             pos->setSkipValue(jsonToValue(json,"skip"));
-            const char * unit = json->get("unit","percent");
+            const char * unit = json->get("unit","inherit");
             if (Util::equal(unit,"pixel")){
                 pos->setUnit(POS_PIXEL);
+            } else if (Util::equal(unit,"percent")){
+                pos->setUnit(POS_PERCENT);
+            } else {
+                pos->setUnit(POS_INHERIT);
             }
             const char * type = json->get("type","relative");
             pos->setPositionType(positionTypeToInt(type));
             pos->setWrap(jsonToValue(json,"wrap"));
             pos->setReverse(jsonToValue(json,"reverse"));
             pos->setOffset(jsonToValue(json,"offset"));
+            pos->setStripNumber(jsonToValue(json,"strip"));
             return pos;
         }
 
         PositionType positionTypeToInt(const char * type){
-            PositionType pt = POS_RELATIVE;
+            PositionType pt = POS_ABSOLUTE;
+            if (type == NULL) { return pt;}
             if (Util::equal(type,"absolute")){
                 pt = POS_ABSOLUTE;
+            } else if (Util::equal(type,"relative")){
+                pt = POS_RELATIVE;
+            } else if (Util::equal(type,"after")){
+                pt = POS_AFTER;
+            } else if (Util::equal(type,"strip")){
+                pt = POS_STRIP;
             }
             return pt;
         }

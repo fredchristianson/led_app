@@ -48,6 +48,13 @@ namespace DevRelief {
                 return result;
             }
 
+            bool assertBetween(int value, int low, int high,const char * msg=UNKNOWN_TEST) {
+                bool result = (value >=low && value <= high);
+                addResult(result,msg);
+                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertBetween %s [ %s]:  %d <= %d <= %d",(result ? SUCCEEDED : FAILED), msg,low,value,high);
+                return result;
+            }
+
             bool assertEqual(const char * a, const char * b,const char * msg=UNKNOWN_TEST) {
                 bool result = true;
                 if (a==b) {
@@ -62,19 +69,43 @@ namespace DevRelief {
                 return result;
             }
 
-            bool assertEqual(void* a,void * b,const char * msg=UNKNOWN_TEST) {
+            bool assertEqual(void * a,void * b,const char * msg=UNKNOWN_TEST) {
                 bool result = (a == b);
                 addResult(result,msg);
                 m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertEqual %s [ %s]:  %d == %d",(result ? SUCCEEDED : FAILED), msg,a,b);
                 return result;
             }
 
-            bool assertNotEqual(void* a,void* b,const char * msg=UNKNOWN_TEST) {
+
+            bool assertNotEqual(int a,int b,const char * msg=UNKNOWN_TEST) {
                 bool result = (a != b);
+                addResult(result,msg);
+                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertNotEqual %s [ %s]:  %d == %d",(result ? SUCCEEDED : FAILED), msg,a,b);
+                return result;
+            }
+
+
+            bool assertNotEqual(const char* a,const char* b,const char * msg=UNKNOWN_TEST) {
+                bool result = true;
+                if (a == b) {
+                    result = false;
+                } else if ((a == NULL && b != NULL) ||(b == NULL && a != NULL)){
+                    result = false;
+                } else {
+                    result = strcmp(a,b) != 0;
+                }
                 addResult(result,msg);
                 m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertNotEqual %s [ %s]:  %d != %d",(result ? SUCCEEDED : FAILED), msg,a,b);
                 return result;
             }
+
+            bool assertNotEqual(void* a,void * b,const char * msg=UNKNOWN_TEST) {
+                bool result = (a != b);
+                addResult(result,msg);
+                m_logger->write(result ? INFO_LEVEL:ERROR_LEVEL,"assertMptEqual %s [ %s]:  %d == %d",(result ? SUCCEEDED : FAILED), msg,a,b);
+                return result;
+            }
+
 
             bool assertNull(void*a,const char * msg=UNKNOWN_TEST) {
                 bool result = (a == NULL);
@@ -128,7 +159,8 @@ namespace DevRelief {
         public:
             typedef void (TestSuite::*TestFn)(TestResult &);
 
-            TestSuite(const char * name, Logger* logger){
+            TestSuite(const char * name, Logger* logger,bool logTestMessages=false){
+                m_logTestMessages = logTestMessages;
                 m_name = name;
                 m_logger = logger;
             }
@@ -137,6 +169,7 @@ namespace DevRelief {
             }
 
             bool runTest(const char * name, auto  test){
+                Logger::setTesting(m_logTestMessages);
                 TestResult result(m_logger);
                 int mem = ESP.getFreeHeap();
                 m_logger->info("Run test: %s",name);
@@ -153,6 +186,8 @@ namespace DevRelief {
                 }
                 m_logger->outdent();
                 success = result.isSuccess() && success;
+                Logger::setTesting(false);
+
                 return result.isSuccess();
             }
 
@@ -160,6 +195,7 @@ namespace DevRelief {
         protected:
             const char * m_name;
             Logger * m_logger;
+            bool m_logTestMessages;
             bool success;
     };
 

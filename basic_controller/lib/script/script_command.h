@@ -33,7 +33,7 @@ namespace DevRelief
 
         void destroy() override { delete this; }
 
-        IHSLStrip* getStrip() override {
+        IStripModifier* getStrip() override {
             if (m_position) {
                 return m_position;
             } else if (m_previousCommand) {
@@ -41,6 +41,7 @@ namespace DevRelief
             }
             return NULL;
         }
+        IHSLStrip * getHSLStrip() { if (m_previousCommand) { return m_previousCommand->getHSLStrip();} return NULL;}
 
         ScriptStatus execute(ScriptState *state, IScriptCommand *previous) override
         {
@@ -101,6 +102,8 @@ namespace DevRelief
         }
 
         ScriptState* getState() { return m_state;}
+
+
     protected:
         virtual ScriptStatus doCommand(ScriptState *state) = 0;
 
@@ -120,7 +123,7 @@ namespace DevRelief
     };
 
     /* the first command in a CommandList.  It does not have a previous command like others */
-    class ScriptStartCommand : public IScriptCommand
+    class ScriptStartCommand : public IScriptCommand, IStripModifier
     {
         public:
             ScriptStartCommand() 
@@ -142,6 +145,8 @@ namespace DevRelief
                 return SCRIPT_RUNNING;
             }
 
+            PositionUnit getPositionUnit() override { return POS_PERCENT;}
+            
             void setHue(int index, int16_t hue, HSLOperation op=REPLACE) {
                 if (m_strip) {
                     m_strip->setHue(index,hue,op);
@@ -193,8 +198,13 @@ namespace DevRelief
 
             const char *getType() override { return "ScriptStartCommand"; }
             void setStrip(IHSLStrip* strip) { m_strip = strip;}
-            IHSLStrip* getStrip() override { return m_strip;}
+            IHSLStrip* getHSLStrip() { return m_strip;}
             IScriptState* getState() { return m_state;}
+
+            IStripModifier* getParentStrip() { return NULL;}
+            IStripModifier* getPositionStrip() { return this;}
+            IStripModifier* getFirstStrip() {return this;}
+            IStripModifier* getStrip() {return this;}
 
         private: 
             IHSLStrip* m_strip;
