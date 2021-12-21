@@ -35,6 +35,7 @@ namespace DevRelief
             m_wrap = true;
             m_reverse = false;
             m_logger = &ScriptLogger;
+            m_operation = REPLACE;
         }
 
         ~ScriptPosition() {
@@ -122,11 +123,11 @@ namespace DevRelief
                 m_end = m_endValue->getIntValue(cmd, m_end);
                 m_count = abs(m_end - m_start)+1;
             };
-            if(m_reverse) {
-                int tmp = m_start;
-                m_start = m_end;
-                m_end = tmp;
-            }
+            // if(m_reverse) {
+            //     int tmp = m_start;
+            //     m_start = m_end;
+            //     m_end = tmp;
+            // }
             if (m_unit == POS_PERCENT) {
                 double baseCount = m_parentStrip->getCount();
                 ScriptLogger.debug("PERCENT: base: %f. start: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s.",baseCount, m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"));
@@ -240,7 +241,9 @@ namespace DevRelief
             }
             index = m_start+index;
             index = index + m_offset + m_positionOffset;
-
+            if (m_reverse) {
+                index = m_end - index;
+            }
             return true;
         }
 
@@ -292,6 +295,8 @@ namespace DevRelief
         // m_positionStrip is the strip this position calculates position off.  may differ from m_parentStrip
         IStripModifier *m_positionStrip;  // may be previous command,  ABSOLUTE, specific strip, etc
         int m_positionOffset;  // offset withing m_parentStrip (usually based on m_positionStrip)
+
+        HSLOperation m_operation;
         Logger* m_logger;
     };
 

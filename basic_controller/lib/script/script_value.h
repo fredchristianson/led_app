@@ -28,7 +28,16 @@ namespace DevRelief
     class ScriptSystemValue : public ScriptValue {
         public:
             ScriptSystemValue(const char* name) {
-                m_name = name;
+                DRStringBuffer buf;
+                auto parts = buf.split(name,":");
+                if (buf.count() == 2) {
+                    m_scope = buf.getAt(0);
+                    m_name = buf.getAt(1);
+                } else {
+                    m_name = buf.getAt(0);
+                }
+
+                m_logger->always("create SystemValue: scope=%s.  name=%s",m_scope.get(),m_name.get());
             }
 
             int getIntValue(IScriptCommand* cmd,  int defaultValue) override
@@ -50,18 +59,22 @@ namespace DevRelief
         DRString toString() { return DRString("System Value: ").append(m_name); }
         private:
             double get(IScriptCommand* cmd, double defaultValue){
+                double val = defaultValue;
                 if (Util::equal(m_name,"start")) {
-                    return cmd->getStrip()->getStart();
+                    val = cmd->getStrip()->getStart();
                 }
                 if (Util::equal(m_name,"count")) {
-                    return cmd->getStrip()->getCount();
+                    val = cmd->getStrip()->getCount();
                 }
                 if (Util::equal(m_name,"step")) {
-                    return cmd->getState()->getStepNumber();
+                    val = cmd->getState()->getStepNumber();
                 }
+                m_logger->always("SystemValue %s:%s %f",m_scope.get(),m_name.get(),defaultValue);
                 return defaultValue;
             }
             DRString m_name;
+            DRString m_scope;
+
     };
   
     class NameValue

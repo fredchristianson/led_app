@@ -284,6 +284,7 @@ namespace DevRelief
         LEDCommand(const char * type) : ScriptCommandBase(type)
         {
             memLogger->debug("LEDCommand()");
+            m_operation = REPLACE;
         }
 
         virtual ~LEDCommand()
@@ -312,8 +313,26 @@ namespace DevRelief
             return SCRIPT_RUNNING;
         }
 
+        void setOperation(const char *op) {
+            if (Util::equal(op,"replace")){
+                m_operation = REPLACE;
+            } else if (Util::equal(op,"add")){
+                m_operation = ADD;
+            }else if (Util::equal(op,"subtract")){
+                m_operation = SUBTRACT;
+            }else if (Util::equal(op,"average")){
+                m_operation = AVERAGE;
+            }else if (Util::equal(op,"min")){
+                m_operation = MIN;
+            }else if (Util::equal(op,"max")){
+                m_operation = MAX;
+            }
+            m_operation = REPLACE;
+        }
+
     protected:
         virtual void updateLED(int index, IHSLStrip* strip)=0;
+        HSLOperation m_operation;
     private:
         IScriptValue *m_hue;
         IScriptValue *m_saturation;
@@ -348,12 +367,18 @@ namespace DevRelief
         IScriptValue *getSaturation(IScriptValue *saturation) { return m_saturation; }
 
         void updateLED(int index, IHSLStrip* strip) override {
-            int h = m_hue ? m_hue->getIntValue(this,  -1) : -1;
-            strip->setHue(index, h, REPLACE);
-            int l = m_lightness ? m_lightness->getIntValue(this, -1) : -1;
-            strip->setLightness(index, l, REPLACE);
-            int s = m_saturation ? m_saturation->getIntValue(this, -1) : -1;
-            strip->setSaturation(index, s, REPLACE);
+            if (m_hue){
+                int h = m_hue->getIntValue(this,  -1);
+                strip->setHue(index, h, m_operation);
+            }
+            if (m_lightness) {
+                int l = m_lightness ? m_lightness->getIntValue(this, -1) : -1;
+                strip->setLightness(index, l, m_operation);
+            }
+            if (m_saturation){
+                int s = m_saturation ? m_saturation->getIntValue(this, -1) : -1;
+                strip->setSaturation(index, s, m_operation);
+            }
 
         }
 
@@ -399,7 +424,7 @@ namespace DevRelief
                 int b = m_blue ? m_blue->getIntValue(this, 0) : 0;
                 m_logger->never("\tblue=%d", b);
                 CRGB crgb(r, g, b);
-                strip->setRGB(index, crgb, REPLACE);
+                strip->setRGB(index, crgb, m_operation);
         }
 
     private:

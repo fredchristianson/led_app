@@ -287,6 +287,8 @@ class ScriptDataLoader : public DataLoader {
             cmd->setRed(jsonToValue(json,"red"));
             cmd->setGreen(jsonToValue(json,"green"));
             cmd->setBlue(jsonToValue(json,"blue"));
+            cmd->setOperation(jsonString(json,"op","replace"));
+
             return cmd;
         }
 
@@ -296,6 +298,7 @@ class ScriptDataLoader : public DataLoader {
             cmd->setHue(jsonToValue(json,"hue"));
             cmd->setLightness(jsonToValue(json,"lightness"));
             cmd->setSaturation(jsonToValue(json,"saturation"));
+            cmd->setOperation(jsonString(json,"op","replace"));
             return cmd;
         }
 

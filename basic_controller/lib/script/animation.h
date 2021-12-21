@@ -22,7 +22,7 @@ namespace DevRelief
 
         double getValue(double position)
         {
-            m_logger->always("AnimationRange.getValue(%f)  %f-%f",position,m_low,m_high);
+            m_logger->never("AnimationRange.getValue(%f)  %f-%f",position,m_low,m_high);
             if (m_unfold) {
                 if (position<=0.5) {
                     position=position*2;
@@ -32,18 +32,18 @@ namespace DevRelief
             }
             if (position <= 0 || m_high == m_low)
             {
-                m_logger->always("\t return low %f",position,m_low);
+                m_logger->never("\t return low %f",position,m_low);
 
                 return m_low;
             }
             if (position >= 1)
             {
-                m_logger->always("\treturn high %f",position,m_high);
+                m_logger->never("\treturn high %f",position,m_high);
                 return m_high;
             }
             double diff = m_high - m_low;
             double value = m_low + position * diff;
-            m_logger->always("\t %f  %f %f-%f",value,diff,m_low,m_high);
+            m_logger->never("\t %f  %f %f-%f",value,diff,m_low,m_high);
             return value;
         }
 
