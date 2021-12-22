@@ -61,8 +61,8 @@ class IHSLStrip {
         virtual void setSaturation(int index, int16_t saturation, HSLOperation op=REPLACE)=0;
         virtual void setLightness(int index, int16_t lightness, HSLOperation op=REPLACE)=0;
         virtual void setRGB(int index, const CRGB& rgb, HSLOperation op=REPLACE)=0;
-        virtual size_t getCount()=0;
-        virtual size_t getStart()=0;
+        virtual int getCount()=0;
+        virtual int getStart()=0;
         virtual void clear()=0;
         virtual void show()=0;
 };
@@ -81,7 +81,7 @@ class DRLedStrip {
         virtual void clear() =0;
         virtual void setBrightness(uint16_t brightness)=0;
         virtual void setColor(uint16_t index,const CRGB& color)=0;
-        virtual size_t getCount()=0;
+        virtual int getCount()=0;
         virtual void show()=0;
 
         virtual void setColor(uint16_t index, CHSL& color) {
@@ -132,7 +132,7 @@ class AdafruitLedStrip : public DRLedStrip {
             m_controller->setPixelColor(index,m_controller->Color(color.red,color.green,color.blue));
         }
 
-        virtual size_t getCount() { return m_controller->numPixels();}
+        virtual int getCount() { return m_controller->numPixels();}
         virtual void show() {
             m_logger->debug("show strip %d, %d",m_controller->getPin(),m_controller->numPixels());
             //m_controller->setBrightness(40);
@@ -236,7 +236,7 @@ class CompoundLedStrip : public DRLedStrip {
                 m_logger->error("bad index %d %d %d",index,strip,(strips[strip] == NULL ? -1 : strips[strip]->getCount()));
             }
         };
-        virtual size_t getCount() {
+        virtual int getCount() {
             size_t ledcount = 0;
             for(int i=0;i<count;i++) {
                 if (strips[i] == NULL) {
@@ -286,7 +286,7 @@ class AlteredStrip : public DRLedStrip {
             m_base->setColor(translateIndex(index),translateColor(color));
         }
 
-        virtual size_t getCount() { return translateCount(m_base->getCount());}
+        virtual int getCount() { return translateCount(m_base->getCount());}
         virtual void show() {m_base->show();}
         virtual CompoundLedStrip* getCompoundLedStrip() { return m_base ? m_base->getCompoundLedStrip() : NULL;}
 
@@ -346,7 +346,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
             reallocHSLData(0);
         }
 
-        virtual size_t getStart() override { return 0;}
+        virtual int getStart() override { return 0;}
 
         void setRGB(int index, const CRGB& rgb,HSLOperation op) {
             CHSL hsl = RGBToHSL(rgb);
@@ -432,7 +432,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
             m_base->show();
         }
 
-        size_t getCount() { return AlteredStrip::getCount();}
+        int getCount() { return AlteredStrip::getCount();}
         virtual IHSLStrip* getFirstHSLStrip() { return this;}
         virtual CompoundLedStrip* getCompoundLedStrip() { return m_base?m_base->getCompoundLedStrip() : NULL;}
 

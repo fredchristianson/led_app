@@ -9,6 +9,16 @@
 namespace DevRelief {
     Logger* colorLogger = new Logger("Color",DEBUG_LEVEL);
 
+    enum HUE {
+        RED= 0,
+        ORANGE= 30,
+        YELLOW= 60,
+        GREEN= 90,
+        CYAN= 180,
+        BLUE= 240,
+        MAGENTA= 285,
+        PURPLE= 315
+    };
 
     int clamp(int min, int max, int val) {
         if (val < min) { return min;}
@@ -141,7 +151,7 @@ namespace DevRelief {
     }
 
     CRGB HSLToRGB(const CHSL& hsl) {
-        //m_logger->debug("hsl to rgb (%d,%d,%d)",(int)hsl.hue,(int)hsl.saturation,(int)hsl.lightness);
+        //m_logger->debug(hsl to rgb (%d,%d,%d)",(int)hsl.hue,(int)hsl.saturation,(int)hsl.lightness);
         unsigned char r = 0;
         unsigned char g = 0;
         unsigned char b = 0;

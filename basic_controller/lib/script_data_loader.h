@@ -24,6 +24,7 @@ class ScriptDataLoader : public DataLoader {
     public:
         ScriptDataLoader() {
             m_logger = & ScriptLoaderLogger;
+            m_currentContainer = NULL;
         }
 
 
@@ -127,12 +128,21 @@ class ScriptDataLoader : public DataLoader {
             
             JsonObject* obj = jsonRoot->getTopObject();
             Script* script = new Script();
-            
+            m_currentContainer = script->getContainer();
+
             m_logger->debug("convert JSON object to Script");
             script->setName(jsonString(obj,S_NAME,"unnamed"));
             script->setFrequencyMSec(jsonInt(obj,S_FREQUENCY,0));
 
             JsonArray * arr = obj->getArray("commands");
+            jsonToCommands(arr,script->getContainer());
+                       
+            m_logger->debug("created Script");
+            return script;
+
+        }
+
+        void jsonToCommands(JsonArray* arr, ICommandContainer* parent) {
             arr->each([&](JsonElement*item) {
             
                 m_logger->debug("\tgot json command");
@@ -152,23 +162,21 @@ class ScriptDataLoader : public DataLoader {
                     } else if (matchName(S_POSITION,type)) {
                        cmd=jsonToPositionCommand(obj);
                     
+                    } else if (matchName(S_SEGMENT,type)){
+                        cmd=jsonToSegment(obj);
                     } else {
                         m_logger->error("unknown ScriptCommand type %s",type);
                         m_logger->info(obj->toJsonString().text());
-                    }
+                    } 
                     
                     if (cmd != NULL) {
                         m_logger->debug("add command %s",cmd->getType());
-                        JsonObject*posJson = obj->getChild("position");
-                        
-                        if (posJson != NULL) {
-                            m_logger->debug("\tgot position json");
-                            ScriptPosition*pos = jsonToPosition(posJson);
-                            if (pos != NULL) {
-                                m_logger->debug("got position object");
-                                cmd->setScriptPosition(pos);
-                            }
+                        ScriptPosition*pos = jsonToPosition(obj);
+                        if (pos != NULL) {
+                            m_logger->debug("got position object");
+                            cmd->setScriptPosition(pos);
                         }
+
                         JsonObject*valJson = obj->getChild("values");
                         
                         if (valJson != NULL) {
@@ -176,7 +184,7 @@ class ScriptDataLoader : public DataLoader {
                             jsonGetValues(valJson,cmd);
                         }
                         m_logger->debug("\tadd child to script");
-                        script->add(cmd);
+                        m_currentContainer->add(cmd);
                         m_logger->debug("\tadded");
                     }
                     
@@ -186,10 +194,6 @@ class ScriptDataLoader : public DataLoader {
                 
                 
             });
-            
-            m_logger->debug("created Script");
-            return script;
-
         }
 
         const char * jsonString(JsonObject* obj,const char * name, const char * defaultValue) {
@@ -211,10 +215,19 @@ class ScriptDataLoader : public DataLoader {
         }
 
 
+        ScriptSegmentContainer* jsonToSegment(JsonObject* json) {
+            ICommandContainer *parentContainer = m_currentContainer;
+            ScriptSegmentContainer* seg = new ScriptSegmentContainer(m_currentContainer);
+            m_currentContainer = seg;
+            JsonArray* arr = json->getArray("commands");
+            jsonToCommands(arr,seg);
+            m_currentContainer = parentContainer;
+            return seg;
+        }
 
         PositionCommand* jsonToPositionCommand(JsonObject* json) {
             m_logger->debug("create PositionCommand");
-            PositionCommand* cmd = new PositionCommand();
+            PositionCommand* cmd = new PositionCommand(m_currentContainer);
             ScriptPosition* pos = jsonToPosition(json);
             cmd->setScriptPosition(pos);
             return cmd;
@@ -222,26 +235,39 @@ class ScriptDataLoader : public DataLoader {
 
 /**/
         ScriptPosition* jsonToPosition(JsonObject* json) {
-            ScriptPosition* pos = new ScriptPosition();
-            pos->setStartValue(jsonToValue(json,"start"));
-            pos->setCountValue(jsonToValue(json,"count"));
-            pos->setEndValue(jsonToValue(json,"end"));
-            pos->setSkipValue(jsonToValue(json,"skip"));
-            const char * unit = json->get("unit","inherit");
-            if (Util::equal(unit,"pixel")){
-                pos->setUnit(POS_PIXEL);
-            } else if (Util::equal(unit,"percent")){
-                pos->setUnit(POS_PERCENT);
-            } else {
-                pos->setUnit(POS_INHERIT);
+            JsonElement* position = json->getPropertyValue("position");
+            if (position != NULL) {
+                json = position->asObject();
             }
-            const char * type = json->get("type","relative");
-            pos->setPositionType(positionTypeToInt(type));
-            pos->setWrap(jsonToValue(json,"wrap"));
-            pos->setReverse(jsonToValue(json,"reverse"));
-            pos->setOffset(jsonToValue(json,"offset"));
-            pos->setStripNumber(jsonToValue(json,"strip"));
-            return pos;
+            if (json == NULL) {
+                return NULL;
+            }
+
+            ScriptPosition* pos = new ScriptPosition();
+            if (json->getProperty("start") || json->getProperty("count")||
+                json->getProperty("skip")||json->getProperty("reverse")||json->getProperty("offset")||json->getProperty("strip")){
+                pos->setStartValue(jsonToValue(json,"start"));
+                pos->setCountValue(jsonToValue(json,"count"));
+                pos->setEndValue(jsonToValue(json,"end"));
+                pos->setSkipValue(jsonToValue(json,"skip"));
+                const char * unit = json->get("unit","inherit");
+                
+                if (Util::equal(unit,"pixel")){
+                    pos->setUnit(POS_PIXEL);
+                } else if (Util::equal(unit,"percent")){
+                    pos->setUnit(POS_PERCENT);
+                } else {
+                    pos->setUnit(POS_INHERIT);
+                }
+                const char * type = json->get("type","relative");
+                pos->setPositionType(positionTypeToInt(type));
+                pos->setWrap(jsonToValue(json,"wrap"));
+                pos->setReverse(jsonToValue(json,"reverse"));
+                pos->setOffset(jsonToValue(json,"offset"));
+                pos->setStripNumber(jsonToValue(json,"strip"));
+                return pos;
+            }
+            return NULL;
         }
 
         PositionType positionTypeToInt(const char * type){
@@ -260,7 +286,7 @@ class ScriptDataLoader : public DataLoader {
         }
 
         ScriptValueCommand* jsonToValueCommand(JsonObject* json) {
-            ScriptValueCommand* cmd = new ScriptValueCommand();
+            ScriptValueCommand* cmd = new ScriptValueCommand(m_currentContainer);
             jsonGetValues(json,cmd);
             return cmd;
         }
@@ -283,7 +309,7 @@ class ScriptDataLoader : public DataLoader {
         }
        /* */
         RGBCommand* jsonToRGBCommand(JsonObject* json) {
-            RGBCommand* cmd = new RGBCommand();
+            RGBCommand* cmd = new RGBCommand(m_currentContainer);
             cmd->setRed(jsonToValue(json,"red"));
             cmd->setGreen(jsonToValue(json,"green"));
             cmd->setBlue(jsonToValue(json,"blue"));
@@ -294,7 +320,7 @@ class ScriptDataLoader : public DataLoader {
 
 
         HSLCommand* jsonToHSLCommand(JsonObject* json) {
-            HSLCommand* cmd = new HSLCommand();
+            HSLCommand* cmd = new HSLCommand(m_currentContainer);
             cmd->setHue(jsonToValue(json,"hue"));
             cmd->setLightness(jsonToValue(json,"lightness"));
             cmd->setSaturation(jsonToValue(json,"saturation"));
@@ -500,7 +526,7 @@ class ScriptDataLoader : public DataLoader {
             
         }
     private:
-        
+        ICommandContainer* m_currentContainer;
 };
 };
 #endif

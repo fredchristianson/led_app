@@ -25,6 +25,7 @@ namespace DevRelief
             m_stepNumber=0;
             m_lastStepTime = 0;
             m_stepNumber=0;
+            m_previousCommand = NULL;
         }
 
         virtual ~ScriptState()
@@ -41,6 +42,8 @@ namespace DevRelief
             m_stepNumber++;
             m_positionDomain.setPosition(0,0,0);
             m_timeDomain.setTimePosition(now);
+            m_previousCommand = NULL;
+
         }
 
         void endStep()
@@ -75,6 +78,12 @@ namespace DevRelief
             return &m_positionDomain;
         }
         int getStepNumber() override { return m_stepNumber;}
+
+        IScriptCommand * getPreviousCommand() { return m_previousCommand;}
+        void setPreviousCommand(IScriptCommand*cmd) { 
+            m_logger->never("Previous command 0x%04X",cmd);
+            m_previousCommand = cmd;
+        }
     private:
         friend Script;
         void beginScript(Script *script, IHSLStrip *strip)
@@ -99,6 +108,7 @@ namespace DevRelief
         unsigned long m_startTime;
         unsigned long m_lastStepTime;
         Script *m_script;
+        IScriptCommand* m_previousCommand;
 
         TimeDomain m_timeDomain;
         PositionDomain m_positionDomain;

@@ -47,6 +47,8 @@ const char * S_CONTROL = "control";
 const char * S_VARIABLE = "variable";
 const char * S_UPDATE = "update";
 const char * S_PATTERN = "pattern";
+const char * S_SEGMENT = "segment";
+
 
 bool matchName(const char * want, const char * have) {
     bool i= strcasecmp(want,have) == 0;

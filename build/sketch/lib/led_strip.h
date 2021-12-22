@@ -66,7 +66,6 @@ class IHSLStrip {
         virtual size_t getStart()=0;
         virtual void clear()=0;
         virtual void show()=0;
-        virtual IHSLStrip* getFirstHSLStrip()=0;  // for series of strips that all can adjust HSL and/or position
 };
 
 class DRLedStrip {
@@ -352,7 +351,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
 
         void setRGB(int index, const CRGB& rgb,HSLOperation op) {
             CHSL hsl = RGBToHSL(rgb);
-            m_logger->never("setRGB %d (%d,%d,%d)->(%d,%d,%d)",index,rgb.red,rgb.green,rgb.blue,hsl.hue,hsl.saturation,hsl.lightness);
+            m_logger->periodicNever(NEVER,5000,"setRGB %d (%d,%d,%d)->(%d,%d,%d)",index,rgb.red,rgb.green,rgb.blue,hsl.hue,hsl.saturation,hsl.lightness);
             setHue(index,hsl.hue,op);
             setSaturation(index,hsl.saturation,op);
             setLightness(index,hsl.lightness,op);
@@ -360,7 +359,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
 
         void setHue(int index, int16_t hue, HSLOperation op=REPLACE) {
             if (index<0 || index>=m_count) {
-                m_logger->error("HSL Hue index out of range %d (0-%d)",index,m_count);
+                m_logger->periodic(ERROR_LEVEL,5000,"HSL Hue index out of range %d (0-%d)",index,m_count);
                 return;
             } 
             if (index == 0) {
@@ -370,13 +369,13 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
             return;
             m_hue[index] = clamp(0,359,performOperation(op,m_hue[index],hue));
             if (index == 0) {
-                m_logger->debug("setHue %d %d %d",index,hue,op);
+                m_logger->periodic(ERROR_LEVEL,5000,"setHue %d %d %d",index,hue,op);
             }
         }
  
         void setSaturation(int index, int16_t saturation, HSLOperation op=REPLACE) {
             if (index<0 || index>=m_count) {
-                m_logger->error("HSL saturation index out of range %d (0-%d)",index,m_count);
+                m_logger->periodic(ERROR_LEVEL,5000,"HSL saturation index out of range %d (0-%d)",index,m_count);
                 return;
             } 
             if (saturation<0 || saturation>100) { return;}
@@ -385,7 +384,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
 
         void setLightness(int index, int16_t lightness, HSLOperation op=REPLACE) {
             if (index<0 || index>=m_count) {
-                m_logger->error("HSL lightness index out of range %d (0-%d)",index,m_count);
+                m_logger->periodic(ERROR_LEVEL,5000,"HSL lightness index out of range %d (0-%d)",index,m_count);
                 return;
             } 
             

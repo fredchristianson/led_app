@@ -14,6 +14,7 @@
 #include "./script_position.h"
 #include "./script_state.h"
 #include "./script_command.h"
+#include "./script_container.h"
 #include "./animation.h";
 
 namespace DevRelief
@@ -29,6 +30,7 @@ namespace DevRelief
             m_logger->debug("Create Script()");
             m_frequencyMSecs = 50;
             m_state = NULL;
+            m_rootContainer = new ScriptRootContainer();
         }
 
         virtual ~Script()
@@ -36,56 +38,38 @@ namespace DevRelief
             memLogger->debug("~Script()");
             m_logger->debug("~Script()");
             delete m_state;
+            delete m_rootContainer;
         }
 
         void destroy() override { delete this;}
 
-        void add(IScriptCommand *cmd)
-        {
-            if (cmd == NULL) {
-                m_logger->error("Script.addCommand called with NULL cmd");
-            }
-            m_logger->info("Script.addCommand type %s",cmd->getType());
-            m_commandList.add(cmd);
-        }
 
         void begin(IHSLStrip * ledStrip) override {
-            m_logger->debug("begin Script");
+            m_logger->always("begin Script.  frequency %d",m_frequencyMSecs);
             delete m_state;
             m_state = new ScriptState();
-            m_commandList.setStrip(ledStrip);
+            m_rootContainer->setStrip(ledStrip);
             m_state->beginScript(this,ledStrip);
 
         }
 
         void step() override
         {
-            m_logger->test("step()");
             int ms = m_state->msecsSinceLastStep();
             m_logger->test("frequency %d %d",m_frequencyMSecs,ms);
             if (m_frequencyMSecs > m_state->msecsSinceLastStep())
             {
-                m_logger->test("too soon to run");
-                return;
+                 return;
             }
             m_logger->test("Script step");
 
             IHSLStrip * strip = m_state->getStrip();
-            if (strip == NULL) {
-                m_logger->test("Script needs a strip");
-                return;
-            }
-            m_logger->test("clearStrip()");
+
 
             strip->clear();
-            m_logger->test("beginStep()");
             m_state->beginStep();
-            m_logger->test("execute()");
-            m_commandList.execute(m_state);
-            m_logger->test("endStep()");
-            
+            m_rootContainer->execute(m_state);
             m_state->endStep();
-            m_logger->test("show strip");
             strip->show();
         }
 
@@ -93,10 +77,10 @@ namespace DevRelief
         const char *getName() { return m_name.text(); }
         void setFrequencyMSec(int msecs) { m_frequencyMSecs = msecs; }
         int getFrequencyMSec() { return m_frequencyMSecs; }
-
+        ScriptRootContainer* getContainer() { return m_rootContainer;}
     private:
         Logger *m_logger;
-        ScriptCommandList m_commandList;
+        ScriptRootContainer* m_rootContainer;
         PtrList<ScriptCommand *> m_commands;
         DRString m_name;
         int m_frequencyMSecs;

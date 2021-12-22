@@ -80,7 +80,10 @@ class SharedPtr {
         T& operator*() { return *data;}
         const T* operator->() const { return data;}
 
-        const T* get() const  { return data;}
+        const T* get() const  {
+            sharedPtrLogger->never("get() 0x%04X",data);
+            return data;
+        }
          T* get()  { return data;}
     private:
         int getRefCount() const { return m_refCount == NULL ? 0 : *m_refCount;}

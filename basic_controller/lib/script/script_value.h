@@ -21,6 +21,7 @@ namespace DevRelief
             void destroy() override { delete this;}
 
             bool isRecursing() override { return false;}
+            bool equals(IScriptCommand*cmd,const char * match) override { return false;}
         protected:
             Logger* m_logger;
     };
@@ -31,13 +32,12 @@ namespace DevRelief
                 DRStringBuffer buf;
                 auto parts = buf.split(name,":");
                 if (buf.count() == 2) {
+                    m_logger->always("got name and scope");
                     m_scope = buf.getAt(0);
                     m_name = buf.getAt(1);
                 } else {
                     m_name = buf.getAt(0);
                 }
-
-                m_logger->always("create SystemValue: scope=%s.  name=%s",m_scope.get(),m_name.get());
             }
 
             int getIntValue(IScriptCommand* cmd,  int defaultValue) override
@@ -62,18 +62,35 @@ namespace DevRelief
                 double val = defaultValue;
                 if (Util::equal(m_name,"start")) {
                     val = cmd->getStrip()->getStart();
-                }
-                if (Util::equal(m_name,"count")) {
+                } else if (Util::equal(m_name,"count")) {
                     val = cmd->getStrip()->getCount();
-                }
-                if (Util::equal(m_name,"step")) {
+                } else if (Util::equal(m_name,"step")) {
                     val = cmd->getState()->getStepNumber();
-                }
-                m_logger->always("SystemValue %s:%s %f",m_scope.get(),m_name.get(),defaultValue);
-                return defaultValue;
+                } else if (Util::equal(m_name,"red")) {
+                    val = HUE::RED;
+                }  else if (Util::equal(m_name,"orange")) {
+                    val = HUE::ORANGE;
+                }  else if (Util::equal(m_name,"yellow")) {
+                    val = HUE::YELLOW;
+                }  else if (Util::equal(m_name,"green")) {
+                    val = HUE::GREEN;
+                }  else if (Util::equal(m_name,"cyan")) {
+                    val = HUE::CYAN;
+                }  else if (Util::equal(m_name,"blue")) {
+                    val = HUE::BLUE;
+                }  else if (Util::equal(m_name,"magenta")) {
+                    val = HUE::MAGENTA;
+                }  else if (Util::equal(m_name,"purple")) {
+                    val = HUE::PURPLE;
+                } 
+
+
+                m_logger->never("SystemValue %s:%s %f",m_scope.get(),m_name.get(),val);
+                return val;
             }
-            DRString m_name;
             DRString m_scope;
+            DRString m_name;
+
 
     };
   
@@ -320,6 +337,7 @@ namespace DevRelief
         ScriptStringValue(const char *value) : m_value(value)
         {
             memLogger->debug("ScriptStringValue()");
+            m_logger->debug("ScriptStringValue 0x%04X %s",this,value);
         }
 
         virtual ~ScriptStringValue()
@@ -357,6 +375,10 @@ namespace DevRelief
             return defaultValue;
         }
 
+        bool equals(IScriptCommand*cmd, const char * match) override { 
+            m_logger->debug("ScriptStringValue.equals %s==%s",m_value.get(),match);
+            return Util::equal(m_value.text(),match);
+        }
         DRString toString() override { return m_value; }
 
     protected:
@@ -534,6 +556,11 @@ namespace DevRelief
             }
             m_recurse = false;
             return dv;
+        }
+
+        bool equals(IScriptCommand*cmd, const char * match) override {
+            IScriptValue * val = cmd->getValue(m_name);
+            return val ? val->equals(cmd,match) : false;
         }
 
         virtual DRString toString() { return DRString("Variable: ").append(m_name); }

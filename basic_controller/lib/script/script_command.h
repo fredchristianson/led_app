@@ -17,12 +17,14 @@ namespace DevRelief
     class ScriptCommandBase : public IScriptCommand, IScriptValueProvider
     {
     public:
-        ScriptCommandBase(const char *type)
+        ScriptCommandBase( ICommandContainer* container,const char *type)
         {
             m_logger = &ScriptCommandLogger;
             m_type = type;
             m_values = NULL;
             m_position = NULL;
+            m_container = container;
+            m_logger->debug("Create command %s with container 0x%04X",type,container);
         }
 
         virtual ~ScriptCommandBase()
@@ -33,23 +35,31 @@ namespace DevRelief
 
         void destroy() override { delete this; }
 
+        ICommandContainer* getContainer() { return m_container;}
+
         IStripModifier* getStrip() override {
+            return m_container->getStrip();
+        }
+
+        IStripModifier* getPosition() override {
             if (m_position) {
                 return m_position;
-            } else if (m_previousCommand) {
-                return m_previousCommand->getStrip();
+            } else if (m_previousCommand != NULL) {
+                return m_previousCommand->getPosition();
+            } else {
+                return NULL;
             }
-            return NULL;
         }
-        IHSLStrip * getHSLStrip() { if (m_previousCommand) { return m_previousCommand->getHSLStrip();} return NULL;}
 
-        ScriptStatus execute(ScriptState *state, IScriptCommand *previous) override
+        IHSLStrip * getHSLStrip() override { return m_container->getHSLStrip();}
+
+        ScriptStatus execute(ScriptState *state) override
         {
-            m_logger->never("execute command %s state=0x%04X  previous=0x%04X",getType(),state,previous);
+            m_logger->never("execute command %s state=0x%04X",getType(),state);
             m_state = state;
-            m_previousCommand = previous;
+            m_previousCommand = state->getPreviousCommand();
             if (m_position) {
-                m_position->updateValues(this,previous->getStrip());
+                m_position->updateValues(this,state,m_container);
             }
             ScriptStatus status = doCommand(state);
             return status;
@@ -107,117 +117,20 @@ namespace DevRelief
     protected:
         virtual ScriptStatus doCommand(ScriptState *state) = 0;
 
-        virtual int modifyPosition(int index) { return index; }
-        virtual int16_t modifyHue(int16_t value) { return value; }
-        virtual int16_t modifySaturation(int16_t value) { return value; }
-        virtual int16_t modifyLightness(int16_t value) { return value; }
-        virtual CRGB modifyRGB(CRGB rgb) { return rgb; }
-        virtual HSLOperation modifyOperation(HSLOperation op) { return op; }
-
         Logger *m_logger;
         ScriptPosition *m_position;
         IScriptCommand *m_previousCommand;
         ScriptValueList *m_values;
         DRString m_type;
         ScriptState* m_state;
+        ICommandContainer* m_container;
     };
 
-    /* the first command in a CommandList.  It does not have a previous command like others */
-    class ScriptStartCommand : public IScriptCommand, IStripModifier
-    {
-        public:
-            ScriptStartCommand() 
-            {
-                ScriptMemoryLogger.debug("ScriptStartCommand");
-                m_strip = NULL;
-                m_logger = &ScriptCommandLogger;
-            }
-
-            virtual ~ScriptStartCommand()
-            {
-                ScriptMemoryLogger.debug("~ScriptStartCommand()");
-            }
-
-            void destroy() override { delete this;}
-            ScriptStatus execute(ScriptState *state, IScriptCommand *previous) override
-            {
-                this->m_state = state;
-                return SCRIPT_RUNNING;
-            }
-
-            PositionUnit getPositionUnit() override { return POS_PERCENT;}
-
-            void setHue(int index, int16_t hue, HSLOperation op=REPLACE) {
-                if (m_strip) {
-                    m_strip->setHue(index,hue,op);
-                }
-            }
-            void setSaturation(int index, int16_t saturation, HSLOperation op=REPLACE){
-                if (m_strip) {
-                    m_strip->setSaturation(index,saturation,op);
-                }
-            }
-            void setLightness(int index, int16_t lightness, HSLOperation op=REPLACE){
-                if (m_strip) {
-                    m_strip->setLightness(index,lightness,op);
-                }
-            }
-            void setRGB(int index, const CRGB& rgb, HSLOperation op=REPLACE){
-                if (m_strip) {
-                    m_strip->setRGB(index,rgb,op);
-                }
-            }
-            size_t getCount(){
-                m_logger->never("getCount() for ScriptStartCommand");
-                if (m_strip) {
-                    return m_strip->getCount();
-                }
-                m_logger->never("\t no strip");
-                return 0;
-            }
-            size_t getStart(){
-                if (m_strip) {
-                    return m_strip->getStart();
-                }
-                return 0;
-            }
-            void clear(){
-                if (m_strip) {
-                    m_strip->clear();
-                }
-            }
-            void show(){
-                if (m_strip) {
-                    m_strip->show();
-                }
-            }
-
-            virtual IScriptValue* getValue(const char* name) { 
-                return NULL;
-            }
-
-            const char *getType() override { return "ScriptStartCommand"; }
-            void setStrip(IHSLStrip* strip) { m_strip = strip;}
-            IHSLStrip* getHSLStrip() { return m_strip;}
-            IScriptState* getState() { return m_state;}
-
-            IStripModifier* getParentStrip() { return NULL;}
-            IStripModifier* getPositionStrip() { return this;}
-            IStripModifier* getFirstStrip() {return this;}
-            IStripModifier* getStrip() {return this;}
-            int getOffset() override { return 0;}
-            int getPositionOffset() override { return 0;}
-        private: 
-            IHSLStrip* m_strip;
-            ScriptState* m_state;
-            Logger* m_logger;
-
-    };
-
+  
     class ScriptControlCommand : public ScriptCommandBase, IScriptControl
     {
     public:
-        ScriptControlCommand() : ScriptCommandBase("ScriptControlCommand")
+        ScriptControlCommand(ICommandContainer* container) : ScriptCommandBase(container,"ScriptControlCommand")
         {
             ScriptMemoryLogger.debug("ScriptControlCommand");
         }
@@ -231,7 +144,7 @@ namespace DevRelief
     class PositionCommand : public ScriptCommandBase
     {
     public:
-        PositionCommand() : ScriptCommandBase("PositionCommand")
+        PositionCommand(ICommandContainer* container) : ScriptCommandBase(container,"PositionCommand")
         {
         }
 
@@ -247,7 +160,7 @@ namespace DevRelief
     class ScriptValueCommand : public ScriptCommandBase
     {
     public:
-        ScriptValueCommand(const char *type = "ScriptValueCommand") : ScriptCommandBase(type)
+        ScriptValueCommand(ICommandContainer* container,const char *type = "ScriptValueCommand") : ScriptCommandBase(container,type)
         {
             memLogger->debug("ScriptValueCommand()");
         }
@@ -267,7 +180,7 @@ namespace DevRelief
 
     class ScriptParameterCommand : public ScriptCommandBase, IScriptValueProvider
     {
-        ScriptParameterCommand(const char *type = "ScriptParameterCommand") : ScriptCommandBase(type)
+        ScriptParameterCommand(ICommandContainer* container,const char *type = "ScriptParameterCommand") : ScriptCommandBase(container,type)
         {
             memLogger->debug("ScriptParameterCommand()");
         }
@@ -281,7 +194,7 @@ namespace DevRelief
     class LEDCommand : public ScriptCommandBase
     {
     public:
-        LEDCommand(const char * type) : ScriptCommandBase(type)
+        LEDCommand(ICommandContainer* container,const char * type) : ScriptCommandBase(container,type)
         {
             memLogger->debug("LEDCommand()");
             m_operation = REPLACE;
@@ -295,9 +208,12 @@ namespace DevRelief
         ScriptStatus doCommand(ScriptState* state) override
         {
             if (m_previousCommand == NULL) {
-                m_logger->periodic(ERROR_LEVEL,1000,NULL,"LEDCommand.doCommand does not have a previousCommand");
+                //m_logger->periodic(ERROR_LEVEL,1000,NULL,"LEDCommand.doCommand does not have a previousCommand");
             }
-            auto *strip = getStrip();
+            auto *strip = getPosition();
+            if (strip == NULL) {
+                strip = getStrip();
+            }
             int count = strip->getCount();
             if (count == 0)
             {
@@ -342,7 +258,7 @@ namespace DevRelief
    class HSLCommand : public LEDCommand
     {
     public:
-        HSLCommand(IScriptValue *h = NULL, IScriptValue *s = NULL, IScriptValue *l = NULL) : LEDCommand("HSLCommand")
+        HSLCommand(ICommandContainer* container,IScriptValue *h = NULL, IScriptValue *s = NULL, IScriptValue *l = NULL) : LEDCommand(container,"HSLCommand")
         {
             memLogger->debug("HSLCommand()");
             m_hue = h;
@@ -391,7 +307,7 @@ namespace DevRelief
     class RGBCommand : public LEDCommand
     {
     public:
-        RGBCommand(IScriptValue *r = 0, IScriptValue *g = 0, IScriptValue *b = 0) : LEDCommand("RGBCommand")
+        RGBCommand(ICommandContainer* container,IScriptValue *r = 0, IScriptValue *g = 0, IScriptValue *b = 0) : LEDCommand(container,"RGBCommand")
         {
             memLogger->debug("RGBCommand()");
             m_red = r;
@@ -434,56 +350,7 @@ namespace DevRelief
     };
 
     
-    class ScriptCommandList {
-        public:
-            ScriptCommandList() {
-                m_logger = &ScriptLogger;
-                m_logger->debug("ScriptCommandList()");
-                m_start = new ScriptStartCommand();
-                add(m_start);
-            }
-
-            virtual ~ScriptCommandList() {
-                m_logger->debug("~ScriptCommandList()");
-                m_commands.each([&](IScriptCommand*cmd) {
-                    cmd->destroy();
-                });
-            }
-
-            ScriptStatus execute(ScriptState* state) {
-                ScriptStatus status = SCRIPT_RUNNING;
-                IScriptCommand* previous = NULL;
-                m_logger->never("ScriptCommandList.execute()");
-                m_start->setStrip(m_strip);
-                m_commands.each([&](IScriptCommand*cmd) {
-                    m_logger->never("\tcommand 0x%04X - %s - %d",cmd,cmd->getType(),(int)status);
-                    if (status == SCRIPT_RUNNING) {
-                        status = cmd->execute(state,previous);
-                    } else {
-                        m_logger->never("\tscript status %d",(int)status);
-
-                    }
-                    previous = cmd;
-                });
-                m_logger->never("\tdoneScriptCommandList.execute()");
-                
-                return status;
-            }
-
-            void add(IScriptCommand* cmd) {
-                m_commands.add(cmd);
-            }
-
-            void setStrip(IHSLStrip* strip) {
-                m_strip = strip;
-            }
-        private:
-            IHSLStrip* m_strip;
-            ScriptStartCommand* m_start;
-            LinkedList<IScriptCommand*> m_commands;
-            Logger* m_logger;
-    };
-
+ 
 
 }
 #endif

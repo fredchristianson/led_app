@@ -21,7 +21,11 @@ class DRStringData {
             delete m_data;
         }
 
-        const char * get() const { return m_data;}
+        const char * get() const {
+            ((DRStringData*)this)->ensureLength(1);
+            return m_data;
+        }
+
         size_t updateLength() {
             if (m_data == NULL) {
                 m_length = 0;
@@ -131,8 +135,13 @@ class DRString {
         }
 
         const char * get() const { 
-            stringLogger->debug("get()");
-            return m_data.get()->data();
+            stringLogger->never("get()");
+            if (m_data.get() == NULL){
+                stringLogger->never("string is NULL");
+                return "";
+            }
+            stringLogger->never("have  m_data 0x%04X",m_data.get());
+            return m_data.get()->get();
         }
 
         DRString& append(const char * other);
@@ -152,7 +161,7 @@ class DRString {
             return m_data.get()->increaseLength(charsNeeded);
         }
 
-        const char * text() const { return m_data.get()->data();}
+        const char * text() const { return get();}
         size_t getLength() { return m_data.get()->getLength();}
 
         // trime whitespace + optional chars

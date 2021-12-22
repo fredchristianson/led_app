@@ -10,7 +10,7 @@ namespace DevRelief
     Logger ScriptLogger("Script", SCRIPT_LOGGER_LEVEL);
     Logger ScriptMemoryLogger("ScriptMem", SCRIPT_MEMORY_LOGGER_LEVEL);
     Logger ScriptCommandLogger("ScriptCommand", SCRIPT_LOGGER_LEVEL);
-    Logger ScriptStateLogger("ScriptCommand", SCRIPT_STATE_LOGGER_LEVEL);
+    Logger ScriptStateLogger("ScriptState", SCRIPT_STATE_LOGGER_LEVEL);
 
     typedef enum PositionUnit
     {
@@ -41,6 +41,7 @@ namespace DevRelief
     class TimeDomain;
     class PositionDomain;
     class IStripModifier;
+    class IStripModifier;
 
     Logger *memLogger = &ScriptMemoryLogger;
     class IScriptCommand;
@@ -56,6 +57,7 @@ namespace DevRelief
         virtual bool isRecursing() = 0; // mainly for variable values
         // for debugging
         virtual DRString toString() = 0;
+        virtual bool equals(IScriptCommand*cmd, const char * match)=0;
 
     };
 
@@ -98,12 +100,13 @@ namespace DevRelief
     {
         public:
             virtual void destroy() =0; // cannot delete pure virtual interfaces. they must all implement destroy            
-            virtual ScriptStatus execute(ScriptState*state, IScriptCommand* previous)=0;
+            virtual ScriptStatus execute(ScriptState*state)=0;
             virtual IScriptValue* getValue(const char* name)=0;
             virtual const char * getType()=0;
             virtual IHSLStrip * getHSLStrip()=0;
             virtual IStripModifier* getStrip()=0;
             virtual IScriptState* getState()=0;
+            virtual IStripModifier* getPosition()=0;
     };
 
     class IValueAnimator
@@ -125,12 +128,16 @@ namespace DevRelief
     class IStripModifier : public IHSLStrip {
         public:
             virtual void destroy()=0;
-            virtual IStripModifier* getParentStrip()=0; // strip to set modified values on
-            virtual IStripModifier* getPositionStrip()=0; // strip to calculate position
-            virtual IStripModifier* getFirstStrip()=0; // ancestor of all strips
             virtual PositionUnit getPositionUnit()=0;
+            virtual int getEnd()=0;
             virtual int getOffset()=0;
-            virtual int getPositionOffset()=0;
+    };
+
+    class ICommandContainer  {
+        public:
+            virtual void add(IScriptCommand*cmd)=0;
+            virtual IHSLStrip * getHSLStrip()=0;
+            virtual IStripModifier* getStrip()=0;
     };
 }
 #endif
