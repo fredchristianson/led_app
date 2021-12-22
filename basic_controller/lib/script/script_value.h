@@ -376,7 +376,7 @@ namespace DevRelief
         }
 
         bool equals(IScriptCommand*cmd, const char * match) override { 
-            m_logger->debug("ScriptStringValue.equals %s==%s",m_value.get(),match);
+            m_logger->never("ScriptStringValue.equals %s==%s",m_value.get(),match);
             return Util::equal(m_value.text(),match);
         }
         DRString toString() override { return m_value; }
@@ -432,6 +432,9 @@ namespace DevRelief
             } else {
                 AnimationRange range(start,end,false);
                 Animator animator(*(state->getAnimationPositionDomain()));
+                CubicBezierEase ease;
+                animator.setEase(ease);
+
                 value = animator.get(range);
                 
             }

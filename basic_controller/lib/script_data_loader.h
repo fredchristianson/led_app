@@ -336,7 +336,7 @@ class ScriptDataLoader : public DataLoader {
             JsonObject* animate = NULL;
             if (jsonValue == NULL) {
                 // see if the animate properties are promoted ot parent
-                if (json->getProperty("duration") || json->getProperty("speed") || json->getProperty("unfold")) {
+                if (json->getProperty("duration") || json->getProperty("speed") || json->getProperty("unfold") || json->getProperty("ease")|| json->getProperty("ease-in")|| json->getProperty("ease-out")) {
                     animate = json;
                 }
             } else {
@@ -353,6 +353,9 @@ class ScriptDataLoader : public DataLoader {
                 animator->setRepeat(jsonToValue(obj,"repeat"));
                 animator->setRepeatDelay(jsonToValue(obj,"delay"));
                 animator->setUnfold(jsonToValue(obj,"unfold"));
+                animator->setEase(jsonToValue(obj,"ease"));
+                animator->setEaseIn(jsonToValue(obj,"ease-in"));
+                animator->setEaseOut(jsonToValue(obj,"ease-out"));
             }
             m_logger->debug("return value animator 0x%04X",animator);
             return animator;

@@ -114,7 +114,7 @@ namespace DevRelief
                 m_skip = round(m_skip*baseCount/100.0);
                 ScriptLogger.debug("\tadjusted: base: %f. start: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s.",baseCount, m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"));
             }
-            ScriptLogger.always("position: start %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s. offset=%d.  ",m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"),m_offset);
+            ScriptLogger.never("position: start %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s. offset=%d.  ",m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"),m_offset);
    
         }
        

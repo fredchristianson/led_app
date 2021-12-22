@@ -236,6 +236,33 @@ namespace DevRelief
 
     LinearEase DefaultEase;
 
+    class CubicBezierEase : public AnimationEase
+    {
+    public:
+        CubicBezierEase(double in=0, double out=0){
+            m_in = in;
+            m_out = out;
+        }
+
+        void setValues(double in, double out) {
+            m_in = in;
+            m_out = out;
+        }
+        double calculate(double position)
+        {
+            double val = 3 * pow(1 - position, 2) * position * m_in +
+                            3 * (1 - position) * pow(position, 2) * m_out +
+                            pow(position, 3);
+            AnimationLogger.always("ease: %f==>%f  %f  %f",position,val,m_in,m_out);
+            return val;
+        }
+    private:
+        double m_in;
+        double m_out;
+        
+    };
+
+
     class Animator
     {
     public:
@@ -256,6 +283,7 @@ namespace DevRelief
             return result;
         };
 
+        void setEase(AnimationEase& ease) { m_ease = ease;}
     private:
         AnimationDomain &m_domain;
         AnimationEase &m_ease;
@@ -348,11 +376,13 @@ namespace DevRelief
 
         double getPositionValue(IScriptCommand*cmd, AnimationRange&range){
             PositionDomain* domain = cmd->getState()->getAnimationPositionDomain();
+            setEaseParameters(cmd);
             if (domain == NULL) {
                 m_logger->errorNoRepeat("ValueAnimation getPositionValue requires a PositionDomain from the state");
                 return range.getLow();
             }
-            Animator animator(*domain);
+            Animator animator(*domain,m_cubicBeszierEase);
+
             range.setUnfolded(isUnfolded(cmd));
             double value = animator.get(range);
             return value;
@@ -360,87 +390,50 @@ namespace DevRelief
 
         double getSpeedValue(IScriptCommand*cmd, double speed, AnimationRange&range){
             range.setUnfolded(isUnfolded(cmd));
+            setEaseParameters(cmd);
             TimeDomain* domain = cmd->getState()->getAnimationTimeDomain();
              if (domain == NULL) {
                 m_logger->errorNoRepeat("ValueAnimation getSpeedValue requires a TimeDomain from the state");
                 return range.getLow();
             }
             domain->setSpeed(speed,&range);
-            Animator animator(*domain);
+            Animator animator(*domain,m_cubicBeszierEase);
+
             double value = animator.get(range);
             return value;
         }
 
         double getDurationValue(IScriptCommand*cmd, double duration, AnimationRange&range){
             range.setUnfolded(isUnfolded(cmd));
+            setEaseParameters(cmd);
             TimeDomain* domain = cmd->getState()->getAnimationTimeDomain();
              if (domain == NULL) {
                 m_logger->errorNoRepeat("ValueAnimation getSpeedValue requires a TimeDomain from the state");
                 return range.getLow();
             }
             domain->setDuration(duration);
-            Animator animator(*domain);
+            Animator animator(*domain,m_cubicBeszierEase);
+
             double value = animator.get(range);
             return value;
         }
 
-        /*----------------------------------------old*/
+        void setEaseParameters(IScriptCommand* cmd) {
+            double in = 0;
+            double out = 0;
+            if (m_ease) {
+                in = m_ease->getFloatValue(cmd,0);
+                out = in;
+            }
+            if (m_easeIn) {
+                in = m_easeIn->getFloatValue(cmd,0);
+            }
 
-        double getTimeValue(IScriptState &state, double low, double high)
-        {
-            /*
-            m_logger->test("ValueAnimator::getTimeValue %f %f",low,high);
-            double stepsPerSecond = 0;
-            if (low == high) {
-                m_logger->test("\tvalues equal");
-                return low;
+            if (m_easeOut) {
+                out = m_easeOut->getFloatValue(cmd,0);
             }
-            double range = high-low+1;
-            int durationMsecs = 0;
-            if (m_speedValue != NULL) {
-                double speed = m_speedValue->getFloatValue(state,0);
-                stepsPerSecond = speed;
-                durationMsecs =  (int)((range/stepsPerSecond)*1000);
-            } else if (m_durationValue != NULL) {
-                durationMsecs = m_durationValue->getFloatValue(state,0);
-                if (durationMsecs != 0) {
-                    int steps = high-low+1;
-                    stepsPerSecond = 1000*steps/durationMsecs;
-                }
-            }
-            m_logger->test("\tspeed=%f. duration=%d",stepsPerSecond,durationMsecs);
-            if (durationMsecs == 0) {
-                return low;
-            }
-            int time = state.scriptTimeMsecs();
-            double timePosition = time % durationMsecs;
-            m_logger->test("\ttime=%d. timeposition=%f",time,timePosition);
-
-            bool unfold = false;
-            if (m_unfoldValue){
-                unfold = m_unfoldValue->getBoolValue(state,false);
-            }
-            Animator animator(0,durationMsecs, unfold);
-            double value = animator.getValueAt(low,high,timePosition);
-            m_logger->debug("\ttime animator value %f",value);
-            return value;
-            */
-            return 0;
+            m_cubicBeszierEase.setValues(in,out);
         }
-
-        double getPositionValue(IScriptState &state, double low, double high, double percent)
-        {
-            /*
-            m_logger->debug("getPositionValue %f %f %f",low,high,percent);
-            Animator animate(low,high,isUnfolded(state));
-            double val = animate.getValueAtPercent(low,high,percent);
-            m_logger->debug("\tposition animator value %f",val);
-            return val;
-            */
-            return 0;
-        }
-
- 
 
         bool hasSpeedOrDuration(IScriptCommand *cmd)
         {
@@ -456,6 +449,9 @@ namespace DevRelief
             return speedOrDuration;
         }
 
+        void setEase(IScriptValue* ease) { m_ease = ease;}
+        void setEaseIn(IScriptValue* ease) { m_easeIn = ease;}
+        void setEaseOut(IScriptValue* ease) { m_easeOut = ease;}
 
     protected:
         IScriptValue *m_speedValue;
@@ -463,6 +459,10 @@ namespace DevRelief
         IScriptValue *m_repeatValue;
         IScriptValue *m_repeatDelayValue;
         IScriptValue *m_unfoldValue;
+        IScriptValue *m_ease;
+        IScriptValue *m_easeIn;
+        IScriptValue *m_easeOut;
+        CubicBezierEase m_cubicBeszierEase;
         bool m_unfold;
         Logger *m_logger;
     };
