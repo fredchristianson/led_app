@@ -61,6 +61,13 @@ namespace DevRelief
                 return;
             }
             m_strip = container->getStrip();
+            int physicalCount = m_strip->getCount();
+            int physicalStart = 0;
+            if (m_physicalStrip != NULL) {
+                int number = m_physicalStrip->getIntValue(cmd,0);
+                physicalStart = getPhysicalStripOffset(number);
+                physicalCount = getPhysicalStripLedCount(number);
+            }
             ScriptLogger.test("updateValues strip");
             if (m_wrapValue) {
                 m_wrap = m_wrapValue->getBoolValue(cmd,true);
@@ -82,21 +89,17 @@ namespace DevRelief
             m_offset= getStripPosition(cmd,state,m_offsetValue,0);
             m_start = getStripPosition(cmd,state,m_startValue,0);
 
-            if (m_physicalStrip != NULL) {
-                int number = m_physicalStrip->getIntValue(cmd,0);
-                int n = getPhysicalStripOffset(number);
-                m_start += n;
-            }
+
             m_skip = getStripPosition(cmd,state,m_skipValue,0);
             if (m_endValue) {
-                m_end = getStripPosition(cmd,state,m_endValue,0);
+                m_end = getStripPosition(cmd,state,m_endValue,0)+physicalStart;
                 m_count = abs(m_start-m_end)+1;
             } else if (m_countValue){
                 m_count =  getStripPosition(cmd,state,m_countValue,0);
                 m_end = m_start+m_count-1;
             } else {
                 IStripModifier* strip = cmd->getStrip();
-                m_end = strip->getStart()+strip->getCount()-1;
+                m_end = physicalStart+physicalCount-1;
                 m_count = abs(m_start-m_end)+1;
             }
 
@@ -105,16 +108,18 @@ namespace DevRelief
             }
                        
             if (m_unit == POS_PERCENT) {
-                double baseCount = m_strip->getCount();
-                ScriptLogger.debug("PERCENT: base: %f. start: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s.",baseCount, m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"));
+                double baseCount = physicalCount;
+                ScriptLogger.never("PERCENT: base: %f. start: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s.",baseCount, m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"));
                 m_start = floor(m_start*baseCount/100.0);
                 m_end = round(m_end*baseCount/100.0);
-                m_count = round(m_count*baseCount/100.0);
+                m_count = round(m_count*baseCount/100.0+0.5);
                 m_offset = round(m_offset*baseCount/100.0);
                 m_skip = round(m_skip*baseCount/100.0);
-                ScriptLogger.debug("\tadjusted: base: %f. start: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s.",baseCount, m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"));
+                ScriptLogger.never("\tadjusted: base: %f. start: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s.",baseCount, m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"));
             }
-            ScriptLogger.never("position: start %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s. offset=%d.  ",m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"),m_offset);
+            m_start += physicalStart;
+            m_end += physicalStart;
+            ScriptLogger.never("position: start %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s. offset=%d. physical: %d,%d ",m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"),m_offset,physicalStart,physicalCount);
    
         }
        
@@ -159,6 +164,17 @@ namespace DevRelief
                 offset += pins[i]->ledCount;
             }
             return offset;
+        }
+
+        int getPhysicalStripLedCount(int stripNumber){
+            // 
+            Config* cfg = Config::getInstance();
+            int ledCount = 0;
+            const PtrList<LedPin*>& pins = cfg->getPins();
+            if (stripNumber<pins.size()) {
+                ledCount = pins[stripNumber]->ledCount;
+            }
+            return ledCount;
         }
 
         // IHSLStrip *getBase()
