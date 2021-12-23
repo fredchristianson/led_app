@@ -366,7 +366,7 @@ namespace DevRelief
 
         double getDuration(IScriptCommand *cmd) 
         {
-            return m_durationValue ? m_durationValue->getFloatValue(cmd, 0) : 0;
+            return m_durationValue ? m_durationValue->getMsecValue(cmd, 0) : 0;
         }
 
         double get(IScriptCommand*cmd, AnimationRange&range) override {

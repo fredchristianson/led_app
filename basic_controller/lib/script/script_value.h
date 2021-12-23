@@ -21,6 +21,17 @@ namespace DevRelief
             void destroy() override { delete this;}
 
             bool isRecursing() override { return false;}
+
+            bool isString(IScriptCommand* cmd)  override{
+              return false;  
+            } 
+            bool isNumber(IScriptCommand* cmd)  override{
+              return false;  
+            } 
+            bool isBool(IScriptCommand* cmd)  override{
+              return false;  
+            } 
+
             bool equals(IScriptCommand*cmd,const char * match) override { return false;}
         protected:
             Logger* m_logger;
@@ -56,6 +67,9 @@ namespace DevRelief
                 return d != 0;
             }
         
+        int getMsecValue(IScriptCommand* cmd,  int defaultValue) override { return defaultValue;}
+        bool isNumber(IScriptCommand* cmd) override { return true;}
+
         DRString toString() { return DRString("System Value: ").append(m_name); }
         private:
             double get(IScriptCommand* cmd, double defaultValue){
@@ -158,7 +172,14 @@ namespace DevRelief
         }
 
         DRString toString() { return DRString("Function: ").append(m_name); }
-
+        int getMsecValue(IScriptCommand* cmd,  int defaultValue) override { 
+            if (Util::equal("millis",m_name)) {
+                return millis();
+            }
+            return defaultValue;
+        }
+        bool isNumber(IScriptCommand* cmd) override { return true;}
+        
     protected:
         double invoke(IScriptCommand * cmd,double defaultValue) {
             double result = 0;
@@ -282,6 +303,11 @@ namespace DevRelief
             return m_value != 0;
         }
 
+        int getMsecValue(IScriptCommand* cmd,  int defaultValue) override { 
+            return m_value;
+        }
+        bool isNumber(IScriptCommand* cmd) override { return true;}
+
         virtual DRString toString() { return DRString::fromFloat(m_value); }
 
     protected:
@@ -316,6 +342,11 @@ namespace DevRelief
         bool getBoolValue(IScriptCommand* cmd,  bool defaultValue) override {
             return m_value;
         }
+
+        int getMsecValue(IScriptCommand* cmd,  int defaultValue) override { 
+            return defaultValue;
+        }
+        bool isBool(IScriptCommand* cmd) override { return true;}
 
         DRString toString() override { 
             m_logger->debug("ScriptBoolValue.toString()");
@@ -379,6 +410,12 @@ namespace DevRelief
             m_logger->never("ScriptStringValue.equals %s==%s",m_value.get(),match);
             return Util::equal(m_value.text(),match);
         }
+
+        int getMsecValue(IScriptCommand* cmd,  int defaultValue) override { 
+            return Util::toMsecs(m_value);
+        }
+        bool isString(IScriptCommand* cmd) override { return true;}
+
         DRString toString() override { return m_value; }
 
     protected:
@@ -394,6 +431,8 @@ namespace DevRelief
             m_start = start;
             m_end = end;
             m_animate = NULL;
+            m_repeat = NULL;
+            m_delay = NULL;
         }
 
         virtual ~ScriptRangeValue()
@@ -402,8 +441,15 @@ namespace DevRelief
             delete m_start;
             delete m_end;
             delete m_animate;
+            delete m_delay;
+            delete m_repeat;
             memLogger->debug("~ScriptRangeValue() end");
         }
+
+        int getMsecValue(IScriptCommand* cmd,  int defaultValue) override { 
+            return getIntValue(cmd,defaultValue);
+        }
+        bool isNumber(IScriptCommand* cmd) override { return true;}
 
         virtual int getIntValue(IScriptCommand* cmd,  int defaultValue)
         {
@@ -459,9 +505,14 @@ namespace DevRelief
         void setAnimator(IValueAnimator* animator) {
             m_animate = animator;
         }
+
+        void setDelay(IScriptValue* delay) { m_delay = delay;}
+        void setRepeat(IScriptValue* repeat) { m_repeat = repeat;}
     protected:
         IScriptValue *m_start;
         IScriptValue *m_end;
+        IScriptValue *m_delay;
+        IScriptValue *m_repeat;
         IValueAnimator* m_animate;
     };
 
@@ -566,6 +617,27 @@ namespace DevRelief
             return val ? val->equals(cmd,match) : false;
         }
 
+        int getMsecValue(IScriptCommand* cmd,  int defaultValue) override { 
+            IScriptValue * val = cmd->getValue(m_name);
+
+            return val ? val->getMsecValue(cmd,defaultValue) : defaultValue;
+        }
+
+        bool isNumber(IScriptCommand* cmd) { 
+            IScriptValue * val = cmd->getValue(m_name);
+            return val ? val->isNumber(cmd) : false;
+
+         }
+        bool isString(IScriptCommand* cmd) { 
+            IScriptValue * val = cmd->getValue(m_name);
+            return val ? val->isString(cmd) : false;
+
+         }
+        bool isBool(IScriptCommand* cmd) { 
+            IScriptValue * val = cmd->getValue(m_name);
+            return val ? val->isBool(cmd) : false;
+         }
+        
         virtual DRString toString() { return DRString("Variable: ").append(m_name); }
 
         bool isRecursing() { return m_recurse;}

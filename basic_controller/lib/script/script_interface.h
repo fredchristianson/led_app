@@ -50,9 +50,14 @@ namespace DevRelief
     {
     public:
         virtual void destroy() =0; // cannot delete pure virtual interfaces. they must all implement destroy
-        virtual int getIntValue(IScriptCommand* cmd,  int defaultValue) = 0;         // percent in [0,100]
-        virtual double getFloatValue(IScriptCommand* cmd,  double defaultValue) = 0; // percent in [0,100]
-        virtual bool getBoolValue(IScriptCommand* cmd,  bool defaultValue) = 0; // percent in [0,100]
+        virtual int getIntValue(IScriptCommand* cmd,  int defaultValue) = 0;         
+        virtual double getFloatValue(IScriptCommand* cmd,  double defaultValue) = 0; 
+        virtual bool getBoolValue(IScriptCommand* cmd,  bool defaultValue) = 0; 
+        virtual int getMsecValue(IScriptCommand* cmd,  int defaultValue) = 0; 
+
+        virtual bool isString(IScriptCommand* cmd)=0;
+        virtual bool isNumber(IScriptCommand* cmd)=0;
+        virtual bool isBool(IScriptCommand* cmd)=0;
 
         virtual bool isRecursing() = 0; // mainly for variable values
         // for debugging

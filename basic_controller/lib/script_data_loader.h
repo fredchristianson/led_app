@@ -444,6 +444,8 @@ class ScriptDataLoader : public DataLoader {
                 IScriptValue * end = jsonToValue(valueObject,"end");
                 auto rangeValue = new ScriptRangeValue(start,end);
                 rangeValue->setAnimator(jsonToValueAnimator(valueObject));
+                rangeValue->setDelay(jsonToValue(valueObject,"delay"));
+                rangeValue->setRepeat(jsonToValue(valueObject,"repeat"));
                 scriptValue = rangeValue;
             }
             return scriptValue;
