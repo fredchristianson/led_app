@@ -354,6 +354,13 @@ namespace DevRelief
         double get(IScriptCommand*cmd, AnimationRange&range) override {
             m_logger->debug("ValueAnimator.get() 0x%04X",cmd);
             AnimationDomain* domain = getDomain(cmd,range);
+            setEaseParameters(cmd);
+            Animator animator(*domain,m_selectedEase);
+            range.setUnfolded(isUnfolded(cmd));
+            double value = animator.get(range);
+            return value;
+
+/*
             if (domain == NULL) {
                 m_logger->error("Animation domain is NULL");
                 m_status = SCRIPT_ERROR;
@@ -394,6 +401,7 @@ namespace DevRelief
                 }
             }
             return value;
+*/            
         }
 
         virtual AnimationDomain* getDomain(IScriptCommand*cmd,AnimationRange&range) =0;
