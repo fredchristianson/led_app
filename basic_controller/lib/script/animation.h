@@ -239,7 +239,7 @@ namespace DevRelief
     class CubicBezierEase : public AnimationEase
     {
     public:
-        CubicBezierEase(double in=0, double out=0){
+        CubicBezierEase(double in=0.65, double out=0.35){
             m_in = in;
             m_out = out;
         }
@@ -250,10 +250,17 @@ namespace DevRelief
         }
         double calculate(double position)
         {
+            /* simple 
+            if (position<0.5){
+                return 4*pow(position,3);
+            } else {
+                return 1-pow(-2*position+2,3)/2;
+            }
+            */
             double val = 3 * pow(1 - position, 2) * position * m_in +
                             3 * (1 - position) * pow(position, 2) * m_out +
                             pow(position, 3);
-            AnimationLogger.always("ease: %f==>%f  %f  %f",position,val,m_in,m_out);
+            AnimationLogger.never("ease: %f==>%f  %f  %f",position,val,m_in,m_out);
             return val;
         }
     private:
@@ -266,7 +273,7 @@ namespace DevRelief
     class Animator
     {
     public:
-        Animator(AnimationDomain &domain, AnimationEase &ease = DefaultEase) : m_domain(domain), m_ease(ease)
+        Animator(AnimationDomain &domain, AnimationEase *ease = &DefaultEase) : m_domain(domain), m_ease(ease)
         {
             m_logger = &AnimationLogger;
             m_logger->debug("create Animator()");
@@ -274,19 +281,22 @@ namespace DevRelief
 
         double get(AnimationRange &range)
         {
+            if (m_ease == NULL) {
+                m_ease = &DefaultEase;
+            }
             m_logger->debug("Animator.get()");
             double position = m_domain.getPosition();
-            double ease = m_ease.calculate(position);
+            double ease = m_ease->calculate(position);
             //m_logger->debug("\tpos %f.  ease %f",position,ease);
             double result = range.getValue(ease);
             //m_logger->debug("\tpos %f.  ease %f. result %f.  ",result);
             return result;
         };
 
-        void setEase(AnimationEase& ease) { m_ease = ease;}
+        void setEase(AnimationEase* ease) { m_ease = ease;}
     private:
         AnimationDomain &m_domain;
-        AnimationEase &m_ease;
+        AnimationEase* m_ease;
         Logger *m_logger;
     };
 
@@ -302,6 +312,8 @@ namespace DevRelief
             m_repeatDelayValue = 0;
             m_unfoldValue = NULL;
             m_unfold = false;
+            m_selectedEase = &m_cubicBeszierEase;
+            m_cubicBeszierEase.setValues(0,1);
         }
 
         virtual ~ValueAnimator()
@@ -381,7 +393,7 @@ namespace DevRelief
                 m_logger->errorNoRepeat("ValueAnimation getPositionValue requires a PositionDomain from the state");
                 return range.getLow();
             }
-            Animator animator(*domain,m_cubicBeszierEase);
+            Animator animator(*domain,m_selectedEase);
 
             range.setUnfolded(isUnfolded(cmd));
             double value = animator.get(range);
@@ -397,7 +409,7 @@ namespace DevRelief
                 return range.getLow();
             }
             domain->setSpeed(speed,&range);
-            Animator animator(*domain,m_cubicBeszierEase);
+            Animator animator(*domain,m_selectedEase);
 
             double value = animator.get(range);
             return value;
@@ -412,21 +424,24 @@ namespace DevRelief
                 return range.getLow();
             }
             domain->setDuration(duration);
-            Animator animator(*domain,m_cubicBeszierEase);
+            Animator animator(*domain,m_selectedEase);
 
             double value = animator.get(range);
             return value;
         }
 
         void setEaseParameters(IScriptCommand* cmd) {
-            double in = 0;
-            double out = 0;
+            double in = 1;
+            double out = 1;
+            if (m_ease == NULL || (m_ease->equals(cmd,"linear"))){
+                m_selectedEase = &m_linearEase;
+            }
             if (m_ease) {
-                in = m_ease->getFloatValue(cmd,0);
-                out = in;
+                in = 1-m_ease->getFloatValue(cmd,1);
+                out = 1-in;
             }
             if (m_easeIn) {
-                in = m_easeIn->getFloatValue(cmd,0);
+                in = 1-m_easeIn->getFloatValue(cmd,0);
             }
 
             if (m_easeOut) {
@@ -463,6 +478,9 @@ namespace DevRelief
         IScriptValue *m_easeIn;
         IScriptValue *m_easeOut;
         CubicBezierEase m_cubicBeszierEase;
+        LinearEase m_linearEase;
+        AnimationEase* m_selectedEase;
+
         bool m_unfold;
         Logger *m_logger;
     };

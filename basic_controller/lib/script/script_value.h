@@ -433,7 +433,7 @@ namespace DevRelief
                 AnimationRange range(start,end,false);
                 Animator animator(*(state->getAnimationPositionDomain()));
                 CubicBezierEase ease;
-                animator.setEase(ease);
+                animator.setEase(&ease);
 
                 value = animator.get(range);
                 
