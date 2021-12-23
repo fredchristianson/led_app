@@ -82,7 +82,7 @@ namespace DevRelief
 
         IScriptCommand * getPreviousCommand() { return m_previousCommand;}
         void setPreviousCommand(IScriptCommand*cmd) { 
-            m_logger->debug("Previous command 0x%04X",cmd);
+            m_logger->never("Previous command 0x%04X",cmd);
             m_previousCommand = cmd;
         }
     private:

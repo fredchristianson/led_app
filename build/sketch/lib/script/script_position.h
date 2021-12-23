@@ -32,7 +32,6 @@ namespace DevRelief
             m_start = 0;
             m_count = 0;
             m_offset = 0;
-            m_positionOffset = 0;
             m_wrap = true;
             m_reverse = false;
             m_logger = &ScriptLogger;
@@ -63,6 +62,13 @@ namespace DevRelief
                 return;
             }
             m_strip = container->getStrip();
+            int physicalCount = m_strip->getCount();
+            int physicalStart = 0;
+            if (m_physicalStrip != NULL) {
+                int number = m_physicalStrip->getIntValue(cmd,0);
+                physicalStart = getPhysicalStripOffset(number);
+                physicalCount = getPhysicalStripLedCount(number);
+            }
             ScriptLogger.test("updateValues strip");
             if (m_wrapValue) {
                 m_wrap = m_wrapValue->getBoolValue(cmd,true);
@@ -81,64 +87,74 @@ namespace DevRelief
             } else {
                 m_skip = 1;
             }
-            bool after = false;
-            if (m_offsetValue) {
-                m_logger->debug("have offset %s",m_offsetValue->toString().get());
-                if (m_offsetValue->equals(cmd,"after")){
-                    m_logger->debug("set position 'after' previous");
-                    m_offset = 0;
-                    m_positionOffset = 0;
-                    m_start = 0;
-                    IScriptCommand*prev = state->getPreviousCommand();
-                    if (prev != NULL) {
-                        IStripModifier* pos =  prev->getPosition();
-                        m_logger->debug("previous pos %d %d",pos->getStart(),pos->getCount());
-                        m_start = pos->getStart() + pos->getCount() + pos->getOffset() + pos->getPositionOffset();
-                        after = true;
-                    } else {
-                        m_logger->debug("no previous command");
-                    }
-                } else {
-                    int offset  = m_offsetValue->getIntValue(cmd,0);
-                    m_offset = offset;
-                }
-            } else {
-                m_offset = 0;
-            }    
-                 
-            if (!after) {
-                m_start = 0;
-            }
-            if (!after && m_startValue != NULL)
-            {
-                m_start = m_startValue->getIntValue(cmd,  m_start);
-            }
-            m_count = m_strip->getCount();
-            if (m_countValue != NULL)
-            {
-                m_count = m_countValue->getIntValue(cmd,  m_count);
+            m_offset= getStripPosition(cmd,state,m_offsetValue,0);
+            m_start = getStripPosition(cmd,state,m_startValue,0);
+
+
+            m_skip = getStripPosition(cmd,state,m_skipValue,0);
+            if (m_endValue) {
+                m_end = getStripPosition(cmd,state,m_endValue,0)+physicalStart;
+                m_count = abs(m_start-m_end)+1;
+            } else if (m_countValue){
+                m_count =  getStripPosition(cmd,state,m_countValue,0);
                 m_end = m_start+m_count-1;
+            } else {
+                IStripModifier* strip = cmd->getStrip();
+                m_end = physicalStart+physicalCount-1;
+                m_count = abs(m_start-m_end)+1;
             }
-            else if (m_endValue != NULL)
-            {
-                m_end = m_start + m_count-1;
-                m_end = m_endValue->getIntValue(cmd, m_end);
-                m_count = abs(m_end - m_start)+1;
-            };     
-            
+
+            if (m_startValue==NULL && m_endValue != NULL && m_countValue != NULL) {
+                m_start = m_end-m_count+1;
+            }
+                       
             if (m_unit == POS_PERCENT) {
-                double baseCount = m_strip->getCount();
-                ScriptLogger.debug("PERCENT: base: %f. start: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s.",baseCount, m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"));
+                double baseCount = physicalCount;
+                ScriptLogger.never("PERCENT: base: %f. start: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s.",baseCount, m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"));
                 m_start = floor(m_start*baseCount/100.0);
                 m_end = round(m_end*baseCount/100.0);
-                m_count = round(m_count*baseCount/100.0);
-                ScriptLogger.debug("\tadjusted: base: %f. start: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s.",baseCount, m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"));
+                m_count = round(m_count*baseCount/100.0+0.5);
+                m_offset = round(m_offset*baseCount/100.0);
+                m_skip = round(m_skip*baseCount/100.0);
+                ScriptLogger.never("\tadjusted: base: %f. start: %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s.",baseCount, m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"));
             }
-            ScriptLogger.always("position: start %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s. offset=%d.  positionOffset=%d",m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"),m_offset,m_positionOffset);
+            m_start += physicalStart;
+            m_end += physicalStart;
+            ScriptLogger.never("position: start %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s. offset=%d. physical: %d,%d ",m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"),m_offset,physicalStart,physicalCount);
    
         }
        
- 
+        int getStripPosition(IScriptCommand* cmd, ScriptState*state, IScriptValue* value,int defaultValue){
+            int rpos = defaultValue;
+            if (value) {
+                //m_logger->debug("have value %s",value->toString().get());
+                IScriptCommand*prev = state->getPreviousCommand();
+                if (prev&&value->equals(cmd,"after")){
+                    IStripModifier* pos =  prev->getPosition();
+                    //m_logger->debug("previous pos %d %d",pos->getStart(),pos->getCount());
+                    if (pos != NULL) {
+                        rpos = pos->getStart() + pos->getCount() + pos->getOffset();
+                    } else {
+                        rpos = 0;
+                    }
+                } else if (prev&&value->equals(cmd,"before")){
+                    IStripModifier* pos =  prev->getPosition();
+                    m_logger->debug("previous pos %d %d",pos->getStart(),pos->getCount());
+                    if (pos == NULL) {
+                        rpos = -1;
+                    } else {
+                        rpos = pos->getStart()-1;
+                    }
+                }  else if (value->equals(cmd,"center")){
+                    IStripModifier* pos =  m_strip;
+                    m_logger->debug("center pos %d %d",pos->getStart(),pos->getCount());
+                    rpos = pos->getStart()+round(pos->getCount()/2);
+                } else {
+                    rpos  = value->getIntValue(cmd,defaultValue);
+                }
+            }    
+            return rpos;
+        }
 
         int getPhysicalStripOffset(int stripNumber){
             // 
@@ -149,6 +165,17 @@ namespace DevRelief
                 offset += pins[i]->ledCount;
             }
             return offset;
+        }
+
+        int getPhysicalStripLedCount(int stripNumber){
+            // 
+            Config* cfg = Config::getInstance();
+            int ledCount = 0;
+            const PtrList<LedPin*>& pins = cfg->getPins();
+            if (stripNumber<pins.size()) {
+                ledCount = pins[stripNumber]->ledCount;
+            }
+            return ledCount;
         }
 
         // IHSLStrip *getBase()
@@ -204,13 +231,20 @@ namespace DevRelief
           //  m_logger->never("\ttranslated RGB index %d===>%d",orig,index);
             m_strip->setRGB((index), rgb, op);
         }
-        size_t getCount() { return m_count; }
-        size_t getStart() { return m_start; }
+        int getCount() { return m_count; }
+        int getStart() { return m_start; }
+        int getEnd() { return m_end; }
         bool translate(int& index)
         {
             // never works in PIXEL units.  updateValues took care of % to pixel if needed
-
-            if (m_count == 0) { return false;}
+            int start = m_start;
+            int count = m_count;
+            int reverse = m_reverse;
+            if (start>m_end) {
+                start = m_end;
+                reverse = !m_reverse;
+            }
+            if (count == 0) { return false;}
             if (m_skipValue) {
                 m_logger->never("\tskip %d. index=%d",m_skip,index*m_skip);
                 index = index * m_skip;
@@ -219,15 +253,15 @@ namespace DevRelief
             }
             if (index < 0) {
                 if (m_wrap) {
-                    index = m_count + (index%m_count);
+                    index = count + (index%count);
                 } else {
                     m_logger->never("clip");
                     return false;
                 }
             }
-            if (index >= m_count) {
+            if (index >= count) {
                 if (m_wrap) {
-                    index = index%m_count;
+                    index = index%count;
                 } else {
                     m_logger->never("clip");
                     return false;
@@ -235,14 +269,15 @@ namespace DevRelief
             }
 
 
+            index = index + m_offset;
             if (m_start>m_end) {
                 index = -index;
 
             }
-            index = m_start+index;
-            index = index + m_offset + m_positionOffset;
             if (m_reverse) {
                 index = m_end - index;
+            } else {
+                index = m_start+index;
             }
             return true;
         }
@@ -261,7 +296,6 @@ namespace DevRelief
         }
 
         int getOffset() override { return m_offset;}
-        int getPositionOffset() override { return m_positionOffset;}
 
     private:
         // values that may be variables
@@ -287,8 +321,7 @@ namespace DevRelief
         PositionType m_type;
         // m_strip is the strip this position writes to
         IStripModifier *m_strip;
-        int m_positionOffset;  // offset withing m_strip (usually based on m_positionStrip)
-
+        
         HSLOperation m_operation;
         Logger* m_logger;
     };

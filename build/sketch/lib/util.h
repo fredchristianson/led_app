@@ -27,6 +27,32 @@ class Util {
         static bool isEmpty(const char * s) {
             return s == NULL || s[0] == 0;
         }
+
+        static bool endsWith(const char *s, const char * end) {
+            if (s == NULL || end == NULL) {
+                return false;
+            }
+            int el = strlen(end);
+            int sl = strlen(s);
+            if (el > sl) {
+                return false;
+            }
+            return strcmp(s+sl-el,end)==0;
+        }
+        static int toMsecs(const char *s) {
+            int val = 0;
+            if (s == NULL || !isdigit(*s)){
+                return val;
+            }
+            if (Util::endsWith(s,"ms")){
+                val = atoi(s);
+            } else if (Util::endsWith(s,"s")){
+                val = atoi(s)*1000;
+            } else {
+                val = atoi(s);
+            }
+            return val;
+        }
 };
 
 

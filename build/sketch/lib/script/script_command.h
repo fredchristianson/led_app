@@ -48,7 +48,7 @@ namespace DevRelief
             } else if (m_previousCommand != NULL) {
                 return m_previousCommand->getPosition();
             } else {
-                return m_container->getStrip();
+                return NULL;
             }
         }
 
@@ -209,9 +209,12 @@ namespace DevRelief
         ScriptStatus doCommand(ScriptState* state) override
         {
             if (m_previousCommand == NULL) {
-                m_logger->periodic(ERROR_LEVEL,1000,NULL,"LEDCommand.doCommand does not have a previousCommand");
+                //m_logger->periodic(ERROR_LEVEL,1000,NULL,"LEDCommand.doCommand does not have a previousCommand");
             }
             auto *strip = getPosition();
+            if (strip == NULL) {
+                strip = getStrip();
+            }
             int count = strip->getCount();
             if (count == 0)
             {

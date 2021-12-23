@@ -139,7 +139,7 @@ class DRStringBuffer : public DRBuffer{
     }
     const char ** split(const char* data,const char* seperators) {
         m_count = 0;
-        m_logger->debug("split %s ~~ %s",data,seperators);
+        m_logger->never("split %s ~~ %s",data,seperators);
         const char * pos = data;
         size_t len = strlen(data)+1;
         size_t count = 1;
@@ -148,7 +148,7 @@ class DRStringBuffer : public DRBuffer{
             count += 1;
             pos = match+1;
         }
-        m_logger->debug("\tcount: %d",count);
+        m_logger->never("\tcount: %d",count);
         
         size_t alignBytes = 4-(len%4);
         char * strings = (char*)reserve(len+(count+1)*sizeof(char*)+alignBytes);
@@ -164,20 +164,20 @@ class DRStringBuffer : public DRBuffer{
         while(!done) {
             char * end = (char *) nextMatch(match,seperators);
             if (end == NULL) {
-                m_logger->debug("found end");
+                m_logger->never("found end");
                 done = true;
             } else {
                 *end = 0;
             }
-            m_logger->debug("\tfound: %s",match);
+            m_logger->never("\tfound: %s",match);
             *array = match;
-            m_logger->debug("\t\tadded pointer");
+            m_logger->never("\t\tadded pointer");
             array++;
             m_count++;
-            m_logger->debug("\t\tarray++");
+            m_logger->never("\t\tarray++");
             match = done ? NULL : end+1;
         }
-        m_logger->debug("\tdone");
+        m_logger->never("\tdone");
         *array = NULL;
         return result;
     }

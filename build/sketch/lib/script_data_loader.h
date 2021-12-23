@@ -246,7 +246,7 @@ class ScriptDataLoader : public DataLoader {
 
             ScriptPosition* pos = new ScriptPosition();
             if (json->getProperty("start") || json->getProperty("count")||
-                json->getProperty("skip")||json->getProperty("reverse")||json->getProperty("offset")){
+                json->getProperty("skip")||json->getProperty("reverse")||json->getProperty("offset")||json->getProperty("strip")){
                 pos->setStartValue(jsonToValue(json,"start"));
                 pos->setCountValue(jsonToValue(json,"count"));
                 pos->setEndValue(jsonToValue(json,"end"));
@@ -337,7 +337,7 @@ class ScriptDataLoader : public DataLoader {
             JsonObject* animate = NULL;
             if (jsonValue == NULL) {
                 // see if the animate properties are promoted ot parent
-                if (json->getProperty("duration") || json->getProperty("speed") || json->getProperty("unfold")) {
+                if (json->getProperty("duration") || json->getProperty("speed") || json->getProperty("unfold") || json->getProperty("ease")|| json->getProperty("ease-in")|| json->getProperty("ease-out")) {
                     animate = json;
                 }
             } else {
@@ -348,35 +348,26 @@ class ScriptDataLoader : public DataLoader {
             if (animate) {
                 m_logger->debug("create ValueAnimator");
                 JsonObject* obj = animate;
-                animator = new ValueAnimator();
-                animator->setDuration(jsonToValue(obj,"duration"));
-                animator->setSpeed(jsonToValue(obj,"speed"));
+                IScriptValue* duration = jsonToValue(obj,"duration");
+                IScriptValue* speed = jsonToValue(obj,"speed");
+                if (speed != NULL) {
+                    animator = new SpeedValueAnimator(speed);
+                } else if (duration) {
+                    animator = new DurationValueAnimator(duration);
+                } else {
+                    animator = new PositionValueAnimator();
+                }
                 animator->setRepeat(jsonToValue(obj,"repeat"));
                 animator->setRepeatDelay(jsonToValue(obj,"delay"));
                 animator->setUnfold(jsonToValue(obj,"unfold"));
+                animator->setEase(jsonToValue(obj,"ease"));
+                animator->setEaseIn(jsonToValue(obj,"ease-in"));
+                animator->setEaseOut(jsonToValue(obj,"ease-out"));
             }
             m_logger->debug("return value animator 0x%04X",animator);
             return animator;
         }
- /*       
-        PositionAnimator* jsonToPositionAnimator(JsonObject* json, const char * name) {
-            m_logger->test("get PositionAnimator from %s",json->toJsonString().get());
-            JsonElement * jsonValue = json->getPropertyValue(name);
-            m_logger->test("got %s property 0x%04X",name,jsonValue);
-            PositionAnimator* animator = NULL;
-            if (jsonValue != NULL && jsonValue->asObject()) {
-                m_logger->debug("create PositionAnimator");
-                JsonObject* obj = jsonValue->asObject();
-                animator = new PositionAnimator();
-                animator->setDuration(jsonToValue(obj,"duration"));
-                animator->setSpeed(jsonToValue(obj,"speed"));
-                animator->setRepeat(jsonToValue(obj,"repeat"));
-                animator->setRepeatDelay(jsonToValue(obj,"delay"));
-            }
-            m_logger->test("return animator 0x%04X",animator);
-            return animator;
-        }
- */       
+    
         IScriptValue* jsonToValue(JsonObject* json, const char * name) {
             JsonElement * jsonValue = json->getPropertyValue(name);
             if (jsonValue == NULL) {

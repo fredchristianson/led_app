@@ -27,6 +27,7 @@ namespace DevRelief
     };
 
     typedef enum ScriptStatus {
+        SCRIPT_CREATED,
         SCRIPT_RUNNING,
         SCRIPT_COMPLETE,
         SCRIPT_ERROR,

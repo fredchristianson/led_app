@@ -105,22 +105,27 @@ namespace DevRelief
             void setRGB(int index, const CRGB& rgb, HSLOperation op=REPLACE){
                 m_strip->setRGB(index,rgb,op);
             }
-            size_t getCount(){
+            int getCount() override {
                 return m_strip->getCount();
             }
-            size_t getStart(){
+            int getStart()override{
                 return m_strip->getStart();
             }
-            void clear(){
+            int getEnd()override{
+                return m_strip->getStart()+m_strip->getCount()-1;
+            }
+            int getOffset()override{
+                return 0;
+            }
+            void clear()override{
                 m_strip->clear();
             }
-            void show(){
+            void show()override{
                 m_strip->show();
             }
 
-            virtual PositionUnit getPositionUnit() { return POS_PERCENT;}
-            virtual int getOffset() { return 0;}
-            virtual int getPositionOffset() { return 0;}           
+            PositionUnit getPositionUnit() override { return POS_PERCENT;}
+        
         private: 
             IHSLStrip* m_strip;
     };

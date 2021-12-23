@@ -431,8 +431,7 @@ namespace DevRelief
             m_start = start;
             m_end = end;
             m_animate = NULL;
-            m_repeat = NULL;
-            m_delay = NULL;
+
         }
 
         virtual ~ScriptRangeValue()
@@ -441,8 +440,6 @@ namespace DevRelief
             delete m_start;
             delete m_end;
             delete m_animate;
-            delete m_delay;
-            delete m_repeat;
             memLogger->debug("~ScriptRangeValue() end");
         }
 
@@ -506,13 +503,10 @@ namespace DevRelief
             m_animate = animator;
         }
 
-        void setDelay(IScriptValue* delay) { m_delay = delay;}
-        void setRepeat(IScriptValue* repeat) { m_repeat = repeat;}
     protected:
         IScriptValue *m_start;
         IScriptValue *m_end;
-        IScriptValue *m_delay;
-        IScriptValue *m_repeat;
+
         IValueAnimator* m_animate;
     };
 

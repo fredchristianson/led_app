@@ -11,7 +11,7 @@ namespace DevRelief
     Logger ScriptLogger("Script", SCRIPT_LOGGER_LEVEL);
     Logger ScriptMemoryLogger("ScriptMem", SCRIPT_MEMORY_LOGGER_LEVEL);
     Logger ScriptCommandLogger("ScriptCommand", SCRIPT_LOGGER_LEVEL);
-    Logger ScriptStateLogger("ScriptCommand", SCRIPT_STATE_LOGGER_LEVEL);
+    Logger ScriptStateLogger("ScriptState", SCRIPT_STATE_LOGGER_LEVEL);
 
     typedef enum PositionUnit
     {
@@ -28,6 +28,7 @@ namespace DevRelief
     };
 
     typedef enum ScriptStatus {
+        SCRIPT_CREATED,
         SCRIPT_RUNNING,
         SCRIPT_COMPLETE,
         SCRIPT_ERROR,
@@ -51,9 +52,14 @@ namespace DevRelief
     {
     public:
         virtual void destroy() =0; // cannot delete pure virtual interfaces. they must all implement destroy
-        virtual int getIntValue(IScriptCommand* cmd,  int defaultValue) = 0;         // percent in [0,100]
-        virtual double getFloatValue(IScriptCommand* cmd,  double defaultValue) = 0; // percent in [0,100]
-        virtual bool getBoolValue(IScriptCommand* cmd,  bool defaultValue) = 0; // percent in [0,100]
+        virtual int getIntValue(IScriptCommand* cmd,  int defaultValue) = 0;         
+        virtual double getFloatValue(IScriptCommand* cmd,  double defaultValue) = 0; 
+        virtual bool getBoolValue(IScriptCommand* cmd,  bool defaultValue) = 0; 
+        virtual int getMsecValue(IScriptCommand* cmd,  int defaultValue) = 0; 
+
+        virtual bool isString(IScriptCommand* cmd)=0;
+        virtual bool isNumber(IScriptCommand* cmd)=0;
+        virtual bool isBool(IScriptCommand* cmd)=0;
 
         virtual bool isRecursing() = 0; // mainly for variable values
         // for debugging
@@ -130,8 +136,8 @@ namespace DevRelief
         public:
             virtual void destroy()=0;
             virtual PositionUnit getPositionUnit()=0;
+            virtual int getEnd()=0;
             virtual int getOffset()=0;
-            virtual int getPositionOffset()=0;
     };
 
     class ICommandContainer  {
