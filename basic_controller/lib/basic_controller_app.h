@@ -209,7 +209,7 @@ namespace DevRelief {
                 m_executor.white(level);
                 result.setCode(200);
                 result.setMessage("lights turned %s","on");
-            } else if (strcmp(api,"solid") == 0){
+            } else if (strcmp(api,"color") == 0){
                 m_executor.solid(params);
                 result.setCode(200);
                 result.setMessage("lights turned %s","on");

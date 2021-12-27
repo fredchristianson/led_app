@@ -34,14 +34,15 @@ namespace DevRelief {
             void white(uint8_t level) {
                 endScript();
                 if (m_ledStrip == NULL) {
+                    m_logger->debug("No LED strip");
                     return;
                 }
                 // level is 0-100
                 m_ledStrip->clear();
                 m_ledStrip->setBrightness(40);
-                m_logger->debug("Set white level %d",level);
+                m_logger->debug("Set white level %d.  LED count:%d",level,m_ledStrip->getCount());
                 for(int i=0;i<m_ledStrip->getCount();i++) {
-                    m_ledStrip->setSaturation(i,100);
+                    m_ledStrip->setSaturation(i,0);
                     m_ledStrip->setLightness(i,level);
                     m_ledStrip->setHue(i,0);
                 }

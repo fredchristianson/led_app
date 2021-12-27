@@ -22,10 +22,12 @@ namespace DevRelief
         {
             memLogger->debug("create ScriptState");
             m_logger = &ScriptStateLogger;
-            m_stepNumber=0;
-            m_lastStepTime = 0;
-            m_stepNumber=0;
             m_previousCommand = NULL;
+
+            m_startTime = millis();
+            m_lastStepTime = 0;
+            m_stepNumber = 0;
+            m_positionDomain.setPosition(0,0,0);
         }
 
         virtual ~ScriptState()
@@ -41,7 +43,7 @@ namespace DevRelief
             m_lastStepTime = now;
             m_stepNumber++;
             m_positionDomain.setPosition(0,0,0);
-            m_timeDomain.setTimePosition(now);
+            m_timeDomain.setTimePosition(now-m_startTime);
             m_previousCommand = NULL;
 
         }
