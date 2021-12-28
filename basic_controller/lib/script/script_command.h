@@ -61,6 +61,7 @@ namespace DevRelief
             if (m_position) {
                 m_position->updateValues(this,state,m_container);
             }
+            state->setCurrentCommand(this);
             ScriptStatus status = doCommand(state);
             return status;
         }
@@ -89,6 +90,10 @@ namespace DevRelief
         IScriptValue *getValue(const char *name) override
         {
             m_logger->never("getvalue %s",name);
+            IScriptValue * stateValue = m_state->getValue(name);
+            if (stateValue) {
+                return stateValue;
+            }
 
             IScriptValue* val =  m_values == NULL ? NULL : m_values->getValue(name);
             m_logger->never("\tnot found");
@@ -100,7 +105,10 @@ namespace DevRelief
         }
 
         int getIntValue(const char * name,int defaultValue) {
-            IScriptValue* sv = getValue(name);
+            IScriptValue* sv = m_state->getValue(name);
+            if (sv == NULL) {
+                sv = getValue(name);
+            }
             if (sv == NULL) { return defaultValue;}
             return sv->getIntValue(this,defaultValue);
         }

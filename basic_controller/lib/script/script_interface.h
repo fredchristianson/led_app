@@ -100,6 +100,8 @@ namespace DevRelief
         virtual TimeDomain* getAnimationTimeDomain()=0;
         virtual PositionDomain* getAnimationPositionDomain()=0;
         virtual int getStepNumber()=0;
+        virtual void setValue(void*owner, const char * valueName, IScriptValue* val)=0;
+        virtual IScriptValue* getValue(void* owner,const char * valueName)=0;
     };
     
     class IScriptCommand 

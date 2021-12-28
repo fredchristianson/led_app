@@ -300,6 +300,38 @@ namespace DevRelief
         Logger *m_logger;
     };
 
+    class AnimatorState : public IScriptValue {
+        public:
+        AnimatorState() {
+            m_status= SCRIPT_RUNNING;
+            m_pauseUntil = 0;
+        }
+
+        void destroy() {delete this;}
+
+        ScriptStatus  m_status;
+        int m_endDomainValue;
+        int m_pauseUntil;
+        virtual int getRepeatCount() { return 0;}
+
+        
+
+        // these methods are required but not implemented for this IScriptValue
+        int getIntValue(IScriptCommand* cmd,  int defaultValue) { return defaultValue;}
+        double getFloatValue(IScriptCommand* cmd,  double defaultValue)  { return defaultValue;}
+        bool getBoolValue(IScriptCommand* cmd,  bool defaultValue)  { return defaultValue;}
+        int getMsecValue(IScriptCommand* cmd,  int defaultValue)  { return defaultValue;}
+
+        bool isString(IScriptCommand* cmd) { return false;}
+        bool isNumber(IScriptCommand* cmd) { return false;}
+        bool isBool(IScriptCommand* cmd) { return false;}
+
+        bool isRecursing()  { return false;}
+        // for debugging
+        DRString toString() { return DRFormattedString("AnimatorState %d %d",m_status,m_pauseUntil);};
+        bool equals(IScriptCommand*cmd, const char * match) { return false;}
+    };
+
     class ValueAnimator : public IValueAnimator
     {
     public:
@@ -312,10 +344,7 @@ namespace DevRelief
             m_unfold = false;
             m_selectedEase = &m_cubicBeszierEase;
             m_cubicBeszierEase.setValues(0,1);
-            m_status = SCRIPT_CREATED;
-            m_pauseUntil = 0;
-            m_endDomainValue = 0;
-            m_repeatCount = 0;
+
         }
 
         virtual ~ValueAnimator()
@@ -350,57 +379,64 @@ namespace DevRelief
             return m_unfoldValue && m_unfoldValue->getBoolValue(cmd, false);
         }
 
+        AnimatorState* getState(IScriptCommand* cmd) {
+            AnimatorState* as = (AnimatorState*)cmd->getState()->getValue(this,"animator-state");
+            if (as == NULL) {
+                as = new AnimatorState();
+                cmd->getState()->setValue(this,"animator-state",as);
+            }
+            return as;
+        }
         double get(IScriptCommand*cmd, AnimationRange&range) override {
             m_logger->debug("ValueAnimator.get() 0x%04X",cmd);
+
+            AnimatorState* as = getState(cmd);
             AnimationDomain* domain = getDomain(cmd,range);
             setEaseParameters(cmd);
             Animator animator(*domain,m_selectedEase);
             range.setUnfolded(isUnfolded(cmd));
-            double value = animator.get(range);
-            return value;
 
-/*
             if (domain == NULL) {
                 m_logger->error("Animation domain is NULL");
-                m_status = SCRIPT_ERROR;
+                as->m_status = SCRIPT_ERROR;
                 return range.getHigh();
             }
-            if (m_status == SCRIPT_COMPLETE||m_status == SCRIPT_ERROR){
+            if (as->m_status == SCRIPT_COMPLETE||as->m_status == SCRIPT_ERROR){
                 return range.getHigh();
-            } else if (m_status == SCRIPT_PAUSED && millis()<m_pauseUntil) {
+            } else if (as->m_status == SCRIPT_PAUSED && millis()<as->m_pauseUntil) {
                 return range.getHigh();
-            } else if (m_status == SCRIPT_CREATED||m_status == SCRIPT_PAUSED) {
-                m_endDomainValue = domain->getMax();
-                m_repeatCount = -1;
+            } else if (as->m_status == SCRIPT_CREATED||as->m_status == SCRIPT_PAUSED) {
+                as->m_endDomainValue = domain->getMax();
+                as->getRepeatCount() = -1;
                 if (m_repeatValue == NULL || m_repeatValue->isBool(cmd) && !m_repeatValue->getBoolValue(cmd,true)) {
-                    m_repeatCount = 1;
+                    as->getRepeatCount() = 1;
                 } else if (m_repeatValue != NULL && m_repeatValue->isNumber(cmd)) {
-                    m_repeatCount = m_repeatValue->getIntValue(cmd,-1);
+                    as->getRepeatCount() = m_repeatValue->getIntValue(cmd,-1);
                 }
-                m_status = SCRIPT_RUNNING;
+                as->m_status = SCRIPT_RUNNING;
             } 
             setEaseParameters(cmd);
             Animator animator(*domain,m_selectedEase);
             range.setUnfolded(isUnfolded(cmd));
             double value = animator.get(range);
-            if (domain->getValue() > m_endDomainValue) {
+            if (domain->getValue() > as->m_endDomainValue) {
                 m_logger->always("paused");
-                if (m_repeatCount>0) {
-                    m_repeatCount--;
+                if (as->getRepeatCount()>0) {
+                    as->getRepeatCount()--;
                 }
-                if (m_repeatCount == 0) {
+                if (as->getRepeatCount() == 0) {
                     m_logger->always("complete");
-                    m_status = SCRIPT_COMPLETE;
+                    as->m_status = SCRIPT_COMPLETE;
                 } else {
                     int pauseMsecs = m_repeatDelayValue ? m_repeatDelayValue->getMsecValue(cmd,0) : 0;
                     if (pauseMsecs > 0) {
-                        m_status= SCRIPT_PAUSED;
-                        m_pauseUntil = millis()+pauseMsecs;
+                        as->m_status= SCRIPT_PAUSED;
+                        as->m_pauseUntil = millis()+pauseMsecs;
                     }
                 }
             }
             return value;
-*/            
+          
         }
 
         virtual AnimationDomain* getDomain(IScriptCommand*cmd,AnimationRange&range) =0;
@@ -441,11 +477,9 @@ namespace DevRelief
         CubicBezierEase m_cubicBeszierEase;
         LinearEase m_linearEase;
         AnimationEase* m_selectedEase;
-        ScriptStatus  m_status;
-        int m_endDomainValue;
-        int m_pauseUntil;
         bool m_unfold;
-        int m_repeatCount;
+
+
         Logger *m_logger;
     };
 
