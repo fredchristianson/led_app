@@ -474,7 +474,7 @@ namespace DevRelief
                 value = m_animate->get(cmd,range);
             } else {
                 AnimationRange range(start,end,false);
-                Animator animator(*(state->getAnimationPositionDomain()));
+                Animator animator(*(cmd->getAnimationPositionDomain()));
                 CubicBezierEase ease;
                 animator.setEase(&ease);
 

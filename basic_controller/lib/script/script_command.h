@@ -43,26 +43,55 @@ namespace DevRelief
 
         IStripModifier* getPosition() override {
             if (m_position) {
+                m_logger->always("have position 0x%04X",m_position);
                 return m_position;
-            } else if (m_previousCommand != NULL) {
-                return m_previousCommand->getPosition();
+            } else if (m_container != NULL) {
+                m_logger->always("get position from container 0x%04X",m_previousCommand);
+                return m_container->getPosition();
             } else {
+                m_logger->always("no position");
                 return NULL;
             }
         }
+
+        void setPosition(int index) override {
+            IStripModifier* pos = getPosition();
+            if (pos) {
+                pos->setPosition(index);
+            } else {
+                m_logger->error("Command type %s needs a position",getType());
+            }
+        }
+
+        
+        PositionDomain* getAnimationPositionDomain() override {
+            IStripModifier* strip = getPosition();
+            m_logger->debug("getAnimationPositionDomain from strip 0x%04X",strip);
+            return strip->getAnimationPositionDomain();
+
+        }
+
 
         IHSLStrip * getHSLStrip() override { return m_container->getHSLStrip();}
 
         ScriptStatus execute(ScriptState *state) override
         {
-            m_logger->never("execute command %s state=0x%04X",getType(),state);
+            m_logger->always("ScriptCommandBase.execute");
+            m_logger->debug("execute command %s state=0x%04X",getType(),state);
             m_state = state;
+             m_logger->debug("get previous");
             m_previousCommand = state->getPreviousCommand();
             if (m_position) {
+                m_logger->debug("update position");
                 m_position->updateValues(this,state,m_container);
+            } else {
+                m_logger->debug("no position");
             }
+            m_logger->debug("setCurrentCommand");
             state->setCurrentCommand(this);
+            m_logger->debug("doCommand");
             ScriptStatus status = doCommand(state);
+            m_logger->debug("done %d",state);
             return status;
         }
 
@@ -215,23 +244,29 @@ namespace DevRelief
 
         ScriptStatus doCommand(ScriptState* state) override
         {
-            if (m_previousCommand == NULL) {
-                //m_logger->periodic(ERROR_LEVEL,1000,NULL,"LEDCommand.doCommand does not have a previousCommand");
-            }
+            m_logger->always("LEDCommand");
+
             auto *strip = getPosition();
             if (strip == NULL) {
                 strip = getStrip();
+                m_logger->always("got strip %04x",strip);
+            } else {
+                m_logger->always("got position %04x",strip);
             }
             int count = strip->getCount();
             if (count == 0)
             {
-                m_logger->periodic(0, 1000, NULL, "strip has 0 LEDS");
+                m_logger->always(0, 1000, NULL, "strip has 0 LEDS");
                 return SCRIPT_ERROR;
             }
-            m_logger->never("LEDCommand count=%d",count);
+            m_logger->always("LEDCommand count=%d",count);
+            auto* positionDomain = strip->getAnimationPositionDomain();
+            m_logger->always("\tgot position domain %d",count);
+            
+
             for (int i = 0; i < count; i++)
             {
-                state->setLedPosition(i,0,count);
+                strip->setPosition(i);    
                 updateLED(i,strip);
             }
             return SCRIPT_RUNNING;

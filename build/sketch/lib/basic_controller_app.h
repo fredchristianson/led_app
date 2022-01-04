@@ -205,7 +205,7 @@ namespace DevRelief {
                 //result.setText(R"j({"result":true,"message":"lights turned off"})j");
                 result.setCode(200);
                 result.setMessage("lights turned %s","off");
-            } else if (strcmp(api,"on") == 0){
+            } else if (strcmp(api,"on") == 0 || strcmp(api,"white") == 0){
                 int level = params->get("level",100);
                 m_executor.white(level);
                 result.setCode(200);

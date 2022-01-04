@@ -29,9 +29,11 @@ namespace DevRelief
             m_reverseValue = NULL;
             m_physicalStrip = NULL;
             m_start = 0;
-            m_count = 0;
+            m_count = 100;
+            m_unit = POS_PERCENT;
             m_offset = 0;
             m_wrap = true;
+            m_position = 0;
             m_reverse = false;
             m_logger = &ScriptLogger;
             m_operation = REPLACE;
@@ -47,6 +49,11 @@ namespace DevRelief
             delete m_offsetValue;
             delete m_physicalStrip;
         }
+
+        PositionDomain* getAnimationPositionDomain() override {
+
+        }
+
 
         void destroy() {
             delete this;
@@ -120,7 +127,9 @@ namespace DevRelief
             m_start += physicalStart;
             m_end += physicalStart;
             ScriptLogger.never("position: start %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s. offset=%d. physical: %d,%d ",m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"),m_offset,physicalStart,physicalCount);
-   
+            m_positionDomain.setMin(m_start);
+            m_positionDomain.setMax(m_end);
+            m_positionDomain.setPos(m_start);
         }
        
         int getStripPosition(IScriptCommand* cmd, ScriptState*state, IScriptValue* value,int defaultValue){
@@ -278,7 +287,17 @@ namespace DevRelief
             } else {
                 index = m_start+index;
             }
+            m_positionDomain.setPos(index);
             return true;
+        }
+
+        void setPosition(int index) override {
+            m_logger->debug("ScriptPosition.setPosition %d",index);
+            int idx = index;
+            
+            translate(idx);
+            m_logger->debug("translated %d",idx);
+            m_positionDomain.setPos(idx);
         }
 
         void setWrap(IScriptValue* wrap) { m_wrapValue = wrap; }
@@ -295,6 +314,16 @@ namespace DevRelief
         }
 
         int getOffset() override { return m_offset;}
+
+        IStripModifier* getPosition() override {
+            return this;
+        }
+        PositionDomain* getAnimationPositionDomain() override {
+            return &m_positionDomain;
+        }
+        void setPosition(int index) override {
+            m_position = index;
+        }
 
     private:
         // values that may be variables
@@ -316,6 +345,7 @@ namespace DevRelief
         bool m_reverse;
         int m_skip;
         int m_offset; // can be set in the JSON position definition.  useful for POS_RELATIVE?
+        int m_position;
         PositionUnit m_unit;
         PositionType m_type;
         // m_strip is the strip this position writes to
@@ -323,6 +353,8 @@ namespace DevRelief
         
         HSLOperation m_operation;
         Logger* m_logger;
+        PositionDomain m_positionDomain;
+
     };
 
   

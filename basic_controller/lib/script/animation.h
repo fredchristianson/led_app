@@ -338,8 +338,6 @@ namespace DevRelief
         ValueAnimator()
         {
             m_logger = &AnimationLogger;
-            m_repeatValue = 0;
-            m_repeatDelayValue = 0;
             m_unfoldValue = NULL;
             m_unfold = false;
             m_selectedEase = &m_cubicBeszierEase;
@@ -349,24 +347,12 @@ namespace DevRelief
 
         virtual ~ValueAnimator()
         {
-            delete m_repeatValue;
-            delete m_repeatDelayValue;
             delete m_unfoldValue;
         };
 
         void destroy() override { delete this; }
 
-      
-        void setRepeat(IScriptValue *repeat)
-        {
-            delete m_repeatValue;
-            m_repeatValue = repeat;
-        }
-        void setRepeatDelay(IScriptValue *repeatDelay)
-        {
-            delete m_repeatDelayValue;
-            m_repeatDelayValue = repeatDelay;
-        }
+    
 
         void setUnfold(IScriptValue *unfold)
         {
@@ -387,54 +373,23 @@ namespace DevRelief
             }
             return as;
         }
+
         double get(IScriptCommand*cmd, AnimationRange&range) override {
             m_logger->debug("ValueAnimator.get() 0x%04X",cmd);
 
             AnimatorState* as = getState(cmd);
             AnimationDomain* domain = getDomain(cmd,range);
             setEaseParameters(cmd);
-            Animator animator(*domain,m_selectedEase);
-            range.setUnfolded(isUnfolded(cmd));
-
             if (domain == NULL) {
                 m_logger->error("Animation domain is NULL");
                 as->m_status = SCRIPT_ERROR;
                 return range.getHigh();
             }
-            if (as->m_status == SCRIPT_COMPLETE||as->m_status == SCRIPT_ERROR){
-                return range.getHigh();
-            } else if (as->m_status == SCRIPT_PAUSED && millis()<as->m_pauseUntil) {
-                return range.getHigh();
-            } else if (as->m_status == SCRIPT_CREATED||as->m_status == SCRIPT_PAUSED) {
-                as->m_endDomainValue = domain->getMax();
-                as->getRepeatCount() = -1;
-                if (m_repeatValue == NULL || m_repeatValue->isBool(cmd) && !m_repeatValue->getBoolValue(cmd,true)) {
-                    as->getRepeatCount() = 1;
-                } else if (m_repeatValue != NULL && m_repeatValue->isNumber(cmd)) {
-                    as->getRepeatCount() = m_repeatValue->getIntValue(cmd,-1);
-                }
-                as->m_status = SCRIPT_RUNNING;
-            } 
-            setEaseParameters(cmd);
+
             Animator animator(*domain,m_selectedEase);
             range.setUnfolded(isUnfolded(cmd));
             double value = animator.get(range);
-            if (domain->getValue() > as->m_endDomainValue) {
-                m_logger->always("paused");
-                if (as->getRepeatCount()>0) {
-                    as->getRepeatCount()--;
-                }
-                if (as->getRepeatCount() == 0) {
-                    m_logger->always("complete");
-                    as->m_status = SCRIPT_COMPLETE;
-                } else {
-                    int pauseMsecs = m_repeatDelayValue ? m_repeatDelayValue->getMsecValue(cmd,0) : 0;
-                    if (pauseMsecs > 0) {
-                        as->m_status= SCRIPT_PAUSED;
-                        as->m_pauseUntil = millis()+pauseMsecs;
-                    }
-                }
-            }
+           
             return value;
           
         }
@@ -468,8 +423,7 @@ namespace DevRelief
 
     protected:
         IScriptValue *m_durationValue; // ignored if m_seed is set
-        IScriptValue *m_repeatValue;
-        IScriptValue *m_repeatDelayValue;
+
         IScriptValue *m_unfoldValue;
         IScriptValue *m_ease;
         IScriptValue *m_easeIn;
@@ -483,7 +437,43 @@ namespace DevRelief
         Logger *m_logger;
     };
 
-    class SpeedValueAnimator : public ValueAnimator {
+
+    class TimeValueAnimator : public ValueAnimator {
+        public:
+            TimeValueAnimator() {
+                m_repeatValue = NULL;
+                m_delayValue = NULL;
+                m_delayResponseValue = NULL;
+            }
+
+            virtual  ~TimeValueAnimator(){
+                delete m_repeatValue;
+                delete m_delayValue;
+                delete m_delayResponseValue;
+            }
+
+            void setRepeatValue(IScriptValue*repeat) { 
+                delete m_repeatValue;
+                m_repeatValue = repeat;
+                }
+            void setRepeatDelayValue(IScriptValue*delay) { 
+                delete m_delayValue;
+                m_delayValue = delay;
+            }
+            void setDelayResponseValue(IScriptValue*delayResponse) { 
+                delete m_delayResponseValue;
+                m_delayResponseValue = delayResponse;
+            }
+
+        protected: 
+            IScriptValue *m_repeatValue;
+            IScriptValue *m_delayValue;
+            IScriptValue *m_delayResponseValue;
+            TimeDomain  m_timeDomain;
+    };
+
+
+    class SpeedValueAnimator : public TimeValueAnimator {
         public:
             SpeedValueAnimator(IScriptValue* speed) { m_speedValue = speed;}
 
@@ -492,12 +482,8 @@ namespace DevRelief
             }
 
             AnimationDomain* getDomain(IScriptCommand*cmd,AnimationRange&range) override {
-                TimeDomain* domain = cmd->getState()->getAnimationTimeDomain();
+                TimeDomain* domain = &m_timeDomain;
 
-                if (domain == NULL) {
-                    m_logger->errorNoRepeat("ValueAnimation getSpeedValue requires a TimeDomain from the state");
-                    return NULL;
-                }
                 int speed = m_speedValue->getIntValue(cmd,1);
                 domain->setSpeed(speed,&range);
                 return domain;
@@ -508,8 +494,7 @@ namespace DevRelief
             IScriptValue *m_speedValue;
 
     };
-
-    class DurationValueAnimator : public ValueAnimator {
+    class DurationValueAnimator : public TimeValueAnimator {
         public:
             DurationValueAnimator(IScriptValue* duration) { m_durationValue = duration;}
 
@@ -517,11 +502,8 @@ namespace DevRelief
 
             }
             AnimationDomain* getDomain(IScriptCommand*cmd,AnimationRange&range) override {
-                TimeDomain* domain = cmd->getState()->getAnimationTimeDomain();
+                TimeDomain* domain = &m_timeDomain;
 
-                if (domain == NULL) {
-                    return NULL;
-                }
                 int duration = m_durationValue->getIntValue(cmd,1000);
                 domain->setDuration(duration);
                 return domain;
@@ -545,7 +527,7 @@ namespace DevRelief
             }
 
             AnimationDomain* getDomain(IScriptCommand*cmd,  AnimationRange&range) override {
-                PositionDomain* domain = cmd->getState()->getAnimationPositionDomain();
+                PositionDomain* domain = cmd->getAnimationPositionDomain();
                 return domain;
             }
 

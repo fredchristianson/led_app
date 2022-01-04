@@ -41,8 +41,6 @@ namespace DevRelief
             long now = millis();
             m_lastStepTime = now;
             m_stepNumber++;
-            m_positionDomain.setPosition(0,0,0);
-            m_timeDomain.setTimePosition(now);
             m_previousCommand = NULL;
 
         }
@@ -67,17 +65,7 @@ namespace DevRelief
 
         long scriptTimeMsecs() { return millis()-m_startTime;}
 
-        void setLedPosition(int current,int min,int max) { 
-            m_positionDomain.setPosition(current,min,max);
-        }
 
-        TimeDomain* getAnimationTimeDomain() {
-            return &m_timeDomain;
-        }        
-
-        PositionDomain* getAnimationPositionDomain(){
-            return &m_positionDomain;
-        }
         int getStepNumber() override { return m_stepNumber;}
 
         IScriptCommand * getPreviousCommand() { return m_previousCommand;}
@@ -94,7 +82,6 @@ namespace DevRelief
             m_startTime = millis();
             m_lastStepTime = 0;
             m_stepNumber = 0;
-            m_positionDomain.setPosition(0,0,0);
         }
 
         void endScript(Script *script)
@@ -111,8 +98,6 @@ namespace DevRelief
         Script *m_script;
         IScriptCommand* m_previousCommand;
 
-        TimeDomain m_timeDomain;
-        PositionDomain m_positionDomain;
     };
 
    

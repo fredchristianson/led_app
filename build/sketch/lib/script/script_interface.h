@@ -95,11 +95,8 @@ namespace DevRelief
     class IScriptState {
         public:
         virtual void destroy() =0; // cannot delete pure virtual interfaces. they must all implement destroy    
-        virtual void setLedPosition(int pos, int min, int max)=0;
 
         virtual int getStepStartTime()=0;
-        virtual TimeDomain* getAnimationTimeDomain()=0;
-        virtual PositionDomain* getAnimationPositionDomain()=0;
         virtual int getStepNumber()=0;
     };
     
