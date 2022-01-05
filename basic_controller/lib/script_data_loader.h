@@ -217,7 +217,7 @@ class ScriptDataLoader : public DataLoader {
 
         ScriptSegmentContainer* jsonToSegment(JsonObject* json) {
             ScriptContainer *parentContainer = m_currentContainer;
-            ScriptSegmentContainer* seg = new ScriptSegmentContainer(m_currentContainer);
+            ScriptSegmentContainer* seg = new ScriptSegmentContainer();
             m_currentContainer = seg;
             JsonArray* arr = json->getArray("commands");
             jsonToCommands(arr,seg);
@@ -227,7 +227,7 @@ class ScriptDataLoader : public DataLoader {
 
         PositionCommand* jsonToPositionCommand(JsonObject* json) {
             m_logger->debug("create PositionCommand");
-            PositionCommand* cmd = new PositionCommand(m_currentContainer);
+            PositionCommand* cmd = new PositionCommand();
             ScriptPosition* pos = jsonToPosition(json);
             cmd->setScriptPosition(pos);
             return cmd;
@@ -286,7 +286,7 @@ class ScriptDataLoader : public DataLoader {
         }
 
         ScriptValueCommand* jsonToValueCommand(JsonObject* json) {
-            ScriptValueCommand* cmd = new ScriptValueCommand(m_currentContainer);
+            ScriptValueCommand* cmd = new ScriptValueCommand();
             jsonGetValues(json,cmd);
             return cmd;
         }
@@ -320,7 +320,7 @@ class ScriptDataLoader : public DataLoader {
 
 
         HSLCommand* jsonToHSLCommand(JsonObject* json) {
-            HSLCommand* cmd = new HSLCommand(m_currentContainer);
+            HSLCommand* cmd = new HSLCommand();
             cmd->setHue(jsonToValue(json,"hue"));
             cmd->setLightness(jsonToValue(json,"lightness"));
             cmd->setSaturation(jsonToValue(json,"saturation"));

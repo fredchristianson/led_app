@@ -98,6 +98,8 @@ namespace DevRelief
         virtual int getStepNumber()=0;
         virtual void setValue(void*owner, const char * valueName, IScriptValue* val)=0;
         virtual IScriptValue* getValue(void* owner,const char * valueName)=0;
+        virtual IScriptCommand* getContainer()=0;
+        virtual IHSLStrip* getStrip()=0;
     };
 
     class IPositionable {
@@ -116,9 +118,7 @@ namespace DevRelief
             virtual ScriptStatus execute(ScriptState*state)=0;
             virtual IScriptValue* getValue(const char* name)=0;
             virtual const char * getType()=0;
-            virtual IHSLStrip* getStrip()=0;
             virtual IScriptState* getState()=0;
-            virtual IScriptCommand* getParent()=0;
     };
 
     class IValueAnimator

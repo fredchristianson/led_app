@@ -357,6 +357,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
         }
 
         void setHue(int index, int16_t hue, HSLOperation op=REPLACE) {
+            m_logger->never("HSL Hue %d %d",index,hue);
             if (index<0 || index>=m_count) {
                 m_logger->periodic(ERROR_LEVEL,5000,"HSL Hue index out of range %d (0-%d)",index,m_count);
                 return;

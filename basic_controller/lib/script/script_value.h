@@ -75,9 +75,9 @@ namespace DevRelief
             double get(IScriptCommand* cmd, double defaultValue){
                 double val = defaultValue;
                 if (Util::equal(m_name,"start")) {
-                    val = cmd->getStrip()->getStart();
+                    val = cmd->getState()->getStrip()->getStart();
                 } else if (Util::equal(m_name,"count")) {
-                    val = cmd->getStrip()->getCount();
+                    val = cmd->getState()->getStrip()->getCount();
                 } else if (Util::equal(m_name,"step")) {
                     val = cmd->getState()->getStepNumber();
                 } else if (Util::equal(m_name,"red")) {

@@ -61,9 +61,15 @@ namespace DevRelief
             m_type = t;
         }
         void updateValues(IScriptCommand* cmd, ScriptState* state){
-            IScriptCommand* parent = cmd->getParent();
-            m_parentPosition = parent == NULL ? NULL : parent->getPosition();
-            m_strip = cmd->getStrip();
+            m_logger->never("update position 0x%x 0x%x",cmd,state);
+            IScriptCommand* container = state->getContainer();
+            m_logger->never("\tcontainer 0x%x",container);
+            m_parentPosition =  container ? container->getPosition() : NULL;
+            m_strip = state->getStrip();
+            if (m_strip == NULL) {
+                m_logger->error("position needs a strip");
+                return;
+            }
             int physicalCount = m_strip->getCount();
             int physicalStart = 0;
             if (m_physicalStrip != NULL) {
@@ -71,11 +77,11 @@ namespace DevRelief
                 physicalStart = getPhysicalStripOffset(number);
                 physicalCount = getPhysicalStripLedCount(number);
             }
-            ScriptLogger.test("updateValues strip");
+            ScriptLogger.never("updateValues strip");
             if (m_wrapValue) {
                 m_wrap = m_wrapValue->getBoolValue(cmd,true);
             } else {
-                m_wrap = true;
+                m_wrap = false;
             }
             if (m_reverseValue) {
                 m_reverse = m_reverseValue->getBoolValue(cmd,true);
@@ -85,7 +91,7 @@ namespace DevRelief
             if (m_skipValue) {
                 int skip  = m_skipValue->getIntValue(cmd,1);
                 m_skip = skip;
-                ScriptLogger.test("skip %d %d.  %s",skip,m_skip,m_skipValue->toString().get());
+                ScriptLogger.never("skip %d %d.  %s",skip,m_skip,m_skipValue->toString().get());
             } else {
                 m_skip = 1;
             }
@@ -127,9 +133,12 @@ namespace DevRelief
             m_start += physicalStart;
             m_end += physicalStart;
             ScriptLogger.never("position: start %d. count %d. end %d. skip %d. wrap: %s.  reverse: %s. offset=%d. physical: %d,%d ",m_start,m_count,m_end,m_skip,(m_wrap?"true":"false"),(m_reverse?"true":"false"),m_offset,physicalStart,physicalCount);
-            m_positionDomain.setMin(m_start);
-            m_positionDomain.setMax(m_end);
-            m_positionDomain.setPos(m_start);
+            //m_positionDomain.setMin(m_start);
+            //m_positionDomain.setMax(m_end);
+            //m_positionDomain.setPos(m_start);
+            m_positionDomain.setMin(0);
+            m_positionDomain.setMax(m_count);
+            m_positionDomain.setPos(0);
         }
        
         int getStripPosition(IScriptCommand* cmd, ScriptState*state, IScriptValue* value,int defaultValue){
@@ -207,10 +216,12 @@ namespace DevRelief
         void setUnit(PositionUnit unit) { m_unit = unit; }
         void setHue(int index, int16_t hue, HSLOperation op = REPLACE)
         {
+            int orig = index;
             if (m_strip == NULL || !translate(index)) {
                 //ScriptLogger.periodic(ERROR_LEVEL,100,NULL,"Script position missing a previous strip");
                 return;
             }
+            m_logger->never("%d==>%d",orig,index);
             m_strip->setHue((index), hue, op);
         }
         void setSaturation(int index, int16_t saturation, HSLOperation op = REPLACE)
@@ -244,7 +255,8 @@ namespace DevRelief
         int getEnd() { return m_end; }
         bool translate(int& index)
         {
-            // never works in PIXEL units.  updateValues took care of % to pixel if needed
+            int orig = index;
+            // works in PIXEL units.  updateValues took care of % to pixel if needed
             int start = m_start;
             int count = m_count;
             int reverse = m_reverse;
@@ -259,21 +271,11 @@ namespace DevRelief
             } else {
                 m_logger->never("\tno skip");
             }
-            if (index < 0) {
-                if (m_wrap) {
+            if (index < 0 && m_wrap) {
                     index = count + (index%count);
-                } else {
-                    m_logger->never("clip");
-                    return false;
-                }
             }
-            if (index >= count) {
-                if (m_wrap) {
+            if (index >= count && m_wrap) {
                     index = index%count;
-                } else {
-                    m_logger->never("clip");
-                    return false;
-                }
             }
 
 
@@ -287,17 +289,15 @@ namespace DevRelief
             } else {
                 index = m_start+index;
             }
-            m_positionDomain.setPos(index);
+           // m_logger->never("%d-->%d",orig,index);
             return true;
         }
 
         void setPositionIndex(int index) override {
+            // use original, not translated index
             m_logger->never("ScriptPosition.setPosition %d",index);
-            int idx = index;
-            
-            translate(idx);
-            m_logger->never("translated %d",idx);
-            m_positionDomain.setPos(idx);
+
+            m_positionDomain.setPos(index);
         }
 
         void setWrap(IScriptValue* wrap) { m_wrapValue = wrap; }

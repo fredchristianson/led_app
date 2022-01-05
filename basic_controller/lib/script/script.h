@@ -43,7 +43,7 @@ namespace DevRelief
 
 
         void begin(IHSLStrip * ledStrip) override {
-            m_logger->always("begin Script.  frequency %d",m_frequencyMSecs);
+            m_logger->never("begin Script.  frequency %d",m_frequencyMSecs);
             delete m_state;
             m_state = new ScriptState();
             m_logger->never("\tset strip 0x%04X",ledStrip);
@@ -58,7 +58,7 @@ namespace DevRelief
             int ms = m_state->msecsSinceLastStep();
             m_logger->never("frequency %d %d",m_frequencyMSecs,ms);
             if (m_frequencyMSecs > m_state->msecsSinceLastStep())
-            {
+            {   m_logger->never("frequency too soon");
                  return;
             }
             m_logger->never("Script step");
@@ -66,6 +66,7 @@ namespace DevRelief
             IHSLStrip * strip = m_state->getStrip();
             m_logger->never("strip 0x%04X",strip);
 
+            int startMs = millis();
 
             strip->clear();
             m_logger->never("cleared");
@@ -77,7 +78,7 @@ namespace DevRelief
             m_state->endStep();
             m_logger->never("ended");
             strip->show();
-            m_logger->never("done");
+            m_logger->never("done %d",millis()-startMs);
         }
 
         void setName(const char *name) { m_name = name; }

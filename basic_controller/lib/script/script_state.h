@@ -30,6 +30,8 @@ namespace DevRelief
             m_values = new ScriptValueList();
             
             m_currentCommand = NULL;
+            m_currentContainer = NULL;
+            m_strip = NULL;
         }
 
         virtual ~ScriptState()
@@ -49,6 +51,21 @@ namespace DevRelief
 
         }
 
+        IScriptCommand* setContainer(IScriptCommand* container) {
+            auto old = m_currentContainer;
+            m_currentContainer = container;
+            return old;
+        }
+
+        IHSLStrip* setStrip(IHSLStrip* strip) {
+            auto old = m_strip;
+            m_strip = strip;
+            return old;
+        }
+
+        IScriptCommand* getContainer() { return m_currentContainer;}
+        IHSLStrip* getStrip() { return m_strip;}
+
         void endStep()
         {
 
@@ -64,8 +81,6 @@ namespace DevRelief
             return (now - m_lastStepTime)/1000; 
 
          }
-
-        IHSLStrip *getStrip() { return m_strip; }
 
         long scriptTimeMsecs() { return millis()-m_startTime;}
 
@@ -130,7 +145,6 @@ namespace DevRelief
 
 
         int m_stepNumber;
-        IHSLStrip *m_strip;
 
         Logger *m_logger;
         unsigned long m_startTime;
@@ -140,6 +154,8 @@ namespace DevRelief
 
         ScriptValueList *m_values;
         IScriptCommand* m_currentCommand;
+        IHSLStrip * m_strip;
+        IScriptCommand* m_currentContainer;
     };
 
    

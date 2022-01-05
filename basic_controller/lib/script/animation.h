@@ -256,13 +256,7 @@ namespace DevRelief
         }
         double calculate(double position)
         {
-            /* simple 
-            if (position<0.5){
-                return 4*pow(position,3);
-            } else {
-                return 1-pow(-2*position+2,3)/2;
-            }
-            */
+
             double val = 3 * pow(1 - position, 2) * position * m_in +
                             3 * (1 - position) * pow(position, 2) * m_out +
                             pow(position, 3);

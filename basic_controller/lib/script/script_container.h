@@ -19,12 +19,12 @@ namespace DevRelief
     class ScriptContainer : public ScriptCommandBase, public ICommandContainer
     {
         public:
-            ScriptContainer(IScriptCommand*container) : ScriptCommandBase(container,"Container")
+            ScriptContainer() : ScriptCommandBase("Container")
             {
                 m_logger = &ScriptContainerLogger;
                 m_logger->debug("ScriptContainer() create");
-                m_position = new ScriptPosition();
-            
+                m_position = NULL;
+                m_strip  = NULL;
             }
 
             virtual ~ScriptContainer()
@@ -38,10 +38,34 @@ namespace DevRelief
 
             void add(IScriptCommand* cmd) { m_commands.add(cmd);}
  
+            ScriptPosition* getPosition() override { 
+                m_logger->never("container getPosition 0x%x",this);
+
+                if (m_position) {
+                    m_logger->never("\tposition %x",m_position);
+                    return m_position;
+                } else {
+                    if (m_parentContainer) {
+                        m_logger->never("\tget parent position %x",m_parentContainer);
+                        return m_parentContainer->getPosition();
+                    }
+                    m_logger->never("\tno position");
+
+                    return NULL;
+                }
+            }
         protected:
             virtual ScriptStatus doCommand(ScriptState *state) {
+                m_logger->never("execute %s 0x%x",getType(),this);
                 ScriptStatus status = SCRIPT_RUNNING;
                 state->setPreviousCommand(NULL);
+                m_parentContainer = state->setContainer(this);
+                auto oldStrip = state->getStrip();
+                if (m_position) {
+                    state->setStrip(m_position);
+                } else if (m_strip) {
+                    state->setStrip(m_strip);
+                }
                 m_commands.each([&](IScriptCommand*cmd) {
                     m_logger->never("\tcommand 0x%04X - %s - %d",cmd,cmd->getType(),(int)status);
                     if (status == SCRIPT_RUNNING) {
@@ -52,6 +76,9 @@ namespace DevRelief
 
                     }
                 });
+                state->setStrip(oldStrip);
+                state->setContainer(m_parentContainer);
+                m_parentContainer = NULL;
                 m_logger->never("\tdoneScriptCommandList.execute()");
                 return status;
             }
@@ -60,11 +87,14 @@ namespace DevRelief
             LinkedList<IScriptCommand*> m_commands;
             
             PositionDomain m_positionDomain;
+
+            IHSLStrip* m_strip;   
+            IScriptCommand* m_parentContainer;        
     };
 
     class ScriptRootContainer : public ScriptContainer {
         public:
-            ScriptRootContainer() : ScriptContainer(NULL) {
+            ScriptRootContainer() : ScriptContainer() {
 
             }
 
@@ -86,23 +116,18 @@ namespace DevRelief
             void setStrip(IHSLStrip* strip) {
                 if (m_position == NULL) {
                     m_position = new ScriptPosition();
+                    m_position->setWrap(new ScriptBoolValue(true));
                 }
                 m_strip = strip;
             }
-            
-            IHSLStrip * getStrip() override {
-                return m_strip;
-            }
 
 
-        private: 
-            IHSLStrip* m_strip;
     };
 
  
     class ScriptSegmentContainer : public ScriptContainer {
         public:
-            ScriptSegmentContainer(IScriptCommand*container) : ScriptContainer(container) {
+            ScriptSegmentContainer() : ScriptContainer() {
 
             }
 
