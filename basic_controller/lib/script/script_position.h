@@ -11,7 +11,7 @@
 namespace DevRelief
 {
 
-    class ScriptPosition : public IStripModifier
+    class ScriptPosition : public IHSLStrip, IPositionable
     {
     public:
         ScriptPosition()
@@ -37,6 +37,7 @@ namespace DevRelief
             m_reverse = false;
             m_logger = &ScriptLogger;
             m_operation = REPLACE;
+            m_parentPosition = NULL;
         }
 
         ~ScriptPosition() {
@@ -50,9 +51,6 @@ namespace DevRelief
             delete m_physicalStrip;
         }
 
-        PositionDomain* getAnimationPositionDomain() override {
-
-        }
 
 
         void destroy() {
@@ -62,12 +60,10 @@ namespace DevRelief
         void setPositionType(PositionType t) { 
             m_type = t;
         }
-        void updateValues(IScriptCommand* cmd, ScriptState* state, ICommandContainer* container){
-            if (container == NULL){
-                m_logger->error("ScriptPosition needs a container");
-                return;
-            }
-            m_strip = container->getStrip();
+        void updateValues(IScriptCommand* cmd, ScriptState* state){
+            IScriptCommand* parent = cmd->getParent();
+            m_parentPosition = parent == NULL ? NULL : parent->getPosition();
+            m_strip = cmd->getStrip();
             int physicalCount = m_strip->getCount();
             int physicalStart = 0;
             if (m_physicalStrip != NULL) {
@@ -105,9 +101,13 @@ namespace DevRelief
                 m_count =  getStripPosition(cmd,state,m_countValue,0);
                 m_end = m_start+m_count-1;
             } else {
-                IStripModifier* strip = cmd->getStrip();
-                m_end = physicalStart+physicalCount-1;
-                m_count = abs(m_start-m_end)+1;
+                if (m_unit == POS_PERCENT) {
+                    m_end = 100;
+                    m_count = 100;
+                } else {
+                    m_end = physicalStart+physicalCount-1;
+                    m_count = abs(m_start-m_end)+1;
+                }
             }
 
             if (m_startValue==NULL && m_endValue != NULL && m_countValue != NULL) {
@@ -138,7 +138,7 @@ namespace DevRelief
                 //m_logger->debug("have value %s",value->toString().get());
                 IScriptCommand*prev = state->getPreviousCommand();
                 if (prev&&value->equals(cmd,"after")){
-                    IStripModifier* pos =  prev->getPosition();
+                    ScriptPosition* pos =  prev->getPosition();
                     //m_logger->debug("previous pos %d %d",pos->getStart(),pos->getCount());
                     if (pos != NULL) {
                         rpos = pos->getStart() + pos->getCount() + pos->getOffset();
@@ -146,7 +146,7 @@ namespace DevRelief
                         rpos = 0;
                     }
                 } else if (prev&&value->equals(cmd,"before")){
-                    IStripModifier* pos =  prev->getPosition();
+                    ScriptPosition* pos =  prev->getPosition();
                     m_logger->debug("previous pos %d %d",pos->getStart(),pos->getCount());
                     if (pos == NULL) {
                         rpos = -1;
@@ -154,7 +154,7 @@ namespace DevRelief
                         rpos = pos->getStart()-1;
                     }
                 }  else if (value->equals(cmd,"center")){
-                    IStripModifier* pos =  m_strip;
+                    IHSLStrip* pos =  m_strip;
                     m_logger->debug("center pos %d %d",pos->getStart(),pos->getCount());
                     rpos = pos->getStart()+round(pos->getCount()/2);
                 } else {
@@ -291,12 +291,12 @@ namespace DevRelief
             return true;
         }
 
-        void setPosition(int index) override {
-            m_logger->debug("ScriptPosition.setPosition %d",index);
+        void setPositionIndex(int index) override {
+            m_logger->never("ScriptPosition.setPosition %d",index);
             int idx = index;
             
             translate(idx);
-            m_logger->debug("translated %d",idx);
+            m_logger->never("translated %d",idx);
             m_positionDomain.setPos(idx);
         }
 
@@ -308,22 +308,20 @@ namespace DevRelief
 
         PositionUnit getPositionUnit() override {
             if (m_unit == POS_INHERIT) {
-                return m_strip == NULL ? POS_PERCENT : m_strip->getPositionUnit();
+                return m_parentPosition == NULL ? POS_PERCENT : m_parentPosition->getPositionUnit();
             }
             return m_unit;
         }
 
         int getOffset() override { return m_offset;}
 
-        IStripModifier* getPosition() override {
+        ScriptPosition* getPosition() override {
             return this;
         }
         PositionDomain* getAnimationPositionDomain() override {
             return &m_positionDomain;
         }
-        void setPosition(int index) override {
-            m_position = index;
-        }
+
 
     private:
         // values that may be variables
@@ -335,6 +333,7 @@ namespace DevRelief
         IScriptValue *m_skipValue;
         IScriptValue *m_offsetValue;
         IScriptValue *m_physicalStrip;
+        ScriptPosition* m_parentPosition;
 
         int m_animationOffset;
         // evaluated variable values
@@ -349,7 +348,7 @@ namespace DevRelief
         PositionUnit m_unit;
         PositionType m_type;
         // m_strip is the strip this position writes to
-        IStripModifier *m_strip;
+        IHSLStrip *m_strip;
         
         HSLOperation m_operation;
         Logger* m_logger;

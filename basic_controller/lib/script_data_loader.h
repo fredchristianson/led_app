@@ -216,7 +216,7 @@ class ScriptDataLoader : public DataLoader {
 
 
         ScriptSegmentContainer* jsonToSegment(JsonObject* json) {
-            ICommandContainer *parentContainer = m_currentContainer;
+            ScriptContainer *parentContainer = m_currentContainer;
             ScriptSegmentContainer* seg = new ScriptSegmentContainer(m_currentContainer);
             m_currentContainer = seg;
             JsonArray* arr = json->getArray("commands");
@@ -524,7 +524,7 @@ class ScriptDataLoader : public DataLoader {
             
         }
     private:
-        ICommandContainer* m_currentContainer;
+        ScriptContainer* m_currentContainer;
 };
 };
 #endif

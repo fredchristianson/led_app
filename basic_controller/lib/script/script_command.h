@@ -17,7 +17,7 @@ namespace DevRelief
     class ScriptCommandBase : public IScriptCommand, IScriptValueProvider
     {
     public:
-        ScriptCommandBase( ICommandContainer* container,const char *type)
+        ScriptCommandBase( IScriptCommand* container,const char *type)
         {
             m_logger = &ScriptCommandLogger;
             m_type = type;
@@ -35,29 +35,35 @@ namespace DevRelief
 
         void destroy() override { delete this; }
 
-        ICommandContainer* getContainer() { return m_container;}
+        IScriptCommand* getContainer() { return m_container;}
+        IScriptCommand* getParent() { return m_container;}
 
-        IStripModifier* getStrip() override {
+        PositionUnit getPositionUnit() {
+            ScriptPosition* pos = getPosition();
+            return pos == NULL ? POS_PERCENT : pos->getPositionUnit();
+        };
+
+        IHSLStrip* getStrip() override {
             return m_container->getStrip();
         }
 
-        IStripModifier* getPosition() override {
+        ScriptPosition* getPosition() override {
             if (m_position) {
-                m_logger->always("have position 0x%04X",m_position);
+                m_logger->never("have position 0x%04X",m_position);
                 return m_position;
             } else if (m_container != NULL) {
-                m_logger->always("get position from container 0x%04X",m_previousCommand);
+                m_logger->never("get position from container 0x%04X",m_previousCommand);
                 return m_container->getPosition();
             } else {
-                m_logger->always("no position");
+                m_logger->never("no position");
                 return NULL;
             }
         }
 
-        void setPosition(int index) override {
-            IStripModifier* pos = getPosition();
+        void setPositionIndex(int index) override {
+            ScriptPosition* pos = getPosition();
             if (pos) {
-                pos->setPosition(index);
+                pos->setPositionIndex(index);
             } else {
                 m_logger->error("Command type %s needs a position",getType());
             }
@@ -65,35 +71,36 @@ namespace DevRelief
 
         
         PositionDomain* getAnimationPositionDomain() override {
-            IStripModifier* strip = getPosition();
-            m_logger->debug("getAnimationPositionDomain from strip 0x%04X",strip);
+            ScriptPosition* strip = getPosition();
+            m_logger->never("getAnimationPositionDomain from strip 0x%04X",strip);
             return strip->getAnimationPositionDomain();
 
         }
 
-
-        IHSLStrip * getHSLStrip() override { return m_container->getHSLStrip();}
-
         ScriptStatus execute(ScriptState *state) override
         {
-            m_logger->always("ScriptCommandBase.execute");
-            m_logger->debug("execute command %s state=0x%04X",getType(),state);
+            m_logger->never("ScriptCommandBase.execute");
+            m_logger->never("execute command %s state=0x%04X",getType(),state);
             m_state = state;
-             m_logger->debug("get previous");
+             m_logger->never("get previous");
             m_previousCommand = state->getPreviousCommand();
             if (m_position) {
-                m_logger->debug("update position");
-                m_position->updateValues(this,state,m_container);
+                m_logger->never("update position");
+                m_position->updateValues(this,state);
             } else {
-                m_logger->debug("no position");
+                m_logger->never("no position");
             }
-            m_logger->debug("setCurrentCommand");
+            m_logger->never("setCurrentCommand");
             state->setCurrentCommand(this);
-            m_logger->debug("doCommand");
+            m_logger->never("doCommand");
             ScriptStatus status = doCommand(state);
-            m_logger->debug("done %d",state);
+            m_logger->never("done %d",state);
             return status;
         }
+
+        
+        int getOffset() override { return getPosition()->getOffset();}
+        
 
         /* ValueProvider methods */
         void addValue(const char *name, IScriptValue *value)
@@ -160,14 +167,14 @@ namespace DevRelief
         ScriptValueList *m_values;
         DRString m_type;
         ScriptState* m_state;
-        ICommandContainer* m_container;
+        IScriptCommand* m_container;
     };
 
   
     class ScriptControlCommand : public ScriptCommandBase, IScriptControl
     {
     public:
-        ScriptControlCommand(ICommandContainer* container) : ScriptCommandBase(container,"ScriptControlCommand")
+        ScriptControlCommand(IScriptCommand* container) : ScriptCommandBase(container,"ScriptControlCommand")
         {
             ScriptMemoryLogger.debug("ScriptControlCommand");
         }
@@ -181,7 +188,7 @@ namespace DevRelief
     class PositionCommand : public ScriptCommandBase
     {
     public:
-        PositionCommand(ICommandContainer* container) : ScriptCommandBase(container,"PositionCommand")
+        PositionCommand(IScriptCommand* container) : ScriptCommandBase(container,"PositionCommand")
         {
         }
 
@@ -197,7 +204,7 @@ namespace DevRelief
     class ScriptValueCommand : public ScriptCommandBase
     {
     public:
-        ScriptValueCommand(ICommandContainer* container,const char *type = "ScriptValueCommand") : ScriptCommandBase(container,type)
+        ScriptValueCommand(IScriptCommand* container,const char *type = "ScriptValueCommand") : ScriptCommandBase(container,type)
         {
             memLogger->debug("ScriptValueCommand()");
         }
@@ -217,7 +224,7 @@ namespace DevRelief
 
     class ScriptParameterCommand : public ScriptCommandBase, IScriptValueProvider
     {
-        ScriptParameterCommand(ICommandContainer* container,const char *type = "ScriptParameterCommand") : ScriptCommandBase(container,type)
+        ScriptParameterCommand(IScriptCommand* container,const char *type = "ScriptParameterCommand") : ScriptCommandBase(container,type)
         {
             memLogger->debug("ScriptParameterCommand()");
         }
@@ -231,7 +238,7 @@ namespace DevRelief
     class LEDCommand : public ScriptCommandBase
     {
     public:
-        LEDCommand(ICommandContainer* container,const char * type) : ScriptCommandBase(container,type)
+        LEDCommand(IScriptCommand* container,const char * type) : ScriptCommandBase(container,type)
         {
             memLogger->debug("LEDCommand()");
             m_operation = REPLACE;
@@ -244,30 +251,26 @@ namespace DevRelief
 
         ScriptStatus doCommand(ScriptState* state) override
         {
-            m_logger->always("LEDCommand");
+            m_logger->never("LEDCommand");
 
-            auto *strip = getPosition();
-            if (strip == NULL) {
-                strip = getStrip();
-                m_logger->always("got strip %04x",strip);
-            } else {
-                m_logger->always("got position %04x",strip);
-            }
-            int count = strip->getCount();
+            auto *position = getPosition();
+            int count = position->getCount();
             if (count == 0)
             {
-                m_logger->always(0, 1000, NULL, "strip has 0 LEDS");
+                m_logger->never(0, 1000, NULL, "strip has 0 LEDS");
                 return SCRIPT_ERROR;
             }
-            m_logger->always("LEDCommand count=%d",count);
-            auto* positionDomain = strip->getAnimationPositionDomain();
-            m_logger->always("\tgot position domain %d",count);
-            
+            m_logger->never("LEDCommand count=%d",count);
+            auto* positionDomain = position->getAnimationPositionDomain();
+            m_logger->never("\tgot position domain %d",count);
 
             for (int i = 0; i < count; i++)
             {
-                strip->setPosition(i);    
-                updateLED(i,strip);
+                m_logger->never("\tLED %d",i);
+                position->setPositionIndex(i); 
+                m_logger->never("\tposition set %d",i);   
+                updateLED(i,position);
+                m_logger->never("\tupdated");
             }
             return SCRIPT_RUNNING;
         }
@@ -301,7 +304,7 @@ namespace DevRelief
    class HSLCommand : public LEDCommand
     {
     public:
-        HSLCommand(ICommandContainer* container,IScriptValue *h = NULL, IScriptValue *s = NULL, IScriptValue *l = NULL) : LEDCommand(container,"HSLCommand")
+        HSLCommand(IScriptCommand* container,IScriptValue *h = NULL, IScriptValue *s = NULL, IScriptValue *l = NULL) : LEDCommand(container,"HSLCommand")
         {
             memLogger->debug("HSLCommand()");
             m_hue = h;
@@ -325,7 +328,7 @@ namespace DevRelief
         void setSaturation(IScriptValue *saturation) { m_saturation = saturation; }
         IScriptValue *getSaturation(IScriptValue *saturation) { return m_saturation; }
 
-        void updateLED(int index, IHSLStrip* strip) override {
+        void updateLED(int index,  IHSLStrip* strip) override {
             if (m_hue){
                 int h = m_hue->getIntValue(this,  -1);
                 strip->setHue(index, h, m_operation);
@@ -350,7 +353,7 @@ namespace DevRelief
     class RGBCommand : public LEDCommand
     {
     public:
-        RGBCommand(ICommandContainer* container,IScriptValue *r = 0, IScriptValue *g = 0, IScriptValue *b = 0) : LEDCommand(container,"RGBCommand")
+        RGBCommand(IScriptCommand* container,IScriptValue *r = 0, IScriptValue *g = 0, IScriptValue *b = 0) : LEDCommand(container,"RGBCommand")
         {
             memLogger->debug("RGBCommand()");
             m_red = r;

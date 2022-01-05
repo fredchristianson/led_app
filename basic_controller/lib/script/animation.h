@@ -67,6 +67,7 @@ namespace DevRelief
             m_logger = &AnimationLogger;
         }
 
+        virtual void update() {}
         /* return position percent from m_low to m_high.
             if value is above m_high, use modulus
          */
@@ -107,45 +108,49 @@ namespace DevRelief
         // domain wraps after period
         TimeDomain() : AnimationDomain()
         {
-            m_timePosition = 0;
+            m_durationMmsecs = 0;
+            m_startMillis = millis();
+            m_min = m_startMillis;
+            m_max = m_startMillis;
+            m_val  = m_startMillis;
+            m_repeat = 0;
         }
 
-        void setTimePosition(int pos) {
-            m_timePosition = pos;
+        void update() override {
+            if (m_durationMmsecs == 0) {
+                m_startMillis = millis();
+                m_min = m_startMillis;
+                m_max = m_startMillis;
+                m_val  = m_startMillis;
+            }
+            m_val = millis();
+            int diff = m_val - m_startMillis;
+            m_repeat = diff / m_durationMmsecs;
+            m_min = m_startMillis + m_repeat*m_durationMmsecs;
+            m_max = m_min + m_durationMmsecs;
         }
-    public:
+
+        virtual void setStart(int msecs = -1) {
+            m_startMillis = (msecs == -1) ? millis() : msecs;
+        }
 
         virtual double getMin()
         {
-            return (double)m_startMillis;
+            return m_min;
         }
         virtual double getMax()
         {
-            return (double)m_endMillis;
+            return m_max;
         }
         virtual double getValue()
         {
-            return (double)m_timePosition;
+            return m_val;
         }
 
         void setDurationMsecs(int msecs) {
             m_durationMmsecs = msecs;
-            setSpan(msecs);
         }
-
-        void setSpan(int msecs) {
-            int now = m_timePosition;
-            if (m_durationMmsecs == 0) {
-                m_startMillis = now;
-                m_endMillis=now;
-                m_logger->errorNoRepeat("TimeDomain duration is 0");
-                return;
-            }
-            int pos = (now % msecs);
-            m_startMillis = now-pos;
-            m_endMillis = m_startMillis+m_durationMmsecs;
-            m_logger->never("TimeDomain %04X-%04X.  now=%04X",m_startMillis,m_endMillis,now);
-        }
+    
 
         void setSpeed(double speed, AnimationRange* range) {
             if (speed == 0) { 
@@ -159,14 +164,15 @@ namespace DevRelief
 
         void setDuration(double duration) {
             m_durationMmsecs = duration;
-            setSpan(duration);  
         }
 
     protected:
-        int m_timePosition;
         int m_durationMmsecs;
         int m_startMillis;
-        int m_endMillis;
+        int m_min;
+        int m_max;
+        int m_val;
+        int m_repeat;
     };
 
    
@@ -285,6 +291,7 @@ namespace DevRelief
                 m_ease = &DefaultEase;
             }
             m_logger->debug("Animator.get()");
+            m_domain.update();
             double position = m_domain.getPosition();
             double ease = m_ease->calculate(position);
             //m_logger->debug("\tpos %f.  ease %f",position,ease);

@@ -46,9 +46,9 @@ namespace DevRelief
             m_logger->always("begin Script.  frequency %d",m_frequencyMSecs);
             delete m_state;
             m_state = new ScriptState();
-            m_logger->always("\tset strip 0x%04X",ledStrip);
+            m_logger->never("\tset strip 0x%04X",ledStrip);
             m_rootContainer->setStrip(ledStrip);
-            m_logger->always("\tm_state->beginScript");
+            m_logger->never("\tm_state->beginScript");
             m_state->beginScript(this,ledStrip);
 
         }
@@ -56,28 +56,28 @@ namespace DevRelief
         void step() override
         {
             int ms = m_state->msecsSinceLastStep();
-            m_logger->debug("frequency %d %d",m_frequencyMSecs,ms);
+            m_logger->never("frequency %d %d",m_frequencyMSecs,ms);
             if (m_frequencyMSecs > m_state->msecsSinceLastStep())
             {
                  return;
             }
-            m_logger->debug("Script step");
+            m_logger->never("Script step");
 
             IHSLStrip * strip = m_state->getStrip();
-            m_logger->debug("strip 0x%04X",strip);
+            m_logger->never("strip 0x%04X",strip);
 
 
             strip->clear();
-            m_logger->always("cleared");
+            m_logger->never("cleared");
             m_state->beginStep();
-            m_logger->always("began");
-            m_logger->always("root container 0x%04X",m_rootContainer);
+            m_logger->never("began");
+            m_logger->never("root container 0x%04X",m_rootContainer);
             m_rootContainer->execute(m_state);
-            m_logger->always("executed");
+            m_logger->never("executed");
             m_state->endStep();
-            m_logger->always("ended");
+            m_logger->never("ended");
             strip->show();
-            m_logger->always("done");
+            m_logger->never("done");
         }
 
         void setName(const char *name) { m_name = name; }
