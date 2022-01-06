@@ -156,6 +156,8 @@ class ScriptDataLoader : public DataLoader {
                         cmd= jsonToRGBCommand(obj);
                     } else if (matchName(S_HSL,type)) {
                         cmd=jsonToHSLCommand(obj);
+                    } else if (matchName(S_XHSL,type)) {
+                        cmd=jsonToXHSLCommand(obj);
                     }  else if (matchName(S_VALUES,type)) {
                         m_logger->debug("read Values command");
                         cmd=jsonToValueCommand(obj);
@@ -325,6 +327,17 @@ class ScriptDataLoader : public DataLoader {
             cmd->setLightness(jsonToValue(json,"lightness"));
             cmd->setSaturation(jsonToValue(json,"saturation"));
             cmd->setOperation(jsonString(json,"op","replace"));
+            return cmd;
+        }
+
+        XHSLCommand* jsonToXHSLCommand(JsonObject* json) {
+            XHSLCommand* cmd = new XHSLCommand();
+            cmd->setHue(jsonToValue(json,"hue"));
+            cmd->setLightness(jsonToValue(json,"lightness"));
+            cmd->setSaturation(jsonToValue(json,"saturation"));
+            cmd->setOperation(jsonString(json,"op","replace"));
+            cmd->setIn(jsonToValue(json,"in"));
+            cmd->setOut(jsonToValue(json,"out"));
             return cmd;
         }
 

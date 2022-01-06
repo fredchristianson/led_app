@@ -83,7 +83,9 @@ namespace DevRelief
             m_logger->never("setCurrentCommand");
             state->setCurrentCommand(this);
             m_logger->never("doCommand");
+            beginCommandStep(state);
             ScriptStatus status = doCommand(state);
+            endCommandStep(state);
             m_logger->never("done %d",state);
             return status;
         }
@@ -150,6 +152,8 @@ namespace DevRelief
 
     protected:
         virtual ScriptStatus doCommand(ScriptState *state) = 0;
+        virtual void beginCommandStep(ScriptState *state) {}
+        virtual void endCommandStep(ScriptState *state) {}
 
         Logger *m_logger;
         ScriptPosition *m_position;
@@ -320,6 +324,7 @@ namespace DevRelief
         void updateLED(int index,  IHSLStrip* strip) override {
             if (m_hue){
                 int h = m_hue->getIntValue(this,  -1);
+                h = mapHue(h);
                 strip->setHue(index, h, m_operation);
             }
             if (m_lightness) {
@@ -333,10 +338,41 @@ namespace DevRelief
 
         }
 
+    protected:
+        virtual int mapHue(int h) { return h;}
     private:
+
         IScriptValue *m_hue;
         IScriptValue *m_saturation;
         IScriptValue *m_lightness;
+    };
+
+    class XHSLCommand: public HSLCommand {
+        public:
+            XHSLCommand() { m_in = NULL; m_out = NULL;}
+            virtual ~XHSLCommand() { delete m_in; delete m_out;}
+
+            void setIn(IScriptValue *in) { m_in = in; }
+            void setOut(IScriptValue *out) { m_out = out; }
+
+        protected:
+            void beginCommandStep(ScriptState *state) override {
+                auto in = m_in ? m_in->getFloatValue(this,0) : 0;
+                auto out = m_out ? m_out->getFloatValue(this,1) : 1;
+                m_map.setValues(in,out);
+
+            }
+
+            int mapHue(int h) override { 
+                return m_map.calculate(1.0*h/360.0)*(360);
+            }
+
+
+        private:
+            IScriptValue* m_in;
+            IScriptValue* m_out;
+            CubicBezierEase m_map;
+
     };
 
     class RGBCommand : public LEDCommand
