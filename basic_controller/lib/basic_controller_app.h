@@ -75,6 +75,7 @@ namespace DevRelief {
                 m_config.getBuildVersion().text(),
                 m_config.getBuildDate().text(),
                 m_config.getBuildTime().text());
+            m_logger->showMemory();
             m_initialized = true;
         }
 

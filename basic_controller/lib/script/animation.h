@@ -18,10 +18,13 @@ namespace DevRelief
             m_unfold = unfold;
             m_logger = &AnimationLogger;
             m_logger->debug("create AnimationRange %f-%f  %s",low,high,unfold?"unfold":"");
+            m_lastPosition = 99999999;
+            m_lastValue = 0;
         }
 
         double getValue(double position)
         {
+            if (position == m_lastPosition) { return m_lastValue;}
             m_logger->never("AnimationRange.getValue(%f)  %f-%f",position,m_low,m_high);
             if (m_unfold) {
                 if (position<=0.5) {
@@ -44,6 +47,8 @@ namespace DevRelief
             double diff = m_high - m_low;
             double value = m_low + position * diff;
             m_logger->never("\t %f  %f %f-%f",value,diff,m_low,m_high);
+            m_lastPosition = position;
+            m_lastValue = value;
             return value;
         }
 
@@ -52,6 +57,8 @@ namespace DevRelief
         double getDistance() { return (m_high-m_low) * (m_unfold ? 2 : 1);}
         void setUnfolded(bool unfold=true) { m_unfold = unfold;}
     private:
+        double m_lastPosition;
+        double m_lastValue;
         double m_low;
         double m_high;
         bool m_unfold;
@@ -65,14 +72,19 @@ namespace DevRelief
         AnimationDomain()
         {
             m_logger = &AnimationLogger;
+            m_changed = true;
         }
 
-        virtual void update() {}
+        // update based on current state if implementation needs to
+        virtual void update(IScriptState* state) {}
+
+
         /* return position percent from m_low to m_high.
             if value is above m_high, use modulus
          */
         double getPosition()
         {
+            if (!m_changed) { return m_lastValue;}
             m_logger->debug("getPosition()");
             double value = getValue();
             double low = getMin();
@@ -91,14 +103,22 @@ namespace DevRelief
             double diff = high - low;
             double pct = diff == 0 ? 1 : (value - low) / (diff);
             m_logger->debug("\thigh=%f low=% diff=% value=% pos=%f",high,low,diff,value,pct);
+            m_changed = false;
+            m_lastValue = pct;
             return pct;
         }
+
+        bool isChanged() { return m_changed;}
 
     public:
         Logger *m_logger;
         virtual double getMin() = 0;
         virtual double getMax() = 0;
         virtual double getValue() = 0;
+        
+    protected:
+        bool m_changed;
+        double m_lastValue;
 
     };
 
@@ -116,18 +136,25 @@ namespace DevRelief
             m_repeat = 0;
         }
 
-        void update() override {
+        void update(IScriptState* state) override {
+            if (m_lastStep == state->getStepNumber()) {
+                return;
+            }
+            m_changed = true;
+            m_val = state->getStepStartTime();
+            m_lastStep = state->getStepNumber();
             if (m_durationMmsecs == 0) {
-                m_startMillis = millis();
+                m_startMillis = m_val;
                 m_min = m_startMillis;
                 m_max = m_startMillis;
                 m_val  = m_startMillis;
+            } else {
+                m_val = m_val;
+                int diff = m_val - m_startMillis;
+                m_repeat = diff / m_durationMmsecs;
+                m_min = m_startMillis + m_repeat*m_durationMmsecs;
+                m_max = m_min + m_durationMmsecs;
             }
-            m_val = millis();
-            int diff = m_val - m_startMillis;
-            m_repeat = diff / m_durationMmsecs;
-            m_min = m_startMillis + m_repeat*m_durationMmsecs;
-            m_max = m_min + m_durationMmsecs;
         }
 
         virtual void setStart(int msecs = -1) {
@@ -167,6 +194,7 @@ namespace DevRelief
         }
 
     protected:
+        int m_lastStep;
         int m_durationMmsecs;
         int m_startMillis;
         int m_min;
@@ -199,13 +227,14 @@ namespace DevRelief
         }
 
         void setPosition(double pos, double min, double max) {
+            m_changed = true;
             m_pos = pos;
             m_min = min;
             m_max = max;
         }
-        void setPos(double p) { m_pos = p;}
-        void setMin(double m) { m_min = m;}
-        void setMax(double m) { m_max = m;}
+        void setPos(double p) { m_pos = p;m_changed = true;}
+        void setMin(double m) { m_min = m;m_changed = true;}
+        void setMax(double m) { m_max = m;m_changed = true;}
     private:
         double m_min;        
         double m_max;
@@ -279,13 +308,13 @@ namespace DevRelief
             m_logger->debug("create Animator()");
         }
 
-        double get(AnimationRange &range)
+        double get(AnimationRange &range, IScriptCommand* cmd)
         {
             if (m_ease == NULL) {
                 m_ease = &DefaultEase;
             }
             m_logger->debug("Animator.get()");
-            m_domain.update();
+            m_domain.update(cmd->getState());
             double position = m_domain.getPosition();
             double ease = m_ease->calculate(position);
             //m_logger->debug("\tpos %f.  ease %f",position,ease);
@@ -389,7 +418,7 @@ namespace DevRelief
 
             Animator animator(*domain,m_selectedEase);
             range.setUnfolded(isUnfolded(cmd));
-            double value = animator.get(range);
+            double value = animator.get(range,cmd);
            
             return value;
           

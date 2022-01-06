@@ -478,7 +478,7 @@ namespace DevRelief
                 CubicBezierEase ease;
                 animator.setEase(&ease);
 
-                value = animator.get(range);
+                value = animator.get(range,cmd);
                 
             }
             return value;
