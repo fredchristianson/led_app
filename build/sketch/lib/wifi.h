@@ -1,3 +1,4 @@
+#line 1 "d:\\dev\\arduino\\led_app\\basic_controller\\lib\\wifi.h"
 #ifndef DRWIFIF_H
 #define DRWIFIF_H
 #include "./logger.h"
@@ -19,7 +20,7 @@ namespace DevRelief {
         }
     protected:
         DRWiFi() {
-            m_logger = new Logger("wifi",80);
+            m_logger = new Logger("wifi",WARN_LEVEL);
             m_logger->debug("wifi created");
         }
 
@@ -31,7 +32,14 @@ namespace DevRelief {
                 m_logger->info("waiting for wifi connection");
                 delay(500);
             }
-            WiFi.hostname(CONFIG_HOSTNAME);
+            Config *config = Config::getInstance();
+            const char * hostname = config->getHostname();
+            if (hostname != NULL) {
+                WiFi.hostname(hostname);
+            }
+            if (config) {
+                config->setAddr(WiFi.localIP().toString().c_str());
+            }
             m_logger->info("WiFi connected %s",WiFi.localIP().toString().c_str());
         }
 

@@ -1,30 +1,47 @@
+#line 1 "d:\\dev\\arduino\\led_app\\basic_controller\\lib\\color.h"
 #ifndef DRCOLOR_H
 #define DRCOLOR_H
-#include <Adafruit_NeoPixel.h>
-#define STRIP1_NUMPIXELS STRIP1_LEDS
-#define STRIP1_PIN 5
-#define STRIP2_NUMPIXELS STRIP2_LEDS
-#define STRIP2_PIN 4
-#define STRIP3_NUMPIXELS STRIP3_LEDS
-#define STRIP3_PIN 0
-#define STRIP4_NUMPIXELS STRIP4_LEDS
-#define STRIP4_PIN 2
-
-//Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
-
-
-
+#include <math.h>
 
 #include "./logger.h"
 
 
 
 namespace DevRelief {
+    Logger* colorLogger = new Logger("Color",DEBUG_LEVEL);
+
+    enum HUE {
+        RED= 0,
+        ORANGE= 30,
+        YELLOW= 60,
+        GREEN= 90,
+        CYAN= 180,
+        BLUE= 240,
+        MAGENTA= 285,
+        PURPLE= 315
+    };
 
     int clamp(int min, int max, int val) {
         if (val < min) { return min;}
         if (val>max) { return max;}
         return val;
+    }
+
+    double max3(double a,double b, double c) {
+        if (a>b) {
+            return a>c ? a : c;
+        } else {
+            return b>c ? b : c;
+        }
+    }
+    
+
+    double min3(double a,double b, double c) {
+        if (a<b) {
+            return a<c ? a : c;
+        } else {
+            return b<c ? b : c;
+        }
     }
     
     class CRGB {
@@ -47,6 +64,8 @@ namespace DevRelief {
                 blue = b;
             }
 
+          
+
         public:
             uint8_t red;
             uint8_t green;
@@ -68,60 +87,7 @@ namespace DevRelief {
                 this->lightness = clamp(0,100,lightness);
             }
 
-            CRGB toRGB() {
-                return CHSL::HSLToRGB(*this);
-            }
-
-            static float HueToRGB(float v1, float v2, float vH) {
-                if (vH < 0)
-                    vH += 1;
-
-                if (vH > 1)
-                    vH -= 1;
-
-                if ((6 * vH) < 1)
-                    return (v1 + (v2 - v1) * 6 * vH);
-
-                if ((2 * vH) < 1)
-                    return v2;
-
-                if ((3 * vH) < 2)
-                    return (v1 + (v2 - v1) * ((2.0f / 3) - vH) * 6);
-
-                return v1;
-            }
-
-            static CRGB HSLToRGB(CHSL& hsl) {
-                //m_logger->debug("hsl to rgb (%d,%d,%d)",(int)hsl.hue,(int)hsl.saturation,(int)hsl.lightness);
-                unsigned char r = 0;
-                unsigned char g = 0;
-                unsigned char b = 0;
-
-                float h = hsl.hue/360.0;
-                float s = 1.0*hsl.saturation/100.0;
-                float l = 1.0*hsl.lightness/100.0;
-                if (s == 0)
-                {
-                    r = g = b = (unsigned char)(l * 255);
-                }
-                else
-                {
-                    float v1, v2;
-                    float hue = (float)h;
-
-                    v2 = (l < 0.5) ? (l * (1 + s)) : ((l + s) - (l * s));
-                    v1 = 2 * l - v2;
-
-                    r = (unsigned char)(255 * CHSL::HueToRGB(v1, v2, hue + (1.0f / 3)));
-                    g = (unsigned char)(255 * CHSL::HueToRGB(v1, v2, hue));
-                    b = (unsigned char)(255 * CHSL::HueToRGB(v1, v2, hue - (1.0f / 3)));
-                }
-
-                CRGB rgb(r, g, b);
-                //m_logger->debug("hsl (%f,%f,%f)->rgb(%d,%d,%d)",(int)h,s,l,rgb.red,rgb.green,rgb.blue);
-                return rgb;
-            }
-
+            
         public:
             uint16_t hue;  // 0-360
             uint16_t saturation; // 0-100
@@ -130,6 +96,131 @@ namespace DevRelief {
     };
 
  
+    CHSL RGBToHSL(const CRGB&rgb)
+    {
+       // double r = rgb.red/255.0;
+       // double g = rgb.green/255.0;
+        double r = rgb.red/255.0;
+        double g = rgb.green/255.0;
+        double b = rgb.blue/255.0;
+        double hue, sat;
+
+        
+    
+        double maxValue , minValue;
+        
+        maxValue = max3(r,g,b);
+        
+        minValue=min3(r,g,b);
+        
+        double h, s, l = (maxValue + minValue) / 2;
+
+        if(maxValue == minValue){
+            h = s = 0; 
+        }else{
+            double d = maxValue - minValue;
+            s = l > 0.5 ? d / (2 - maxValue - minValue) : d / (maxValue + minValue);
+            if (maxValue == r) {
+                h = (g - b) / d + (g < b ? 6 : 0); 
+            } else if (maxValue == g) {
+                h = (b - r) / d + 2;
+            } else {
+                 h = (r - g) / d + 4;
+            }
+            h /= 6;
+        }
+        return CHSL(h*360,s*100,l*100);
+    }
+
+    float HueToRGB(float v1, float v2, float vH) {
+        if (vH < 0)
+            vH += 1;
+
+        if (vH > 1)
+            vH -= 1;
+
+        if ((6 * vH) < 1)
+            return (v1 + (v2 - v1) * 6 * vH);
+
+        if ((2 * vH) < 1)
+            return v2;
+
+        if ((3 * vH) < 2)
+            return (v1 + (v2 - v1) * ((2.0f / 3) - vH) * 6);
+
+        return v1;
+    }
+
+    CRGB HSLToRGB(const CHSL& hsl) {
+        //m_logger->debug(hsl to rgb (%d,%d,%d)",(int)hsl.hue,(int)hsl.saturation,(int)hsl.lightness);
+        unsigned char r = 0;
+        unsigned char g = 0;
+        unsigned char b = 0;
+
+        float h = hsl.hue/360.0;
+        float s = 1.0*hsl.saturation/100.0;
+        float l = 1.0*hsl.lightness/100.0;
+        if (s == 0)
+        {
+            r = g = b = (unsigned char)(l * 255);
+        }
+        else
+        {
+            float v1, v2;
+            float hue = (float)h;
+
+            v2 = (l < 0.5) ? (l * (1 + s)) : ((l + s) - (l * s));
+            v1 = 2 * l - v2;
+
+            r = (unsigned char)(255 * HueToRGB(v1, v2, hue + (1.0f / 3)));
+            g = (unsigned char)(255 * HueToRGB(v1, v2, hue));
+            b = (unsigned char)(255 * HueToRGB(v1, v2, hue - (1.0f / 3)));
+        }
+
+        CRGB rgb(r, g, b);
+        //m_logger->debug("hsl (%f,%f,%f)->rgb(%d,%d,%d)",(int)h,s,l,rgb.red,rgb.green,rgb.blue);
+        return rgb;
+    }
+
+
+    CHSL RGBToHSL_dbg(const CRGB&rgb)
+    {
+        double r = rgb.red/255.0;
+        double g = rgb.green/255.0;
+        double b = rgb.blue/255.0;
+        double hue, sat;
+
+        colorLogger->debug("RGBToHSL %d,%d,%d  %f,%f,%f",rgb.red,rgb.green,rgb.blue,r,g,b);
+    
+        double maxValue , minValue;
+        
+        maxValue = max3(r,g,b);
+        
+        minValue=min3(r,g,b);
+        
+        double h, s, l = (maxValue + minValue) / 2;
+
+        if(maxValue == minValue){
+            colorLogger->debug("\tmax==min %f==%f",maxValue,minValue);
+            h = s = 0; 
+        }else{
+            double d = maxValue - minValue;
+            s = l > 0.5 ? d / (2 - maxValue - minValue) : d / (maxValue + minValue);
+            colorLogger->debug("\t %f %f %f %f %f",minValue,maxValue,d,s,l);
+            if (maxValue == r) {
+                h = (g - b) / d + (g < b ? 6 : 0); 
+            } else if (maxValue == g) {
+                h = (b - r) / d + 2;
+            } else {
+                 h = (r - g) / d + 4;
+            }
+            h /= 6;
+        }
+        CHSL hsl(h*360,s*100,l*100);
+        colorLogger->debug("\thsl %d,%d,%d",hsl.hue,hsl.saturation,hsl.lightness);
+
+        return hsl;
+    }
 
 }
 

@@ -1,0 +1,296 @@
+[
+  {
+    "name": "simple",
+    "commands": [
+      {
+        "type": "rgb",
+        "red": 250
+      }
+    ]
+  },
+
+  {
+    "name": "variable",
+    "commands": [
+      {
+        "type": "values",
+        "red": 250,
+        "green": 0,
+        "foo": "var(bar)"
+      },
+      {
+        "type": "rgb",
+        "red": "var(red)",
+        "green": "var(green)",
+        "blue": "var(blue)"
+      }
+    ]
+  },
+
+  {
+    "name": "position gradient",
+    "commands": [
+      {
+        "type": "values",
+        "red": 250
+      },
+      {
+        "type": "rgb",
+        "red": { "start": 0, "end": 255 },
+        "green": { "start": 255, "end": 0 },
+        "blue": "var(blue)"
+      }
+    ]
+  },
+  {
+    "name": "position",
+    "commands": [
+      {
+        "type": "values",
+        "red": 250,
+        "start": 10
+      },
+      {
+        "type": "rgb",
+        "red": { "start": 0, "end": 255 },
+        "green": { "start": 255, "end": 0 },
+        "blue": "0",
+        "start": "var(start)",
+        "end": 20
+      },
+      {
+        "type": "hsl",
+        "hue": 150,
+        "position": {
+          "start": "30",
+          "count": 5
+        }
+      }
+    ]
+  },
+  {
+    "name": "position command",
+    "commands": [
+      {
+        "type": "values",
+        "red": 250,
+        "start": 10
+      },
+      {
+        "type": "position",
+        "start": "var(start)",
+        "end": 20
+      },
+      {
+        "type": "rgb",
+        "red": { "start": 0, "end": 255 },
+        "green": { "start": 255, "end": 0 },
+        "blue": "0"
+      }
+    ]
+  },
+  {
+    "name": "position skip wrap",
+    "commands": [
+      {
+        "type": "rgb",
+        "red": 255
+      },
+      {
+        "type": "position",
+        "start": 5,
+        "end": 30,
+        "duration": 2000,
+        "wrap": false
+      },
+      {
+        "type": "rgb",
+        "position": { "start": 0, "count": 10 },
+        "green": { "start": 50, "end": 200 }
+      },
+      {
+        "type": "position",
+        "base": "absolute",
+        "unit": "pixel",
+        "start": 50,
+        "end": 40,
+        "duration": "3sec",
+        "wrap": true
+      },
+      {
+        "type": "rgb",
+        "position": { "start": 10, "count": 20 },
+        "green": { "start": 50, "end": 200 }
+      },
+      {
+        "type": "position",
+        "base": "absolute",
+        "start": 100,
+        "count": 20,
+        "step": 3
+      },
+      {
+        "type": "rgb",
+        "position": {
+          "start": 10,
+          "count": 80,
+          "speed": 10,
+          "wrap": false,
+          "repeat": true
+        },
+        "blue": { "start": 50, "end": 200, "unfold": true }
+      }
+    ]
+  },
+  {
+    "name": "time animation",
+    "commands": [
+      {
+        "type": "rgb",
+        "red": { "start": 0, "end": 255, "duration": "2sec" },
+        "green": { "start": 255, "end": 0, "duration": 2000 },
+        "position": { "start": 0, "end": 40 }
+      },
+      {
+        "type": "hsl",
+        "hue": 150,
+        "animation": {
+          "duration": 3000,
+          "ease": { "in": true, "out": true },
+          "unfold": true
+        },
+        "saturation": { "start": 0, "end": 100 },
+        "position": { "after": true, "count": 40 }
+      }
+    ]
+  },
+
+  {
+    "name": "control",
+    "commands": [
+      {
+        "type": "control",
+        "state": "running",
+        "states": {
+          "running": [
+            {
+              "type": "control",
+              "duration": 5000,
+              "next-state": "complete"
+            },
+            {
+              "type": "rgb",
+              "red": 255
+            },
+            {
+              "type": "rgb",
+              "position": { "repeat": 5, "skip": 5 },
+              "blue": 255
+            }
+          ],
+          "complete": [
+            {
+              "type": "control",
+              "duration": 1000,
+              "next-state": "running"
+            },
+            {
+              "type": "hsl",
+              "hue": 150,
+              "animation": {
+                "duration": 3000,
+                "ease": { "in": true, "out": true },
+                "unfold": true
+              },
+              "saturation": { "start": 0, "end": 100 },
+              "position": { "after": true, "count": 40 }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "multiple",
+    "commands": [
+      {
+        "type": "multiple",
+        "frequency": 3000,
+        "count": 3,
+        "variables": {
+          "pos": "rand(0,90)",
+          "count": "rand(3,10)"
+        },
+        "commands": [
+          {
+            "type": "control",
+            "duration": 5000
+          },
+          {
+            "type": "hsl",
+            "saturation": 0,
+            "lightness": {
+              "start": 10,
+              "end": 100,
+              "duration": 1000,
+              "unfold": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "multiple - chase",
+    "commands": [
+      {
+        "type": "multiple",
+        "frequency": 3000,
+        "count": 3,
+        "variables": {
+          "pos": "rand(0,90)",
+          "length": "3"
+        },
+        "commands": [
+          {
+            "type": "control",
+            "duration": 5000,
+            "speed": "10/sec"
+          },
+          {
+            "type": "hsl",
+            "saturation": 0,
+            "position": { "start": "var(pos)", "count": "var(length)" },
+            "lightness": {
+              "start": 10,
+              "end": 100,
+              "duration": 1000,
+              "unfold": true
+            }
+          },
+          {
+            "type": "set-variable",
+            "length": "add(length,2)"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "pattern",
+    "commands": [
+      {
+        "type": "hsl",
+        "hue": {
+          "pattern": [
+            { "count": 5, "value": 0 },
+            { "count": 15, "value": 150 },
+            { "count": 7, "value": 60 },
+            { "count": 3, "value": -1 }
+          ],
+          "repeat": true
+        }
+      }
+    ]
+  }
+]

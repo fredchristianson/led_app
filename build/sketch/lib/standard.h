@@ -1,7 +1,9 @@
+#line 1 "d:\\dev\\arduino\\led_app\\basic_controller\\lib\\standard.h"
 #ifndef STANDARD_VALS_H
 #define STANDARD_VALS_H
 
 namespace DevRelief {
+    /*
     const char * STD_HOME = R"home(
         <html>
         <style>
@@ -144,6 +146,7 @@ namespace DevRelief {
            
     }
     )std";
+    */
 }
 
 #endif

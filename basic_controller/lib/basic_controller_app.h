@@ -9,421 +9,247 @@
 #include "./led_strip.h"
 #include "./parse_gen.h"
 #include "./config.h"
-#include "./script.h"
+#include "./script/script.h"
+#include "./script_executor.h"
 #include "./standard.h"
+#include "./data.h"
+#include "./test/tests.h"
+#include "./util.h"
+#include "./script_data_loader.h"
 
 extern EspClass ESP;
 
 
 namespace DevRelief {
-    const char * VERSION ="1.0.1";
+    const char * VERSION ="2.0.0";
     DRFileBuffer statusBuffer;
-    char loadScriptOnLoop[50];
     DRFileBuffer fileBuffer;
-    ObjectParser scriptParser;
-    long lastLoopMessageTime;
+
 
     class BasicControllerApplication : public Application {
     public: 
    
    
         BasicControllerApplication() {
-            m_logger = new Logger("BasicControllerApplication",80);
-            m_initialized = false;
-            loadScriptOnLoop[0] =0;
+            m_logger = new Logger("APP",APP_LOGGER_LEVEL);
             m_logger->showMemory();
-            m_httpServer = new HttpServer();
-            m_fileSystem = new DRFileSystem();
-            loadScriptOnLoop[0] = 0;
-
-            char * result = (char*)fileBuffer.reserve(2000);
-            auto found = m_fileSystem->read("/config",fileBuffer);
-            if (found) {
-                m_config.read(fileBuffer.text());
-            } else {
-                m_config.read(DEFAULT_CONFIG);
+            if (!Tests::Run()) {
+                return;
             }
-            m_executor.setConfig(m_config);
-
-            if (m_fileSystem->read("/sysstatus",statusBuffer)) {
-                m_fileSystem->write("/sysstatus","starting");
-                m_logger->info("statusbuffer: %s",statusBuffer.text());
-                if (strcmp(statusBuffer.text(),"script")==0) {
-                    m_fileSystem->read("/run_script",fileBuffer);
-                    m_logger->info("restart with script: %s",fileBuffer.text());
-                    strncpy(loadScriptOnLoop,fileBuffer.text(),50);
-
-                } else if (strcmp(statusBuffer.text(),"off")==0) {
-                    m_logger->info("restart with execution off");
-                }  else if (strcmp(statusBuffer.text(),"std")==0) {
-                    m_logger->info("restart with std script");
-                    readStdScript();
-                } else {
-                    m_logger->error("restart after boot failure: %s",statusBuffer.text());
-                }
-            } else {
-                m_logger->error("status file not found");
-            }
-
-            
-            m_httpServer->route("/",[this](Request* req, Response* resp){
-                //this->getPage("STD_HOME",req,resp);
-                resp->send(200,"text/html",STD_HOME);
-            });
-
-            m_httpServer->routeBraces("/{}.html",[this](Request* req, Response* resp){
-                this->getPage(req->pathArg(0).c_str(),req,resp);
-            });
-
-
-            m_httpServer->routeBracesGet( "/api/off",[this](Request* req, Response* resp){
-                this->m_executor.turnOff();
-                m_fileSystem->write("/sysstatus","off");
-                resp->send(200,"text/json",fileBuffer.text());
-            });
-
-            m_httpServer->routeBracesGet( "/api/config",[this](Request* req, Response* resp){
-                m_logger->debug("get /api/config");
-                char * result = (char*)fileBuffer.reserve(2000);
-                Generator gen(&fileBuffer);
-                m_config.setAddr(WiFi.localIP().toString().c_str());
-                m_logger->debug("IP addr is set");
-                
-                int max = 20;
-                String scripts[max];
-                int scriptCount = m_fileSystem->listFiles("/script",scripts,max);
-                m_logger->debug("got script list");
-                m_config.setScripts(scripts,scriptCount);
-                m_logger->debug("set script list");
-                m_config.write(gen);
-                m_logger->debug("wrote config");
-                resp->send(200,"text/json",fileBuffer.text());
- 
-            });
-
-
-            m_httpServer->routeBracesPost( "/api/config",[this](Request* req, Response* resp){
-                ////m_logger->debug("handling POST API  %s", req->uri().c_str());
-                auto body = req->arg("plain").c_str();
-                ObjectParser parser(body);
-                m_config.read(parser);
-                m_executor.setConfig(m_config);
-                m_logger->always("set config",body);
-                m_logger->always("set load script",m_config.startupScript);
-              
-                strncpy(loadScriptOnLoop,m_config.startupScript,20);
-                m_fileSystem->write("/config",body);
-                resp->send(200,"text/plain","posted /api/config");
-                //this->apiRequest(req->pathArg(0),req,resp);
-            });
-
-            m_httpServer->routeBraces( "/api/std/{}",[this](Request* req, Response* resp){
-                const char * name = req->pathArg(0).c_str();
-                m_logger->never("std %s",name);
-                const char * script = NULL;
-                if (strcmp(name,"off")==0) {
-                    script = STD_OFF;
-                } else if (strcmp(name,"white")==0) {
-                    script = STD_WHITE;
-                } else if (strcmp(name,"color")==0) {
-                    script = STD_COLOR;
-                }
-
-                if (script != NULL) {
-                    ParameterVariableCommand* cmd = new ParameterVariableCommand();
-                    scriptParser.setData(script);
-
-                    for(int i=0;i<req->args();i++) {
-                        m_logger->never("\t%s=%s",req->argName(i).c_str(),req->arg(i).c_str());
-                        const char * name = req->argName(i).c_str();
-                        const char * val = req->arg(i).c_str();
-                        if (name[0] == 'p'){
-                            addPattern(m_currentScript,name+1,val);
-                        } else {
-                            cmd->add(req->argName(i).c_str(),req->arg(i).c_str());
-                        }
-                    }
-                    m_currentScript.clear();
-                    m_currentScript.read(scriptParser,cmd);
-                    /*
-                    int test = 89;
-                    if (cmd->getInt("hue",test)) {
-                        m_logger->never("---- got hue:  %d",test);
-                    } else {
-                        m_logger->never("---- hue failed:  %d",test);
-                    }
-
-                    Command* c = m_currentScript.getFirstCommand();
-                    while(c != NULL) {
-                        if (c->hasVariables()){
-                            if (cmd->getInt("hue",test)) {
-                                m_logger->never("---- var cmd got hue:  %d",test);
-                            } else {
-                                m_logger->never("---- var cmd hue failed:  %d",test);
-                            }   
-                        }
-                        c = c->getNext();
-                    }
-                    */
-                    m_executor.setScript(&m_currentScript);
-                    m_executor.start();
-                    m_fileSystem->write("/sysstatus","std");
-
-                    Generator gen(&fileBuffer);
-                    gen.startObject();
-                    gen.writeNameValue("name",name);
-                    gen.writeName("args");
-                    gen.startProperty();
-                    gen.startArray();
-                    for(int i=0;i<req->args();i++) {
-                        gen.startProperty();
-                        gen.startObject();
-                        gen.writeNameValue("name",req->argName(i).c_str());
-                        gen.writeNameValue("value",req->arg(i).c_str());
-                        gen.endObject();
-                        gen.endProperty();
-                    }
-                    gen.endArray();
-                    gen.endProperty();
-                    gen.endObject();
-
-                    m_logger->never("script: %s",fileBuffer.text());
-                    m_fileSystem->write("std_script",fileBuffer.text());
-                    statusBuffer.setText("running");
-                    resp->send(200,"text/plain",fileBuffer.text());
-                } else {
-                    resp->send(404,"text/plain","script not found");
-                }
-            });
-
-
-            m_httpServer->routeBracesGet( "/api/script/{}",[this](Request* req, Response* resp){
-                if (m_fileSystem->read(path.concatTemp("/script/",req->pathArg(0).c_str()),fileBuffer)){
-                    resp->send(200,"text/plain",fileBuffer.text());
-                } else {
-                    resp->send(404,"text/plain","script not found");
-                }
-
-            });
-
-
-            m_httpServer->routeBracesPost( "/api/script/{}",[this](Request* req, Response* resp){
-                //m_logger->debug("post scene %s", req->pathArg(0).c_str());
-                const char * script = req->pathArg(0).c_str();
-                const char * body = req->arg("plain").c_str();
-                //m_logger->debug("commands: %s", body.c_str());
-                m_fileSystem->write(path.concatTemp("/script/",script),body);
-                m_logger->debug("set load script",script);
-                
-                strcpy(loadScriptOnLoop,script);
-                //ObjectParser parser(body);
-                //m_currentScript.read(parser);
-                //m_executor.setScript(&m_currentScript);
-                m_logger->debug("read script name %.15s",m_currentScript.name);
-                resp->send(200,"text/plain",path.concatTemp("posted /api/script/",script));
-
-            });
-
-            m_httpServer->routeBracesGet( "/api/run/{}",[this](Request* req, Response* resp){
-                if (m_fileSystem->read(path.concatTemp("/script/",req->pathArg(0).c_str()),fileBuffer)){
-                    strcpy(loadScriptOnLoop,req->pathArg(0).c_str());
-
-
-                    resp->send(200,"text/plain",fileBuffer.text());
-                } else {
-                    resp->send(404,"text/plain","script not found");
-                }
-
-            });
-
-
-            m_httpServer->routeBracesGet("/api/{}",[this](Request* req, Response* resp){
-                ////////m_logger->debug("handling API  %s", req->uri().c_str());
-                //resp->send(200,"text/html","working");
-                this->apiRequest(req->pathArg(0).c_str(),req,resp);
-            });
-
-
-            m_httpServer->routeNotFound([this](Request* req, Response* resp){
-                //////m_logger->debug("handling not found  %s", req->uri().c_str());
-                this->handleFile(req,resp);
-            });
-
-            m_httpServer->begin();
-            
- 
-            m_logger->debug("Running BasicControllerApplication configured: %s",VERSION);
-            m_initialized = true;
+            m_logger->showMemory();
+            initialize();
         }
 
 
-        void readStdScript(){
-            if (m_fileSystem->read("std_script",fileBuffer)) {
-                loadScriptOnLoop[0] = 0;
-                m_currentScript.clear();
-                m_logger->always("starting std script: %s",fileBuffer.text());
-                scriptParser.setData(fileBuffer.text());
-                scriptParser.readStringValue("name",tmpBuffer,20);
-                const char * script = NULL;
-                if (strcmp(tmpBuffer,"off")==0) {
-                    script = STD_OFF;
-                } else if (strcmp(tmpBuffer,"white")==0) {
-                    script = STD_WHITE;
-                } else if (strcmp(tmpBuffer,"color")==0) {
-                    script = STD_COLOR;
-                } else if (strcmp(tmpBuffer,"pattern")==0) {
-                    script = STD_PATTERN;
-                }
-                m_logger->never("read std script %s",script);
-                ArrayParser args;
-                scriptParser.getArray("args",args);
-                ObjectParser arg;
-                
-                ParameterVariableCommand* varCmd = new ParameterVariableCommand();
 
-                
-                char pname[20];
-                char pval[20];
-                while(args.nextObject(&arg)) {
-                    if (arg.readStringValue("name",pname,20) &&
-                        arg.readStringValue("value",pval,20)) {
-                        if (pname[0] == 'p'){
-                            addPattern(m_currentScript,pname+1,pval);
-                        } else {
-                            varCmd->add(pname,pval);
-                            m_logger->always("param: %s=%s",pname,pval);
-                        }
-                    }
-                }
-                m_currentScript.clear();
-                scriptParser.setData(script);
-                m_currentScript.read(scriptParser,varCmd);
-                m_executor.setScript(&m_currentScript);
-                m_executor.start();
-                m_fileSystem->write("/sysstatus","std");
-                m_logger->always("started std script: %s",tmpBuffer);
-            } else {
-                m_fileSystem->write("/sysstatus","off");
-                m_logger->error("std_script not found");
-            }
-
-        }
-        
-        void addPattern(Script& script, const char * pattern, const char * pval) {
-            // to add HSL patterns in scripts
-            m_logger->error("addPattern not implemented");
-        }
-
+    protected:       
         void loop() {
             if (!m_initialized) {
                 return;
             }
             m_httpServer->handleClient();
+            m_executor.step();
+        }
 
-            if (loadScriptOnLoop[0] != 0) {
-                if (strcmp(statusBuffer.text(),"off")==0) {
-                    loadScriptOnLoop[0]=0;
-                    return;
-                }
-                m_logger->info("Loading script %s",loadScriptOnLoop);
-                if (m_fileSystem->read(path.concatTemp("/script/",loadScriptOnLoop),fileBuffer)){
-                    scriptParser.setData(fileBuffer.text());
-                    m_currentScript.clear();
-                    m_currentScript.read(scriptParser);
-                    m_logger->debug("read script");
-                    m_executor.setScript(&m_currentScript);
-                    m_executor.start();
-                    m_logger->debug("set executor");
-                }
-                m_fileSystem->write("/run_script",loadScriptOnLoop);
-                m_fileSystem->write("/sysstatus","script");
-                loadScriptOnLoop[0] = 0;
-                m_logger->debug("loop load done");
-            } else if (m_executor.isRunning() && m_executor.isComplete()) {
-                const char * next = m_executor.getNextScriptName();
-                m_logger->info("next script: %s",next);
-                if (next[0] != NULL && m_fileSystem->read(path.concatTemp("/script/",next),fileBuffer)){
-                    m_logger->info("\t found next");
-                    scriptParser.setData(fileBuffer.text());
-                    m_currentScript.clear();
-                    m_currentScript.read(scriptParser);
-                    m_executor.setScript(&m_currentScript);
-                    m_logger->info("\tnext script loaded");
-                    m_logger->showMemory();
-                } else {
-                    m_executor.restart();
-                }               
+        void initialize() {
+            ConfigDataLoader configDataLoader;
+            if (!configDataLoader.loadConfig(m_config)) {
+                m_logger->error("Load failed.  Using default.");
+                configDataLoader.initialize(m_config);
+                configDataLoader.saveConfig(m_config);
             } else {
-                m_logger->periodic(DEBUG_LEVEL,5000,lastLoopMessageTime,"loop() %s",statusBuffer.text());
-                m_executor.step();
+                m_logger->info("Loaded config.json");
             }
+            m_logger->debug("set config instance");
+            m_config.setInstance(&m_config);
+            m_logger->debug("create httpserver");
+            m_httpServer = new HttpServer();
+            m_logger->debug("setup routes");
+            setupRoutes();        
+            m_logger->debug("begin http server");
+            m_httpServer->begin();
             
+            m_logger->debug("show build version");
+            m_executor.configChange(m_config);
+            m_logger->debug("Running BasicControllerApplication configured: %s.  Built at %s %s",
+                m_config.getBuildVersion().text(),
+                m_config.getBuildDate().text(),
+                m_config.getBuildTime().text());
+            m_logger->showMemory();
+            m_initialized = true;
         }
 
-        
-        String getMimeType(String path) {
-            if (path.endsWith(".css")){
-                return "text/css";
-            }
-            if (path.endsWith(".js")){
-                return "application/javascript";
-            }
-            
-            if (path.endsWith(".html")){
-                return "text/html";
-            }
-            return "text/plain";
+        void setupRoutes() {
+            m_httpServer->route("/",[this](Request* req, Response* resp){
+                resp->send(200,"text/html","home not defined");
+            });
+
+
+            m_httpServer->routeBracesGet( "/api/config",[this](Request* req, Response* resp){
+                m_logger->debug("get /api/config");
+                ConfigDataLoader configDataLoader;
+                SharedPtr<JsonRoot> jsonRoot = configDataLoader.toJson(m_config);
+                JsonElement*json = jsonRoot->getTopElement();
+                ApiResult api(json);
+                DRString apiText;
+                
+                api.toText(apiText);
+                const char * text = apiText.text();
+                m_logger->debug("sending response");
+                m_logger->debug("%s",text);
+                
+                resp->send(200,"text/json",text);
+            });
+
+
+            m_httpServer->routeBracesPost( "/api/config",[this](Request* req, Response* resp){
+                
+                auto body = req->arg("plain").c_str();
+                ConfigDataLoader loader;
+                loader.updateConfig(m_config,body);
+                m_executor.configChange(m_config);
+
+                ApiResult result(true);
+                DRString apiText;
+                result.toText(apiText);
+                resp->send(200,"text/json",apiText.text());
+            });
+
+
+            m_httpServer->routeBracesGet( "/api/script/{}",[this](Request* req, Response* resp){
+                ScriptDataLoader loader;
+                LoadResult load;
+                m_logger->debug("load script");
+                if (loader.loadScriptJson( req->pathArg(0).c_str(),load)){
+                    ApiResult result(load.getJson());
+                    result.send(req);
+                }
+                resp->send(404,"text/json","script not loaded");
+            });
+
+            m_httpServer->routeBracesGet( "/api/run/{}",[this](Request* req, Response* resp){
+                ScriptDataLoader loader;
+                LoadResult load;
+                m_logger->debug("run script");
+                ApiResult result;
+                if (loader.loadScriptJson( req->pathArg(0).c_str(),load)){
+                    Script* script = loader.jsonToScript(load);
+                    if (script == NULL) {
+                        result.setCode(500);
+                        DRFormattedString msg("script parse failed: %s",req->pathArg(0).c_str());
+                        result.setMessage(msg);
+                    } else {
+                        m_executor.setScript(script);
+                    }
+                    result.setData(load.getJson());
+                } else {
+                    result.setCode(404);
+                    DRFormattedString msg("script not found: %s",req->pathArg(0).c_str());
+                    result.setMessage(msg);
+                }
+                result.send(req);
+            });
+
+            m_httpServer->routeBracesPost( "/api/script/{}",[this](Request* req, Response* resp){
+                m_logger->debug("save script");
+
+                auto body = req->arg("plain").c_str();
+                auto name =req->pathArg(0).c_str();
+
+                ScriptDataLoader loader;
+                Script* script = loader.writeScript(name,body);
+                m_executor.setScript(script);
+                ApiResult result(true);
+                DRString apiText;
+                result.toText(apiText);
+                resp->send(200,"text/json",apiText.text());
+                //resp->send(200,"text/json","POST not implemented");
+            });
+
+
+            m_httpServer->routeBracesDelete( "/api/script/{}",[this](Request* req, Response* resp){
+                m_logger->debug("delete script");
+                resp->send(200,"text/json","DELETE not implemented");
+            });
+
+
+
+
+            m_httpServer->routeBracesGet("/api/{}",[this](Request* req, Response* resp){
+
+                this->apiRequest(req->pathArg(0).c_str(),req,resp);
+            });
+
         }
 
-        
+    protected:
+
 
         void apiRequest(const char * api,Request * req,Response * resp) {
             m_logger->debug("handle API %s",api);
+            int code=200;
             if (strcmp(api,"reboot") == 0) {
+                code = 200;
                 resp->send(200,"text/json","{result:true,message:\"rebooting ... \"}");   
                 delay(1000);
                 ESP.restart();
+                return;
             }
-            //Serial.println("*** handle api ");
-            //Serial.println(api);
-         
-             resp->send(200,"text/json","{result:false,message:\"unknown api \"}");
-        }
+            m_logger->never("get parameters");
+            SharedPtr<JsonRoot> paramJson = getParameters(req);
 
-        void getPage(const char * page,Request * req,Response * resp){
-           ////m_logger->debug("get page %s",page.c_str());
-           streamFile(resp,path.concatTemp("/",page,".html"));
-        }
-
-        void handleFile(Request *req , Response* resp) {
-            const char * path = req->uri().c_str();
-            streamFile(resp,path);
-        }
-
-        void streamFile(Response * resp,const char * path) {
-            ////m_logger->debug("stream file %s",path.c_str());
-            File file = m_fileSystem->openFile(path);
-            if (file.isFile()) {
-                auto mimeType = getMimeType(path);
-                resp->streamFile(file,mimeType);
-                m_fileSystem->closeFile(file);
+            JsonObject *params = paramJson->getTopObject();
+            ApiResult result;
+            if (strcmp(api,"off") == 0) {
+                m_executor.turnOff();
+                //result.setText(R"j({"result":true,"message":"lights turned off"})j");
+                result.setCode(200);
+                result.setMessage("lights turned %s","off");
+            } else if (strcmp(api,"on") == 0){
+                int level = params->get("level",100);
+                m_executor.white(level);
+                result.setCode(200);
+                result.setMessage("lights turned %s","on");
+            } else if (strcmp(api,"color") == 0){
+                m_executor.solid(params);
+                result.setCode(200);
+                result.setMessage("lights turned %s","on");
+            } else if (strcmp(api,"mem") == 0){
+                ApiResult result;
+                result.send(req);
+                
             } else {
-                ////m_logger->debug("file not found");
-                resp->send(404,"text/html","file not found ");
+                code = 404;
+                result.setCode(404);
+                result.setMessage("failed");
             }
-          
+            DRString apiText;
+            result.toText(apiText);
+            resp->send(200,"text/json",apiText.text());
+
+        }
+    
+
+
+      
+        JsonRoot* getParameters(Request*req){
+            JsonRoot * root = new JsonRoot();
+            JsonObject* obj = root->createObject();
+            m_logger->never("\tloop parameters");
+            for(int i=0;i<req->args();i++) {
+                m_logger->debug("\t%s=%s",req->argName(i).c_str(),req->arg(i).c_str());
+                obj->set(req->argName(i).c_str(),req->arg(i).c_str());
+            }
+            return root;
         }
 
-    
     private: 
         Logger * m_logger;
-        DRFileSystem * m_fileSystem;
-        DRPath path;
         HttpServer * m_httpServer;
-        Script m_currentScript;
         Config m_config;
         ScriptExecutor m_executor;
         bool m_initialized;
     };
+
 
 }

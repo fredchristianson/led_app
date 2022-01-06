@@ -1,131 +1,146 @@
 #ifndef CONFIG_H
 #define CONFIG_H
-#define CONFIG_HOSTNAME  "Lanai"
+
+#include <Adafruit_NeoPixel.h>
 
 #include "./parse_gen.h";
 #include "./logger.h";
+#include "./data.h";
+#include "./list.h";
+#include "./util.h";
 
 namespace DevRelief {
-    const char * DEFAULT_CONFIG = R"config({ 
-        "name": CONFIG_HOSTNAME,
-        "addr": "unset",
-        "scripts": [],
-        "strips": [],
-        "brightness": 40
-    })config";
+    Logger ConfigLogger("Config",CONFIG_LOGGER_LEVEL);
+
+    class LedPin {
+        public:
+        LedPin(int n, int c, bool r) {
+            ConfigLogger.debug("create LedPin 0x%04X  %d %d %d",this,n,c,r);
+            number=n;
+            ledCount=c;
+            reverse=r;
+            pixelType = NEO_GRB;
+            maxBrightness=50;
+        }
+
+        ~LedPin() {
+            ConfigLogger.debug("destroy LedPin 0x%04X %d %d %d",this,number,ledCount,reverse);
+        }
+
+        int number;
+        int ledCount;
+        bool reverse;
+        uint16_t pixelType;
+        uint8_t maxBrightness;
+    };
+
+
 
     class Config {
         public:
+            static Config* getInstance() { return instance;}
+            static void setInstance(Config*cfg) { Config::instance = cfg;}
+
             Config() {
-                m_logger = new Logger("Config",80);
-                strcpy(name,CONFIG_HOSTNAME);
-                for(auto i=0;i<3;i++) {
-                    stripPins[i] = -1;
-                    stripLeds[0] = 0;
-                }
+                m_logger = &ConfigLogger;
+                hostName = HOSTNAME;
+                runningScript = NULL;
+                runningParameters = NULL;
                 brightness = 40;
-                scriptCount = 0;
+                maxBrightness = 100;
+                buildVersion = BUILD_VERSION;
+                buildDate = BUILD_DATE;
+                buildTime = BUILD_TIME;
+
             }
 
-            bool read(ObjectParser parser){
-                size_t idx;
-                ArrayParser stripArray;
-                ObjectParser obj;
-                bool result = parser.readStringValue("name",name);
-                parser.readStringValue("startup_script",startupScript);
-                stripCount = 0;
-                parser.getArray("strips",stripArray);
-                
-                while(stripArray.nextObject(&obj)){
-                    obj.readIntValue("pin",&stripPins[stripCount]);
-                    obj.readIntValue("leds",&stripLeds[stripCount]);
-                    obj.readBoolValue("reverse",&stripReverse[stripCount],false);
-                    m_logger->debug("reverse %d %s",stripCount,stripReverse[stripCount] ? "reverse" : "forward");
-                    stripCount++;
+          
+            void setAddr(const char * ip){
+                ipAddress = ip;
+            }
+
+            
+            const DRString& getAddr() const { return ipAddress;}
+
+            void clearPins() {
+                pins.clear();
+            }
+
+
+            LedPin* addPin(int number,int ledCount,bool reverse=false) {
+                m_logger->debug("addPin %d %d %d",number,ledCount,reverse);
+                LedPin* pin = new LedPin(number,ledCount,reverse);
+                pins.add(pin);
+                return pin;
+            }
+            const LedPin* getPin(size_t idx) const { return pins[idx];}
+            size_t getPinCount() const { return pins.size();}
+            const PtrList<LedPin*>& getPins() { 
+                m_logger->debug("return pins");
+                return pins;
+            }
+
+            int getBrightness() const { return brightness;}
+            void setBrightness(int b) { brightness = b;}
+            int getMaxBrightness() const { return maxBrightness;}
+            void setMaxBrightness(int b) { maxBrightness = b;}
+
+            void clearScripts() {
+                scripts.clear();
+            }
+
+            size_t getScriptCount()  const{ return scripts.size();}
+            
+            bool addScript(const char * name) {
+                m_logger->debug("add script %s",name);
+                if (name == NULL || strlen(name) == 0) {
+                    m_logger->warn("addScript requires a name");
+                    return false;
                 }
-                parser.readIntValue("brightness",&brightness);
-                m_logger->debug("config read success");
+                
+                scripts.add(DRString(name));
+                m_logger->debug("\tadded");
                 return true;
             }
 
-            void write(Generator& gen) {
-                gen.startObject();
-                gen.writeNameValue("name",name);
-                gen.writeNameValue("startup_script",startupScript);
-                gen.writeNameValue("addr",addr);
-                gen.writeNameValue("stripCount",(int)stripCount);
-                gen.writeNameValue("brightness",brightness);
-
-                gen.writeName("strips");
-                gen.startProperty();
-                gen.startArray();
-                for(int i=0;i<stripCount;i++) {
-                    gen.startProperty();
-                    gen.startObject();
-                    gen.writeNameValue("pin",stripPins[i]);
-                    gen.writeNameValue("leds",stripLeds[i]);
-                    gen.writeNameValue("reverse",stripReverse[i]);
-                    gen.endObject();
-                    gen.endProperty();
-                }
-                gen.endArray();
-                gen.endProperty();
-
-                
-                gen.writeName("scripts");
-                gen.startProperty();
-                gen.startArray();
-                auto script = scriptNames.text();
-                for(int i=0;i< scriptCount;i++) {
-                    gen.writeArrayValue(script);
-                    script += strlen(script)+1;
-                }
-                gen.endArray();
-                gen.endProperty();
-
-
-                gen.endObject();
+            void setScripts(LinkedList<DRString>& list) {
+                scripts.clear();
+                list.each([&](DRString&name) {
+                    addScript(name.get());
+                });
             }
+            const LinkedList<DRString>& getScripts()  const{ return scripts;}
 
-            void setAddr(const char * ip){
-                strcpy(addr,ip);
+            const DRString& getHostname() const { return hostName;}
+            void setHostname(const char * name) {
+                hostName = name;
             }
-
-            void setScripts(String* scripts, int count) {
-                int pos = 0;
-                uint8_t* data = scriptNames.reserve(count*20); // estimate 20 chars per name.  may be extended
-                scriptCount = count;
-                for(int i=0;i<count;i++) {
-                    auto name = scripts[i].c_str();
-                    m_logger->debug("add script: %s",name);
-                    auto len = strlen(name);
-                    data = scriptNames.reserve(pos+len+1);
-                    memcpy(data+pos,name,len);
-                    pos += len;
-                    data[pos] = 0;
-                    pos += 1;
-                    scriptNames.setLength(pos);
-                }
-                data[pos] = 0;
-               // m_logger->debug("script names: %s",data);
-               // m_logger->debug("script names: %s",scriptNames.text());
+            void setRunningScript(const char * name) {
+                runningScript = name;
             }
+            const DRString& getRunningScript()  const{ return runningScript;}
 
-            size_t getStripCount() { return stripCount;}
-            int getPin(size_t idx) { return stripPins[idx];}
-            int getLedCount(size_t idx) { return stripLeds[idx];}
-            bool isReversed(size_t idx) { return stripReverse[idx];}
-            char     name[50];
-            char     startupScript[50];
-            char     addr[32];
-            size_t stripCount;
-            int  stripPins[4];
-            int  stripLeds[4];
-            bool stripReverse[4];
+            const DRString& getBuildVersion()const { return buildVersion;}
+            const DRString& getBuildDate()const { return buildDate;}
+            const DRString& getBuildTime()const { return buildTime;}
+    private:            
+            DRString     hostName;
+            DRString     ipAddress;
+            DRString    buildVersion;
+            DRString    buildDate;
+            DRString    buildTime;
+            PtrList<LedPin*>  pins;
+            LinkedList<DRString>   scripts;
+            DRString runningScript;
+            JsonElement * runningParameters;
             int  brightness;
-            int scriptCount;
-            DRBuffer scriptNames;
+            int  maxBrightness;
             Logger * m_logger;
+            static Config* instance;
+
     };
+    Config* Config::instance;
 }
+
+
 #endif
