@@ -36,7 +36,6 @@ namespace DevRelief
             m_position = 0;
             m_reverse = false;
             m_logger = &ScriptLogger;
-            m_operation = REPLACE;
             m_parentPosition = NULL;
         }
 
@@ -214,7 +213,7 @@ namespace DevRelief
             }
         }
         void setUnit(PositionUnit unit) { m_unit = unit; }
-        void setHue(int index, int16_t hue, HSLOperation op = REPLACE)
+        void setHue(int index, int16_t hue, HSLOperation op)
         {
             int orig = index;
             if (m_strip == NULL || !translate(index)) {
@@ -224,7 +223,7 @@ namespace DevRelief
             m_logger->never("%d==>%d",orig,index);
             m_strip->setHue((index), hue, op);
         }
-        void setSaturation(int index, int16_t saturation, HSLOperation op = REPLACE)
+        void setSaturation(int index, int16_t saturation, HSLOperation op)
         {
             if (m_strip == NULL || !translate(index)) {
                 //ScriptLogger.periodic(ERROR_LEVEL,100,NULL,"Script position missing a previous strip");
@@ -232,15 +231,16 @@ namespace DevRelief
             }
             m_strip->setSaturation((index), saturation, op);
         }
-        void setLightness(int index, int16_t lightness, HSLOperation op = REPLACE)
+        void setLightness(int index, int16_t lightness, HSLOperation op)
         {
             if (m_strip == NULL || !translate(index)) {
                 //ScriptLogger.periodic(ERROR_LEVEL,100,NULL,"Script position missing a previous strip");
                 return;
             }
+            m_logger->never("Position op %d",op);
             m_strip->setLightness((index), lightness, op);
         }
-        void setRGB(int index, const CRGB &rgb, HSLOperation op = REPLACE)
+        void setRGB(int index, const CRGB &rgb, HSLOperation op)
         {
             int orig = index;
             if (m_strip == NULL || !translate(index)) {
@@ -349,8 +349,7 @@ namespace DevRelief
         PositionType m_type;
         // m_strip is the strip this position writes to
         IHSLStrip *m_strip;
-        
-        HSLOperation m_operation;
+
         Logger* m_logger;
         PositionDomain m_positionDomain;
 

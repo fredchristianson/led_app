@@ -269,6 +269,7 @@ namespace DevRelief
         }
 
         void setOperation(const char *op) {
+            m_logger->always("HSL op %s",op);
             if (Util::equal(op,"replace")){
                 m_operation = REPLACE;
             } else if (Util::equal(op,"add")){
@@ -281,8 +282,10 @@ namespace DevRelief
                 m_operation = MIN;
             }else if (Util::equal(op,"max")){
                 m_operation = MAX;
+            } else {
+                m_operation = REPLACE;
             }
-            m_operation = REPLACE;
+            m_logger->never("HSL op %s=%d",op,m_operation);
         }
 
     protected:
@@ -329,6 +332,7 @@ namespace DevRelief
             }
             if (m_lightness) {
                 int l = m_lightness ? m_lightness->getIntValue(this, -1) : -1;
+                m_logger->never("HSL op %d",m_operation);
                 strip->setLightness(index, l, m_operation);
             }
             if (m_saturation){

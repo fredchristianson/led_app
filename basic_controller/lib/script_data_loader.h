@@ -390,7 +390,7 @@ class ScriptDataLoader : public DataLoader {
         IScriptValue* jsonToValue(JsonObject* json, const char * name) {
             JsonElement * jsonValue = json->getPropertyValue(name);
             if (jsonValue == NULL) {
-                m_logger->debug("No value found for %s",name);
+                m_logger->never("No value found for %s",name);
                 return NULL;
             }
             return jsonToValue(jsonValue);
