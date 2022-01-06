@@ -363,7 +363,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
                 return;
             } 
             if (index == 0) {
-                m_logger->debug("hue %d %d",index,hue);
+                m_logger->never("hue %d %d",index,hue);
             }
             m_hue[index] = clamp(0,359,performOperation(op,m_hue[index],hue));
             if (index == 0) {

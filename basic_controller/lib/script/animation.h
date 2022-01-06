@@ -174,6 +174,10 @@ namespace DevRelief
             return m_val;
         }
 
+        virtual int getRepeatCount() { 
+            return m_repeat;
+        }
+
         void setDurationMsecs(int msecs) {
             m_durationMmsecs = msecs;
         }
@@ -372,6 +376,7 @@ namespace DevRelief
             m_unfold = false;
             m_selectedEase = &m_cubicBeszierEase;
             m_cubicBeszierEase.setValues(0,1);
+            m_isComplete = false;
 
         }
 
@@ -382,7 +387,7 @@ namespace DevRelief
 
         void destroy() override { delete this; }
 
-    
+        bool isComplete() { return m_isComplete;}
 
         void setUnfold(IScriptValue *unfold)
         {
@@ -407,7 +412,11 @@ namespace DevRelief
         double get(IScriptCommand*cmd, AnimationRange&range) override {
             m_logger->debug("ValueAnimator.get() 0x%04X",cmd);
 
+
             AnimatorState* as = getState(cmd);
+            if (isPaused(as,cmd,range)) {
+                return getPauseValue(as,cmd,range);
+            }
             AnimationDomain* domain = getDomain(cmd,range);
             setEaseParameters(cmd);
             if (domain == NULL) {
@@ -419,7 +428,7 @@ namespace DevRelief
             Animator animator(*domain,m_selectedEase);
             range.setUnfolded(isUnfolded(cmd));
             double value = animator.get(range,cmd);
-           
+           m_lastValue = value;
             return value;
           
         }
@@ -452,8 +461,9 @@ namespace DevRelief
         void setEaseOut(IScriptValue* ease) { m_easeOut = ease;}
 
     protected:
-        IScriptValue *m_durationValue; // ignored if m_seed is set
-
+        virtual bool isPaused(AnimatorState* animatorState,IScriptCommand* cmd, AnimationRange&range) { return false;}
+        virtual double getPauseValue(AnimatorState* animatorState,IScriptCommand* cmd, AnimationRange&range) { return m_lastValue;}
+        double m_lastValue;
         IScriptValue *m_unfoldValue;
         IScriptValue *m_ease;
         IScriptValue *m_easeIn;
@@ -462,6 +472,7 @@ namespace DevRelief
         LinearEase m_linearEase;
         AnimationEase* m_selectedEase;
         bool m_unfold;
+        bool m_isComplete;
 
 
         Logger *m_logger;
@@ -474,6 +485,8 @@ namespace DevRelief
                 m_repeatValue = NULL;
                 m_delayValue = NULL;
                 m_delayResponseValue = NULL;
+                m_iterationCount = 0;
+                m_delayUntil = 0;
             }
 
             virtual  ~TimeValueAnimator(){
@@ -496,6 +509,45 @@ namespace DevRelief
             }
 
         protected: 
+            bool isPaused(AnimatorState* animatorState,IScriptCommand* cmd, AnimationRange&range) override  { 
+                if (m_timeDomain.getRepeatCount()==0) {
+                    return false;
+                };
+                if (m_delayUntil == 0) {
+                    
+                    m_iterationCount += 1;
+                    if (m_repeatValue) {
+                        int maxRepeat = m_repeatValue->getIntValue(cmd,1);
+                        if (m_iterationCount>= maxRepeat) {
+                            m_isComplete = true;
+                            return true;
+                        }
+                    }
+
+                    int delayMsecs = m_delayValue->getIntValue(cmd,1000);
+                    m_delayUntil = millis() + delayMsecs;
+                    return true;
+                } else if (m_delayValue != NULL) {
+                    if (millis() > m_delayUntil) {
+                        m_delayUntil = 0;
+                        m_timeDomain.setStart();
+                        return false;
+                    } else {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            
+            double getPauseValue(AnimatorState* animatorState,IScriptCommand* cmd, AnimationRange&range) override {
+                if (m_delayResponseValue != NULL) {
+                    return m_delayResponseValue->getFloatValue(cmd,m_lastValue);
+                }
+                return m_lastValue;
+            }
+
+            int m_iterationCount;
+            int m_delayUntil;
             IScriptValue *m_repeatValue;
             IScriptValue *m_delayValue;
             IScriptValue *m_delayResponseValue;
