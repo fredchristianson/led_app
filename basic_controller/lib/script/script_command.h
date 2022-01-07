@@ -16,6 +16,7 @@ namespace DevRelief
     
     class ScriptCommandBase : public IScriptCommand, IScriptValueProvider
     {
+
     public:
         ScriptCommandBase(const char *type)
         {
@@ -52,11 +53,16 @@ namespace DevRelief
         ScriptPosition* getPosition() override { 
             m_logger->never("base getPosition 0x%x",this);
             if (m_position) {
+                m_logger->never("\t 0x%x",m_position);
                 return m_position;
             } else {
-                if (m_state->getContainer()) {
-                    return m_state->getContainer()->getPosition();
+                m_logger->never("\tgetContainer");
+                IScriptCommand* container = m_state->getContainer();
+                if (container) {
+                    m_logger->debug("\tget container position %x",container);
+                    return container->getPosition();
                 }
+                m_logger->debug("\tno container");
                 return NULL;
             }
         }
@@ -68,7 +74,7 @@ namespace DevRelief
 
         }
 
-        ScriptStatus execute(ScriptState *state) override
+        ScriptStatus execute(IScriptState *state) override
         {
             m_logger->never("ScriptCommandBase.execute %s 0x%x",getType(),this);
             m_state = state;
@@ -94,8 +100,8 @@ namespace DevRelief
         int getOffset() override { return getPosition()->getOffset();}
         
 
-        /* ValueProvider methods */
-        void addValue(const char *name, IScriptValue *value)
+        /* Value methods */
+        virtual void addValue(const char *name, IScriptValue *value) 
         {
             m_logger->debug("ScriptCommandBase.addValue %s 0x%04x",name,value);
             if (m_values == NULL) {
@@ -118,15 +124,19 @@ namespace DevRelief
         IScriptValue *getValue(const char *name) override
         {
             m_logger->never("getvalue %s",name);
+            IScriptValue* val =  m_values == NULL ? NULL : m_values->getValue(name);
+            if (val && !val->isRecursing()) {
+                return val;
+            }
+            m_logger->never("getvalue from state %s",name);
             IScriptValue * stateValue = m_state->getValue(name);
             if (stateValue) {
                 return stateValue;
             }
 
-            IScriptValue* val =  m_values == NULL ? NULL : m_values->getValue(name);
-            m_logger->never("\tnot found");
+            m_logger->never("\tnot found in state");
             if ((val == NULL||val->isRecursing()) && m_previousCommand != NULL) {
-                m_logger->never("\tcheck previous");
+                m_logger->never("\tcheck previous %x",m_previousCommand);
                 return m_previousCommand->getValue(name);
             }
             return val;
@@ -141,26 +151,26 @@ namespace DevRelief
             return sv->getIntValue(this,defaultValue);
         }
 
-        const char *getType() override { return m_type; }
+        const char *getType() override { return m_type.get(); }
 
         void setScriptPosition(ScriptPosition* pos) {
             m_position = pos;
         }
 
-        ScriptState* getState() { return m_state;}
+        IScriptState* getState() { return m_state;}
 
 
     protected:
-        virtual ScriptStatus doCommand(ScriptState *state) = 0;
-        virtual void beginCommandStep(ScriptState *state) {}
-        virtual void endCommandStep(ScriptState *state) {}
+        virtual ScriptStatus doCommand(IScriptState *state) = 0;
+        virtual void beginCommandStep(IScriptState *state) {}
+        virtual void endCommandStep(IScriptState *state) {}
 
         Logger *m_logger;
         ScriptPosition *m_position;
         IScriptCommand *m_previousCommand;
         ScriptValueList *m_values;
         DRString m_type;
-        ScriptState* m_state;
+        IScriptState* m_state;
     };
 
   
@@ -185,7 +195,7 @@ namespace DevRelief
         {
         }
 
-        ScriptStatus doCommand(ScriptState * state) override
+        ScriptStatus doCommand(IScriptState * state) override
         {
             // positioning is taken care of by base
             return SCRIPT_RUNNING;
@@ -207,7 +217,7 @@ namespace DevRelief
             memLogger->debug("~ScriptValueCommand()");
         }
 
-        ScriptStatus doCommand(ScriptState * state) override
+        ScriptStatus doCommand(IScriptState * state) override
         {
             // nothing to do for this type of command
             return SCRIPT_RUNNING;
@@ -242,15 +252,16 @@ namespace DevRelief
             memLogger->debug("~LEDCommand() ");
         }
 
-        ScriptStatus doCommand(ScriptState* state) override
+        ScriptStatus doCommand(IScriptState* state) override
         {
             m_logger->never("LEDCommand");
-
+            
             auto *position = getPosition();
+            m_logger->never("got position");
             int count = position->getCount();
             if (count == 0)
             {
-                m_logger->never(0, 1000, NULL, "strip has 0 LEDS");
+                m_logger->never( "strip has 0 LEDS");
                 return SCRIPT_ERROR;
             }
             m_logger->never("LEDCommand count=%d",count);
@@ -269,7 +280,7 @@ namespace DevRelief
         }
 
         void setOperation(const char *op) {
-            m_logger->always("HSL op %s",op);
+            m_logger->never("HSL op %s",op);
             if (Util::equal(op,"replace")){
                 m_operation = REPLACE;
             } else if (Util::equal(op,"add")){
@@ -291,10 +302,7 @@ namespace DevRelief
     protected:
         virtual void updateLED(int index, IHSLStrip* strip)=0;
         HSLOperation m_operation;
-    private:
-        IScriptValue *m_hue;
-        IScriptValue *m_saturation;
-        IScriptValue *m_lightness;
+
     };
 
    class HSLCommand : public LEDCommand
@@ -360,7 +368,7 @@ namespace DevRelief
             void setOut(IScriptValue *out) { m_out = out; }
 
         protected:
-            void beginCommandStep(ScriptState *state) override {
+            void beginCommandStep(IScriptState *state) override {
                 auto in = m_in ? m_in->getFloatValue(this,0) : 0;
                 auto out = m_out ? m_out->getFloatValue(this,1) : 1;
                 m_map.setValues(in,out);

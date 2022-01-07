@@ -49,6 +49,7 @@ const char * S_VARIABLE = "variable";
 const char * S_UPDATE = "update";
 const char * S_PATTERN = "pattern";
 const char * S_SEGMENT = "segment";
+const char * S_CREATE = "create";
 
 
 bool matchName(const char * want, const char * have) {

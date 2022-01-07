@@ -166,6 +166,8 @@ class ScriptDataLoader : public DataLoader {
                     
                     } else if (matchName(S_SEGMENT,type)){
                         cmd=jsonToSegment(obj);
+                    } else if (matchName(S_CREATE,type)){
+                        cmd=jsonToCreate(obj);
                     } else {
                         m_logger->error("unknown ScriptCommand type %s",type);
                         m_logger->info(obj->toJsonString().text());
@@ -225,6 +227,37 @@ class ScriptDataLoader : public DataLoader {
             jsonToCommands(arr,seg);
             m_currentContainer = parentContainer;
             return seg;
+        }
+        ScriptTemplate* jsonToCreate(JsonObject* json) {
+            JsonObject* templ =json->getPropertyValue("template")->asObject();
+            if (templ == NULL) {
+                return NULL;
+            }
+            ScriptContainer *parentContainer = m_currentContainer;
+            ScriptTemplate *templateContainer = new ScriptTemplate();
+            m_currentContainer = templateContainer;
+            templateContainer->setCount(jsonToValue(json,"count"));            
+            templateContainer->setMinCount(jsonToValue(json,"min-count"));            
+            templateContainer->setMaxCount(jsonToValue(json,"max-count"));
+            JsonArray* arr = templ->getArray("commands");
+            jsonToCommands(arr,templateContainer);
+
+            JsonObject* values = templ->getPropertyValue("values")->asObject();
+            if (values) {
+                values->eachProperty([&](const char* name, JsonElement*value){
+                    if (!Util::equal("type",name)) {
+                        IScriptValue * scriptValue = jsonToValue(value);
+                        if (scriptValue == NULL) {
+                            m_logger->error("unable to get ScriptValue from %s",value->toJsonString().text());
+                        } else {
+                            m_logger->debug("\tadd ScriptValue for %s",name);
+                            templateContainer->addValue(name,scriptValue);
+                        }
+                    }
+                });
+            }
+            m_currentContainer = parentContainer;
+            return templateContainer;
         }
 
         PositionCommand* jsonToPositionCommand(JsonObject* json) {

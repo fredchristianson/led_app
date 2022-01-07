@@ -70,6 +70,8 @@ namespace DevRelief
         int getMsecValue(IScriptCommand* cmd,  int defaultValue) override { return defaultValue;}
         bool isNumber(IScriptCommand* cmd) override { return true;}
 
+
+
         DRString toString() { return DRString("System Value: ").append(m_name); }
         private:
             double get(IScriptCommand* cmd, double defaultValue){
@@ -279,6 +281,11 @@ namespace DevRelief
         ScriptNumberValue(double value) : m_value(value)
         {
             memLogger->debug("ScriptNumberValue()");
+        }
+
+        ScriptNumberValue(IScriptCommand*cmd, IScriptValue* base,double defaultValue) {
+            double val = base->getFloatValue(cmd,defaultValue);
+            m_value = val;
         }
 
         virtual ~ScriptNumberValue()
@@ -572,21 +579,18 @@ namespace DevRelief
         void destroy() override { delete this;}
         virtual int getIntValue(IScriptCommand*cmd,  int defaultValue) override
         {
-            m_recurse = true;
-            IScriptValue * val = cmd->getValue(m_name);
-            int dv = m_hasDefaultValue ? m_defaultValue : defaultValue;
-            if (val != NULL) {
-                dv = val->getIntValue(cmd,dv);
-            }
-            m_recurse = false;
-            return dv;
+            return getFloatValue(cmd,defaultValue);
         }
 
         virtual double getFloatValue(IScriptCommand*cmd,  double defaultValue) override
         {
+            int dv = m_hasDefaultValue ? m_defaultValue : defaultValue;
+            if (m_recurse) {
+                m_logger->always("variable getFloatValue() recurse");
+                return dv;
+            }
             m_recurse = true;
             IScriptValue * val = cmd->getValue(m_name);
-            int dv = m_hasDefaultValue ? m_defaultValue : defaultValue;
             if (val != NULL) {
                 dv = val->getFloatValue(cmd,dv);
             }
@@ -676,8 +680,14 @@ namespace DevRelief
                 NameValue* nv = new NameValue(name,value);
                 m_values.add(nv);
             }
+
+            void each(auto&& lambda) const {
+                m_values.each(lambda);
+            }
  
             void destroy() { delete this;}
+
+            int count() { return m_values.size();}
         private:
             PtrList<NameValue*> m_values;
             Logger* m_logger;

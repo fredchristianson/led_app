@@ -13,7 +13,7 @@
 
 namespace DevRelief
 {
-  
+    class ChildState;
 
     class ScriptState : public IScriptState, IScriptValueProvider
     {
@@ -122,13 +122,19 @@ namespace DevRelief
             m_values->addValue(fullName.get(),val);
         }
 
+        void setValue(const char * valueName, IScriptValue* val) {
+            m_values->addValue(valueName,val);
+        }
+
         IScriptValue* getValue(void* owner,const char * valueName){
             DRFormattedString fullName("%04x-%s",owner,valueName);
             return getValue(fullName.get());
         }
         
-    private:
+        IScriptState* createChild();
+    protected:
         friend Script;
+        friend ChildState;
         void beginScript(Script *script, IHSLStrip *strip)
         {
             m_script = script;
@@ -158,6 +164,30 @@ namespace DevRelief
         IScriptCommand* m_currentContainer;
     };
 
+    class ChildState : public ScriptState {
+        public:
+            ChildState(ScriptState* parent) {
+                m_parent = parent;
+                m_stepNumber = 0;
+                m_logger = parent->m_logger;
+                m_startTime = millis();
+                m_strip = parent->getStrip();
+                m_lastStepTime = 0;
+                m_script = parent->m_script;
+                m_previousCommand = NULL;
+                m_currentCommand = NULL;
+                m_currentContainer = parent->getContainer();
+                m_logger->debug("Created ChildState 0x%x 0x%x",m_strip,m_currentContainer);
+            }
+
+        protected:
+            IScriptState* m_parent;
+    };
+
    
+    IScriptState*   ScriptState::createChild() {
+        ChildState* child = new ChildState(this);
+        return child;
+    }
 }
 #endif

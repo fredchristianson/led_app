@@ -59,7 +59,7 @@ namespace DevRelief
         void setPositionType(PositionType t) { 
             m_type = t;
         }
-        void updateValues(IScriptCommand* cmd, ScriptState* state){
+        void updateValues(IScriptCommand* cmd, IScriptState* state){
             m_logger->never("update position 0x%x 0x%x",cmd,state);
             IScriptCommand* container = state->getContainer();
             m_logger->never("\tcontainer 0x%x",container);
@@ -140,10 +140,11 @@ namespace DevRelief
             m_positionDomain.setPos(0);
         }
        
-        int getStripPosition(IScriptCommand* cmd, ScriptState*state, IScriptValue* value,int defaultValue){
+        int getStripPosition(IScriptCommand* cmd, IScriptState*state, IScriptValue* value,int defaultValue){
+            m_logger->debug("getStripPosition");
             int rpos = defaultValue;
             if (value) {
-                //m_logger->debug("have value %s",value->toString().get());
+                m_logger->debug("have value %s",value->toString().get());
                 IScriptCommand*prev = state->getPreviousCommand();
                 if (prev&&value->equals(cmd,"after")){
                     ScriptPosition* pos =  prev->getPosition();
@@ -168,7 +169,9 @@ namespace DevRelief
                 } else {
                     rpos  = value->getIntValue(cmd,defaultValue);
                 }
-            }    
+            }  else {
+                m_logger->debug("\tno value");
+            }
             return rpos;
         }
 

@@ -187,6 +187,7 @@ namespace DevRelief
             const char * name = m_name.get();
             if (Util::equal("rand",name)){
                 result = invokeRand(cmd,defaultValue);
+                m_logger->always("Rand value: %f",result);
             } else if (Util::equal("add",name) || Util::equal("+",name)) {
                 result = invokeAdd(cmd,defaultValue);
             } else if (Util::equal("subtract",name) ||Util::equal("sub",name) || Util::equal("-",name)) {
@@ -475,7 +476,8 @@ namespace DevRelief
                 value = m_animate->get(cmd,range);
             } else {
                 AnimationRange range(start,end,false);
-                Animator animator(*(state->getAnimationPositionDomain()));
+                //Animator animator(*(state->getAnimationPositionDomain()));
+                Animator animator(*(cmd->getPosition()->getAnimationPositionDomain()));
                 CubicBezierEase ease;
                 animator.setEase(&ease);
 

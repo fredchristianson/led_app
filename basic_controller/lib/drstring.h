@@ -253,7 +253,7 @@ class DRFormattedString : public DRString{
     private:
         void formatString(const char * format, va_list args) {
             char buf[2];
-            int len = vsnprintf(buf,1,format,args);
+            int len = vsnprintf(buf,1,format,args)+1;
             m_data.get()->ensureLength(len+1);
             vsnprintf(m_data.get()->data(),len,format,args);
         }

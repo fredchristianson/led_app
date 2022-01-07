@@ -59,6 +59,8 @@ namespace DevRelief
         virtual bool isNumber(IScriptCommand* cmd)=0;
         virtual bool isBool(IScriptCommand* cmd)=0;
 
+
+
         virtual bool isRecursing() = 0; // mainly for variable values
         // for debugging
         virtual DRString toString() = 0;
@@ -96,10 +98,18 @@ namespace DevRelief
 
         virtual int getStepStartTime()=0;
         virtual int getStepNumber()=0;
+        virtual void setValue(const char * valueName, IScriptValue* val)=0;
         virtual void setValue(void*owner, const char * valueName, IScriptValue* val)=0;
+        virtual void setPreviousCommand(IScriptCommand* cmd)=0;
+        virtual void setCurrentCommand(IScriptCommand* cmd)=0;
+        virtual IScriptCommand* getPreviousCommand()=0;
+        virtual IScriptValue* getValue(const char * valueName)=0;
         virtual IScriptValue* getValue(void* owner,const char * valueName)=0;
+        virtual IScriptCommand* setContainer(IScriptCommand*)=0;// return previous value
         virtual IScriptCommand* getContainer()=0;
+        virtual IHSLStrip* setStrip(IHSLStrip*)=0; // return previous value
         virtual IHSLStrip* getStrip()=0;
+        virtual IScriptState* createChild()=0;
     };
 
     class IPositionable {
@@ -115,7 +125,7 @@ namespace DevRelief
     {
         public:
             virtual void destroy() =0; // cannot delete pure virtual interfaces. they must all implement destroy            
-            virtual ScriptStatus execute(ScriptState*state)=0;
+            virtual ScriptStatus execute(IScriptState*state)=0;
             virtual IScriptValue* getValue(const char* name)=0;
             virtual const char * getType()=0;
             virtual IScriptState* getState()=0;
