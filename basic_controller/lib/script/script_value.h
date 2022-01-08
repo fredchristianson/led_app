@@ -435,7 +435,7 @@ namespace DevRelief
     class ScriptRangeValue : public ScriptValue
     {
     public:
-        ScriptRangeValue(IScriptValue *start, IScriptValue *end,IValueAnimator * animate )
+        ScriptRangeValue(IScriptValue *start, IScriptValue *end,IValueAnimator * animate=NULL )
         {
             memLogger->debug("ScriptRangeValue()");
             m_start = start;
@@ -649,6 +649,12 @@ namespace DevRelief
             IScriptValue * val = cmd->getValue(m_name);
             return val ? val->isBool(cmd) : false;
          }
+
+        IScriptValue* eval(IScriptCommand * cmd, double defaultValue=0) override{
+            return new ScriptNumberValue(getFloatValue(cmd,defaultValue));
+
+        }
+
         
         virtual DRString toString() { return DRString("Variable: ").append(m_name); }
 
@@ -707,7 +713,7 @@ namespace DevRelief
             Logger* m_logger;
    };
 
-   IScriptValue* ScriptValue::eval(IScriptCommand * cmd, double defaultValue=0) {
+   IScriptValue* ScriptValue::eval(IScriptCommand * cmd, double defaultValue) {
         return new ScriptNumberValue(getFloatValue(cmd,defaultValue));
    }
 }

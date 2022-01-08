@@ -334,39 +334,7 @@ namespace DevRelief
         Logger *m_logger;
     };
 
-    class AnimatorState : public IScriptValue {
-        public:
-        AnimatorState() {
-            m_status= SCRIPT_RUNNING;
-            m_pauseUntil = 0;
-        }
-
-        void destroy() {delete this;}
-
-        ScriptStatus  m_status;
-        int m_endDomainValue;
-        int m_pauseUntil;
-        virtual int getRepeatCount() { return 0;}
-
-        
-
-        // these methods are required but not implemented for this IScriptValue
-        int getIntValue(IScriptCommand* cmd,  int defaultValue) { return defaultValue;}
-        double getFloatValue(IScriptCommand* cmd,  double defaultValue)  { return defaultValue;}
-        bool getBoolValue(IScriptCommand* cmd,  bool defaultValue)  { return defaultValue;}
-        int getMsecValue(IScriptCommand* cmd,  int defaultValue)  { return defaultValue;}
-
-        bool isString(IScriptCommand* cmd) { return false;}
-        bool isNumber(IScriptCommand* cmd) { return false;}
-        bool isBool(IScriptCommand* cmd) { return false;}
-
-        bool isRecursing()  { return false;}
-        // for debugging
-        DRString toString() { return DRFormattedString("AnimatorState %d %d",m_status,m_pauseUntil);};
-        bool equals(IScriptCommand*cmd, const char * match) { return false;}
-    };
-
-    class ValueAnimator : public IValueAnimator
+     class ValueAnimator : public IValueAnimator
     {
     public:
         ValueAnimator()
@@ -375,6 +343,22 @@ namespace DevRelief
             m_unfoldValue = NULL;
             m_unfold = false;
             m_selectedEase = &m_cubicBeszierEase;
+            m_cubicBeszierEase.setValues(0,1);
+            m_isComplete = false;
+            m_ease = NULL;
+            m_easeIn = NULL;
+            m_easeOut = NULL;
+        }
+
+        ValueAnimator(ValueAnimator*other, IScriptCommand*cmd)
+        {
+            m_logger = &AnimationLogger;
+            m_unfoldValue = other->m_unfoldValue ? other->m_unfoldValue->eval(cmd,false) : NULL;
+            m_ease = other->m_ease ? other->m_ease->eval(cmd,false) : NULL;
+            m_easeIn = other->m_easeIn ? other->m_easeIn->eval(cmd,false) : NULL;
+            m_easeOut = other->m_easeOut ? other->m_easeOut->eval(cmd,false) : NULL;
+            m_unfold = false;
+            m_selectedEase = other->m_selectedEase;
             m_cubicBeszierEase.setValues(0,1);
             m_isComplete = false;
 
@@ -400,37 +384,19 @@ namespace DevRelief
             return m_unfoldValue && m_unfoldValue->getBoolValue(cmd, false);
         }
 
-        AnimatorState* getState(IScriptCommand* cmd) {
-            m_logger->never("get animatorState %x",this);
-            m_logger->never("\tstate %x",cmd->getState());
-            AnimatorState* as = (AnimatorState*)cmd->getState()->getValue(this,"animator-state");
-            if (as == NULL) {
-                m_logger->never("\tcreate animatorState %x",this);
-                as = new AnimatorState();
-                m_logger->never("\tcreated animatorState %x",as);
-                cmd->getState()->setValue(this,"animator-state",as);
-            }
-            m_logger->never("\treturn animatorState %x",as);
-            return as;
-        }
-
+     
         double get(IScriptCommand*cmd, AnimationRange&range) override {
             m_logger->debug("ValueAnimator.get() 0x%04X",cmd);
 
 
-            AnimatorState* as = getState(cmd);
             m_logger->debug("\tcheck paused");
-            if (isPaused(as,cmd,range)) {
-                m_logger->debug("\treturn pause value");
-                return getPauseValue(as,cmd,range);
-            }
+
             m_logger->debug("\tget domain");
             AnimationDomain* domain = getDomain(cmd,range);
             m_logger->debug("\tset ease");
             setEaseParameters(cmd);
             if (domain == NULL) {
                 m_logger->error("Animation domain is NULL");
-                as->m_status = SCRIPT_ERROR;
                 return range.getHigh();
             }
             m_logger->debug("\tcreate animator");
@@ -439,6 +405,11 @@ namespace DevRelief
             m_logger->debug("\tset unfold");
             range.setUnfolded(isUnfolded(cmd));
             m_logger->debug("\tget value");
+
+            if (isPaused(cmd,range)) {
+                m_logger->debug("\treturn pause value");
+                return getPauseValue(cmd,range);
+            }
             double value = animator.get(range,cmd);
             m_lastValue = value;
             m_logger->debug("\tvalue=%f",value);
@@ -475,8 +446,8 @@ namespace DevRelief
         void setEaseOut(IScriptValue* ease) { m_easeOut = ease;}
 
     protected:
-        virtual bool isPaused(AnimatorState* animatorState,IScriptCommand* cmd, AnimationRange&range) { return false;}
-        virtual double getPauseValue(AnimatorState* animatorState,IScriptCommand* cmd, AnimationRange&range) { return m_lastValue;}
+        virtual bool isPaused(IScriptCommand* cmd, AnimationRange&range) { return false;}
+        virtual double getPauseValue(IScriptCommand* cmd, AnimationRange&range) { return m_lastValue;}
         double m_lastValue;
         IScriptValue *m_unfoldValue;
         IScriptValue *m_ease;
@@ -503,10 +474,10 @@ namespace DevRelief
                 m_delayUntil = 0;
             }
 
-            TimeValueAnimator(TimeValueAnimator* other,IScriptCommand*cmd){
-                m_repeatValue = other->m_repeatValue ? other->m_repeatValue->eval(cmd) : NULL;
-                m_delayValue = other->m_delayValue ? other->m_delayValue->eval(cmd) : NULL;
-                m_delayResponseValue = other->m_delayResponseValue ? other->m_delayResponseValue->eval(cmd) : NULL;
+            TimeValueAnimator(TimeValueAnimator* other,IScriptCommand*cmd) : ValueAnimator(other,cmd) {
+                m_repeatValue = other->m_repeatValue ? other->m_repeatValue->eval(cmd,0) : NULL;
+                m_delayValue = other->m_delayValue ? other->m_delayValue->eval(cmd,0) : NULL;
+                m_delayResponseValue = other->m_delayResponseValue ? other->m_delayResponseValue->eval(cmd,0) : NULL;
                 m_iterationCount = 0;
                 m_delayUntil = 0;
             }
@@ -531,7 +502,8 @@ namespace DevRelief
             }
 
         protected: 
-            bool isPaused(AnimatorState* animatorState,IScriptCommand* cmd, AnimationRange&range) override  { 
+            bool isPaused(IScriptCommand* cmd, AnimationRange&range) override  { 
+                m_timeDomain.update(cmd->getState());
                 m_logger->debug("check repeat count");
                 if (m_timeDomain.getRepeatCount()==0) {
                     m_logger->debug("\tno repeat");
@@ -572,7 +544,7 @@ namespace DevRelief
                 return false;
             }
             
-            double getPauseValue(AnimatorState* animatorState,IScriptCommand* cmd, AnimationRange&range) override {
+            double getPauseValue(IScriptCommand* cmd, AnimationRange&range) override {
                 if (m_delayResponseValue != NULL) {
                     return m_delayResponseValue->getFloatValue(cmd,m_lastValue);
                 }
