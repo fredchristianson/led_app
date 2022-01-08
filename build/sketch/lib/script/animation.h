@@ -359,49 +359,7 @@ namespace DevRelief
             range.setUnfolded(isUnfolded(cmd));
             double value = animator.get(range);
             return value;
-
-/*
-            if (domain == NULL) {
-                m_logger->error("Animation domain is NULL");
-                m_status = SCRIPT_ERROR;
-                return range.getHigh();
-            }
-            if (m_status == SCRIPT_COMPLETE||m_status == SCRIPT_ERROR){
-                return range.getHigh();
-            } else if (m_status == SCRIPT_PAUSED && millis()<m_pauseUntil) {
-                return range.getHigh();
-            } else if (m_status == SCRIPT_CREATED||m_status == SCRIPT_PAUSED) {
-                m_endDomainValue = domain->getMax();
-                m_repeatCount = -1;
-                if (m_repeatValue == NULL || m_repeatValue->isBool(cmd) && !m_repeatValue->getBoolValue(cmd,true)) {
-                    m_repeatCount = 1;
-                } else if (m_repeatValue != NULL && m_repeatValue->isNumber(cmd)) {
-                    m_repeatCount = m_repeatValue->getIntValue(cmd,-1);
-                }
-                m_status = SCRIPT_RUNNING;
-            } 
-            setEaseParameters(cmd);
-            Animator animator(*domain,m_selectedEase);
-            range.setUnfolded(isUnfolded(cmd));
-            double value = animator.get(range);
-            if (domain->getValue() > m_endDomainValue) {
-                m_logger->always("paused");
-                if (m_repeatCount>0) {
-                    m_repeatCount--;
-                }
-                if (m_repeatCount == 0) {
-                    m_logger->always("complete");
-                    m_status = SCRIPT_COMPLETE;
-                } else {
-                    int pauseMsecs = m_repeatDelayValue ? m_repeatDelayValue->getMsecValue(cmd,0) : 0;
-                    if (pauseMsecs > 0) {
-                        m_status= SCRIPT_PAUSED;
-                        m_pauseUntil = millis()+pauseMsecs;
-                    }
-                }
-            }
-            return value;
-*/            
+           
         }
 
         virtual AnimationDomain* getDomain(IScriptCommand*cmd,AnimationRange&range) =0;

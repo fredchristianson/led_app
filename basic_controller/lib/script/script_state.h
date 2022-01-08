@@ -41,7 +41,7 @@ namespace DevRelief
 
         void destroy() override { delete this;}
       
-        void beginStep()
+        void beginStep() override
         {
             long now = millis();
             m_lastStepTime = now;
@@ -66,7 +66,7 @@ namespace DevRelief
         IScriptCommand* getContainer() { return m_currentContainer;}
         IHSLStrip* getStrip() { return m_strip;}
 
-        void endStep()
+        void endStep() override
         {
 
         }
@@ -108,6 +108,7 @@ namespace DevRelief
             m_logger->never("getvalue %s",name);
 
             IScriptValue* val =  m_values == NULL ? NULL : m_values->getValue(name);
+            m_logger->never("\tgot %x",val);
             return val;
         }
 
@@ -177,7 +178,7 @@ namespace DevRelief
                 m_previousCommand = NULL;
                 m_currentCommand = NULL;
                 m_currentContainer = parent->getContainer();
-                m_logger->debug("Created ChildState 0x%x 0x%x",m_strip,m_currentContainer);
+                m_logger->never("Created ChildState 0x%x 0x%x",m_strip,m_currentContainer);
             }
 
         protected:

@@ -59,6 +59,9 @@ namespace DevRelief
         virtual bool isNumber(IScriptCommand* cmd)=0;
         virtual bool isBool(IScriptCommand* cmd)=0;
 
+        // evaluate this IScriptValue with the given command and return a new
+        // IScriptValue.  mainly useful to get a random number one time
+        virtual IScriptValue* eval(IScriptCommand*cmd, double defaultValue)=0; 
 
 
         virtual bool isRecursing() = 0; // mainly for variable values
@@ -96,6 +99,8 @@ namespace DevRelief
         public:
         virtual void destroy() =0; // cannot delete pure virtual interfaces. they must all implement destroy    
 
+        virtual void beginStep()=0;
+        virtual void endStep()=0;
         virtual int getStepStartTime()=0;
         virtual int getStepNumber()=0;
         virtual void setValue(const char * valueName, IScriptValue* val)=0;
@@ -137,6 +142,7 @@ namespace DevRelief
         virtual void destroy() =0; // cannot delete pure virtual interfaces. they must all implement destroy    
         virtual bool isUnfolded(IScriptCommand *cmd)=0;
         virtual double get(IScriptCommand*cmd, AnimationRange&range)=0;
+        virtual IValueAnimator* clone(IScriptCommand*cmd)=0;
     };
 
   

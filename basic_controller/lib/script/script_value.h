@@ -33,6 +33,9 @@ namespace DevRelief
             } 
 
             bool equals(IScriptCommand*cmd,const char * match) override { return false;}
+
+            IScriptValue* eval(IScriptCommand * cmd, double defaultValue=0) override;
+            
         protected:
             Logger* m_logger;
     };
@@ -432,12 +435,12 @@ namespace DevRelief
     class ScriptRangeValue : public ScriptValue
     {
     public:
-        ScriptRangeValue(IScriptValue *start, IScriptValue *end)
+        ScriptRangeValue(IScriptValue *start, IScriptValue *end,IValueAnimator * animate )
         {
             memLogger->debug("ScriptRangeValue()");
             m_start = start;
             m_end = end;
-            m_animate = NULL;
+            m_animate = animate;
 
         }
 
@@ -501,14 +504,25 @@ namespace DevRelief
 
         virtual DRString toString()
         {
+            m_logger->never("format range DRString");
             DRString result("range:");
             result.append(m_start ? m_start->toString() : "NULL")
+                .append("--")
                 .append(m_end ? m_end->toString() : "NULL");
+            return result;
         }
 
         void setAnimator(IValueAnimator* animator) {
             m_animate = animator;
         }
+
+        IScriptValue* eval(IScriptCommand * cmd, double defaultValue=0) override{
+            auto start = m_start ? m_start->eval(cmd,defaultValue) : NULL;
+            auto end = m_end ? m_end->eval(cmd,defaultValue) : NULL;
+            auto animator = m_animate ? m_animate->clone(cmd) : NULL;
+            return new ScriptRangeValue(start,end,animator);
+        }
+
 
     protected:
         IScriptValue *m_start;
@@ -692,5 +706,9 @@ namespace DevRelief
             PtrList<NameValue*> m_values;
             Logger* m_logger;
    };
+
+   IScriptValue* ScriptValue::eval(IScriptCommand * cmd, double defaultValue=0) {
+        return new ScriptNumberValue(getFloatValue(cmd,defaultValue));
+   }
 }
 #endif

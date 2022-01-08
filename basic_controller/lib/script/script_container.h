@@ -42,17 +42,17 @@ namespace DevRelief
             }
  
             ScriptPosition* getPosition() override { 
-                m_logger->always("container getPosition 0x%x",this);
+                m_logger->never("container getPosition 0x%x",this);
 
                 if (m_position) {
-                    m_logger->always("\tposition %x",m_position);
+                    m_logger->never("\tposition %x",m_position);
                     return m_position;
                 } else {
                     if (m_parentContainer) {
-                        m_logger->always("\tget parent position %x",m_parentContainer);
+                        m_logger->never("\tget parent position %x",m_parentContainer);
                         return m_parentContainer->getPosition();
                     }
-                    m_logger->always("\tno position");
+                    m_logger->never("\tno position");
 
                     return NULL;
                 }
@@ -158,7 +158,8 @@ namespace DevRelief
                 m_logger = &ScriptCommandLogger;;
                 m_state = parent->getState()->createChild();
                 values.each([&](NameValue* nv){
-                    IScriptValue*val = new ScriptNumberValue(parent,nv->getValue(),0);
+                    //IScriptValue*val = new ScriptNumberValue(parent,nv->getValue(),0);
+                    IScriptValue*val = nv->getValue()->eval(parent,0);
                     m_logger->debug("add ChildState %s=%s",nv->getName(),val->toString().get());
                     m_state->setValue(nv->getName(),val);
                 });
@@ -168,12 +169,14 @@ namespace DevRelief
                 delete m_state;
             }
 
+
             ScriptStatus run(PtrList<IScriptCommand*>& commands){
                 m_logger->debug("run instance");
                 ScriptStatus status = SCRIPT_RUNNING;
+                m_state->beginStep();
                 m_state->setPreviousCommand(m_parent);
                 commands.each([&](IScriptCommand*cmd) {
-                    m_logger->always("\tcommand 0x%04X - %s - %d",cmd,cmd->getType(),(int)status);
+                    m_logger->never("\tcommand 0x%04X - %s - %d",cmd,cmd->getType(),(int)status);
                     if (status == SCRIPT_RUNNING) {
                         status = cmd->execute(m_state);
                         m_state->setPreviousCommand(cmd);
@@ -183,6 +186,7 @@ namespace DevRelief
                     }
                 });
                 m_state->setPreviousCommand(NULL);
+                m_state->endStep();
                 m_logger->debug("\tinstance done");
                 return status;
             }
@@ -204,7 +208,11 @@ namespace DevRelief
             }
 
             void addValue(const char * name, IScriptValue* value) override {
-                m_logger->always("\tadd value %s=%s",name,value->toString().get());
+                m_logger->never("get value DRString");
+                DRString drval = value->toString();
+                m_logger->never("\tgot value DRString");
+                m_logger->never("\t%s",drval.get());
+                m_logger->never("\tadd value %s=%s",name,value->toString().get());
                 m_values.addValue(name,value);
             }
 

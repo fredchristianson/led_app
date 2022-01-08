@@ -367,7 +367,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
             }
             m_hue[index] = clamp(0,359,performOperation(op,m_hue[index],hue));
             if (index == 0) {
-                m_logger->periodic(ERROR_LEVEL,5000,"setHue %d %d %d",index,hue,op);
+                //m_logger->periodic(ERROR_LEVEL,5000,"setHue %d %d %d",index,hue,op);
             }
         }
  

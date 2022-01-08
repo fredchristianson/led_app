@@ -401,11 +401,16 @@ namespace DevRelief
         }
 
         AnimatorState* getState(IScriptCommand* cmd) {
+            m_logger->never("get animatorState %x",this);
+            m_logger->never("\tstate %x",cmd->getState());
             AnimatorState* as = (AnimatorState*)cmd->getState()->getValue(this,"animator-state");
             if (as == NULL) {
+                m_logger->never("\tcreate animatorState %x",this);
                 as = new AnimatorState();
+                m_logger->never("\tcreated animatorState %x",as);
                 cmd->getState()->setValue(this,"animator-state",as);
             }
+            m_logger->never("\treturn animatorState %x",as);
             return as;
         }
 
@@ -414,21 +419,30 @@ namespace DevRelief
 
 
             AnimatorState* as = getState(cmd);
+            m_logger->debug("\tcheck paused");
             if (isPaused(as,cmd,range)) {
+                m_logger->debug("\treturn pause value");
                 return getPauseValue(as,cmd,range);
             }
+            m_logger->debug("\tget domain");
             AnimationDomain* domain = getDomain(cmd,range);
+            m_logger->debug("\tset ease");
             setEaseParameters(cmd);
             if (domain == NULL) {
                 m_logger->error("Animation domain is NULL");
                 as->m_status = SCRIPT_ERROR;
                 return range.getHigh();
             }
+            m_logger->debug("\tcreate animator");
 
             Animator animator(*domain,m_selectedEase);
+            m_logger->debug("\tset unfold");
             range.setUnfolded(isUnfolded(cmd));
+            m_logger->debug("\tget value");
             double value = animator.get(range,cmd);
-           m_lastValue = value;
+            m_lastValue = value;
+            m_logger->debug("\tvalue=%f",value);
+
             return value;
           
         }
@@ -489,6 +503,14 @@ namespace DevRelief
                 m_delayUntil = 0;
             }
 
+            TimeValueAnimator(TimeValueAnimator* other,IScriptCommand*cmd){
+                m_repeatValue = other->m_repeatValue ? other->m_repeatValue->eval(cmd) : NULL;
+                m_delayValue = other->m_delayValue ? other->m_delayValue->eval(cmd) : NULL;
+                m_delayResponseValue = other->m_delayResponseValue ? other->m_delayResponseValue->eval(cmd) : NULL;
+                m_iterationCount = 0;
+                m_delayUntil = 0;
+            }
+
             virtual  ~TimeValueAnimator(){
                 delete m_repeatValue;
                 delete m_delayValue;
@@ -510,21 +532,28 @@ namespace DevRelief
 
         protected: 
             bool isPaused(AnimatorState* animatorState,IScriptCommand* cmd, AnimationRange&range) override  { 
+                m_logger->debug("check repeat count");
                 if (m_timeDomain.getRepeatCount()==0) {
+                    m_logger->debug("\tno repeat");
                     return false;
                 };
+                m_logger->debug("\tgot repeat",m_timeDomain.getRepeatCount());
                 if (m_delayUntil == 0) {
+                    m_logger->debug("\tincrement iteration %d",m_iterationCount);
                     
                     m_iterationCount += 1;
                     if (m_repeatValue) {
+                        m_logger->debug("\tcheck max repeat");
+
                         int maxRepeat = m_repeatValue->getIntValue(cmd,1);
                         if (m_iterationCount>= maxRepeat) {
+                            m_logger->debug("\treached max");
                             m_isComplete = true;
                             return true;
                         }
                     }
 
-                    int delayMsecs = m_delayValue->getIntValue(cmd,1000);
+                    int delayMsecs = m_delayValue == NULL ? 1 : m_delayValue->getIntValue(cmd,1);
                     m_delayUntil = millis() + delayMsecs;
                     return true;
                 } else if (m_delayValue != NULL) {
@@ -535,6 +564,10 @@ namespace DevRelief
                     } else {
                         return true;
                     }
+                } else {
+                    m_delayUntil = 0;
+                    m_timeDomain.setStart();
+                    return false;
                 }
                 return false;
             }
@@ -543,8 +576,10 @@ namespace DevRelief
                 if (m_delayResponseValue != NULL) {
                     return m_delayResponseValue->getFloatValue(cmd,m_lastValue);
                 }
-                return m_lastValue;
+                return range.getHigh();
             }
+
+
 
             int m_iterationCount;
             int m_delayUntil;
@@ -558,6 +593,9 @@ namespace DevRelief
     class SpeedValueAnimator : public TimeValueAnimator {
         public:
             SpeedValueAnimator(IScriptValue* speed) { m_speedValue = speed;}
+            SpeedValueAnimator(SpeedValueAnimator* other,IScriptCommand*cmd) : TimeValueAnimator(other,cmd) {
+                 m_speedValue = other->m_speedValue->eval(cmd,0);
+            }
 
             virtual ~SpeedValueAnimator(){
 
@@ -572,6 +610,12 @@ namespace DevRelief
             }
 
             void setSpeed(IScriptValue* speed) { m_speedValue = speed;}
+            
+            IValueAnimator* clone(IScriptCommand* cmd) {
+                SpeedValueAnimator* other = new SpeedValueAnimator(this,cmd); //m_speedValue->eval(cmd,0));
+                return other;
+            }
+
         private: 
             IScriptValue *m_speedValue;
 
@@ -579,7 +623,9 @@ namespace DevRelief
     class DurationValueAnimator : public TimeValueAnimator {
         public:
             DurationValueAnimator(IScriptValue* duration) { m_durationValue = duration;}
-
+            DurationValueAnimator(DurationValueAnimator* other,IScriptCommand*cmd) : TimeValueAnimator(other,cmd) {
+                 m_durationValue = other->m_durationValue->eval(cmd,0);
+            }
             virtual ~DurationValueAnimator(){
 
             }
@@ -592,6 +638,11 @@ namespace DevRelief
             }
 
             void setDuration(IScriptValue* duration) { m_durationValue = duration;}
+
+            IValueAnimator* clone(IScriptCommand* cmd) {
+                DurationValueAnimator* other = new DurationValueAnimator(this,cmd); //m_speedValue->eval(cmd,0));
+                return other;
+            }
 
         private: 
             IScriptValue *m_durationValue;
@@ -611,6 +662,10 @@ namespace DevRelief
             AnimationDomain* getDomain(IScriptCommand*cmd,  AnimationRange&range) override {
                 PositionDomain* domain = cmd->getAnimationPositionDomain();
                 return domain;
+            }
+
+            IValueAnimator* clone(IScriptCommand* cmd) {
+                return new PositionValueAnimator();
             }
 
         private: 

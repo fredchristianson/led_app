@@ -500,6 +500,7 @@ namespace DevRelief
             DRString result("range:");
             result.append(m_start ? m_start->toString() : "NULL")
                 .append(m_end ? m_end->toString() : "NULL");
+            return result;
         }
 
         void setAnimator(IValueAnimator* animator) {

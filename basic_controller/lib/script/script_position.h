@@ -144,7 +144,7 @@ namespace DevRelief
             m_logger->debug("getStripPosition");
             int rpos = defaultValue;
             if (value) {
-                m_logger->debug("have value %s",value->toString().get());
+                //m_logger->debug("have value %s",value->toString().get());
                 IScriptCommand*prev = state->getPreviousCommand();
                 if (prev&&value->equals(cmd,"after")){
                     ScriptPosition* pos =  prev->getPosition();
@@ -170,7 +170,7 @@ namespace DevRelief
                     rpos  = value->getIntValue(cmd,defaultValue);
                 }
             }  else {
-                m_logger->debug("\tno value");
+                m_logger->never("\tno value");
             }
             return rpos;
         }

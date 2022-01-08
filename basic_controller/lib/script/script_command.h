@@ -105,11 +105,11 @@ namespace DevRelief
         {
             m_logger->debug("ScriptCommandBase.addValue %s 0x%04x",name,value);
             if (m_values == NULL) {
-                m_logger->debug("\tcreate ScriptValueList");
+                m_logger->never("\tcreate ScriptValueList");
                 m_values = new ScriptValueList();
             }
             m_values->addValue(name, value);
-            m_logger->debug("added NameValue");
+            m_logger->never("added NameValue");
         }
 
 
@@ -285,9 +285,9 @@ namespace DevRelief
                 m_operation = REPLACE;
             } else if (Util::equal(op,"add")){
                 m_operation = ADD;
-            }else if (Util::equal(op,"subtract")){
+            }else if (Util::equal(op,"subtract")||Util::equal(op,"sub")){
                 m_operation = SUBTRACT;
-            }else if (Util::equal(op,"average")){
+            }else if (Util::equal(op,"average")||Util::equal(op,"avg")){
                 m_operation = AVERAGE;
             }else if (Util::equal(op,"min")){
                 m_operation = MIN;
