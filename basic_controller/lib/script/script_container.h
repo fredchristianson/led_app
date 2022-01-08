@@ -225,7 +225,7 @@ namespace DevRelief
                 double frac = msecs/1000.0;
                 double probability = (frac * chance)*100;
                 double roll = random(100);
-                m_logger->always("should happen: %f x %f (%f/1000)  %f>%f?",chance, frac,msecs,probability,roll);
+                m_logger->never("should happen: %f x %f (%f/1000)  %f>%f?",chance, frac,msecs,probability,roll);
                 if (probability> roll) {
                     return true;
                 }
@@ -238,29 +238,29 @@ namespace DevRelief
                 int maxCount = m_maxCount ? m_maxCount->getIntValue(this,count) : count;
                 minCount = max(minCount,count);
                 maxCount = max(maxCount,count);
-                m_logger->always("counts %d %d %d %d",count,minCount,maxCount,m_instances.size());
+                m_logger->never("counts %d %d %d %d",count,minCount,maxCount,m_instances.size());
 
                 double startChance = m_startChance?m_startChance->getFloatValue(this,0):0;
                 double endChance = m_endChance?m_endChance->getFloatValue(this,0):0;
 
                 if (shouldHappen(startChance,state) && maxCount>m_instances.size()+1) {
                     TemplateInstance* inst = new TemplateInstance(this,m_values);
-                    m_logger->always("\tshould create");
+                    m_logger->never("\tshould create");
                     m_instances.add(inst);
                 }
 
                 if (shouldHappen(endChance,state) && minCount<m_instances.size()) {
-                    m_logger->always("\tshould remove");
+                    m_logger->never("\tshould remove");
                     m_instances.removeAt(0);
                 }
 
                 m_logger->debug("run template");
                 while(maxCount < m_instances.size()) {
-                    m_logger->always("\t remove extra instance");
+                    m_logger->never("\t remove extra instance");
                     m_instances.removeAt(0);
                 }
                 while(minCount > m_instances.size()) {
-                    m_logger->always("\t create instance for min");
+                    m_logger->never("\t create instance for min");
                     TemplateInstance* inst = new TemplateInstance(this,m_values);
                     m_logger->never("\t created");
                     m_instances.add(inst);

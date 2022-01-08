@@ -159,6 +159,7 @@ namespace DevRelief
         {
             memLogger->debug("ScriptVariableValue()");
             randomSeed(analogRead(0)+millis());
+            m_funcState = -1;
         }
 
         virtual ~ScriptFunction()
@@ -213,6 +214,8 @@ namespace DevRelief
                 result = invokeMax(cmd,defaultValue);
             } else if (Util::equal("randOf",name)) {
                 result = invokeRandomOf(cmd,defaultValue);
+            } else if (Util::equal("seq",name)||Util::equal("sequence",name)) {
+                result = invokeSequence(cmd,defaultValue);
             } else {
                 m_logger->error("unknown function: %s",name);
             }
@@ -285,6 +288,25 @@ namespace DevRelief
             return getArgValue(cmd,idx,defaultValue);
         }
 
+        double invokeSequence(IScriptCommand*cmd,double defaultValue) {
+            
+            int start = getArgValue(cmd,0,0);
+            int end = getArgValue(cmd,1,100);
+            int step = getArgValue(cmd,2,1);
+
+            if (m_funcState < start){ 
+                m_funcState = start;
+            } else {
+                m_funcState += step;
+            }
+            if (m_funcState > end){
+                m_funcState = start;
+            }
+
+            m_logger->always("Sequence %d %d %d ==> %f",start,end,step,m_funcState);
+            return m_funcState;
+        }
+
         double getArgValue(IScriptCommand*cmd, int idx, double defaultValue){
             if (m_args == NULL) {
                 return defaultValue;
@@ -296,6 +318,7 @@ namespace DevRelief
 
         DRString m_name;
         FunctionArgs * m_args;
+        double m_funcState; // different functions can use in their way
     };
 
     class ScriptNumberValue : public ScriptValue
