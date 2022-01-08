@@ -89,7 +89,7 @@ namespace DevRelief
     private:
         Logger *m_logger;
         ScriptRootContainer* m_rootContainer;
-        PtrList<ScriptCommand *> m_commands;
+        PtrList<IScriptCommand *> m_commands;
         DRString m_name;
         int m_frequencyMSecs;
         ScriptState* m_state;

@@ -27,6 +27,7 @@ namespace DevRelief
             m_startTime = millis();
             m_lastStepTime = 0;
             m_stepNumber = 0;
+            m_stepStartTime = 0;
             m_values = new ScriptValueList();
             
             m_currentCommand = NULL;
@@ -37,14 +38,18 @@ namespace DevRelief
         virtual ~ScriptState()
         {
             memLogger->debug("~ScriptState");
+            m_values->destroy();
         }
 
-        void destroy() override { delete this;}
+        void destroy() override { 
+            delete this;
+        }
       
         void beginStep() override
         {
             long now = millis();
-            m_lastStepTime = now;
+            //m_lastStepTime = now;
+            m_stepStartTime = now;
             m_stepNumber++;
              m_previousCommand = NULL;
             m_currentCommand = NULL;
@@ -68,10 +73,10 @@ namespace DevRelief
 
         void endStep() override
         {
-
+            m_lastStepTime = m_stepStartTime;
         }
 
-        int getStepStartTime() override { return m_lastStepTime;}
+        int getStepStartTime() override { return m_stepStartTime;}
         long msecsSinceLastStep() { 
             long now = millis();
             return now - m_lastStepTime; 
@@ -155,6 +160,7 @@ namespace DevRelief
 
         Logger *m_logger;
         unsigned long m_startTime;
+        unsigned long m_stepStartTime;
         unsigned long m_lastStepTime;
         Script *m_script;
         IScriptCommand* m_previousCommand;

@@ -27,6 +27,10 @@ namespace DevRelief {
             ConfigLogger.debug("destroy LedPin 0x%04X %d %d %d",this,number,ledCount,reverse);
         }
 
+        void destroy() {
+            delete this;
+        }
+
         int number;
         int ledCount;
         bool reverse;

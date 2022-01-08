@@ -239,6 +239,8 @@ class ScriptDataLoader : public DataLoader {
             templateContainer->setCount(jsonToValue(json,"count"));            
             templateContainer->setMinCount(jsonToValue(json,"min-count"));            
             templateContainer->setMaxCount(jsonToValue(json,"max-count"));
+            templateContainer->setStartChance(jsonToValue(json,"start-chance"));
+            templateContainer->setEndChance(jsonToValue(json,"end-chance"));
             JsonArray* arr = templ->getArray("commands");
             jsonToCommands(arr,templateContainer);
 

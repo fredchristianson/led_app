@@ -129,6 +129,8 @@ namespace DevRelief
             m_value->destroy();
         }
 
+        virtual void destroy() { delete this;}
+
         const char *getName() { return m_name.text(); }
         IScriptValue *getValue() { return m_value; }
 
@@ -144,8 +146,11 @@ namespace DevRelief
 
             void add(IScriptValue* val) { args.add(val);}
             IScriptValue* get(int index) { return args.get(index);}
+            size_t length() { return args.size();}
         PtrList<IScriptValue*> args;
     };
+
+    int randTotal = millis();
 
     class ScriptFunction : public ScriptValue
     {
@@ -159,6 +164,7 @@ namespace DevRelief
         virtual ~ScriptFunction()
         {
             memLogger->debug("~ScriptFunction()");
+            delete m_args;
         }
         int getIntValue(IScriptCommand* cmd,  int defaultValue) override
         {
@@ -205,6 +211,8 @@ namespace DevRelief
                 result = invokeMin(cmd,defaultValue);
             } else if (Util::equal("max",name)) {
                 result = invokeMax(cmd,defaultValue);
+            } else if (Util::equal("randOf",name)) {
+                result = invokeRandomOf(cmd,defaultValue);
             } else {
                 m_logger->error("unknown function: %s",name);
             }
@@ -213,13 +221,19 @@ namespace DevRelief
         }
 
         double invokeRand(IScriptCommand*cmd ,double defaultValue) {
-            double low = getArgValue(cmd,0,0);
-            double high = getArgValue(cmd, 1,low);
+            int low = getArgValue(cmd,0,0);
+            int high = getArgValue(cmd, 1,low);
             if (high == low) {
-                return random(high);
-            } else {
-                return random(low,high+1);
+                low = 0;
             }
+            if (high < low) {
+                int t = low;
+                low = high;
+                high = t;
+            }
+            int val = random(low,high+1);
+            return val;
+            
         }
 
         double invokeAdd(IScriptCommand*cmd,double defaultValue) {
@@ -263,6 +277,12 @@ namespace DevRelief
             double first = getArgValue(cmd,0,defaultValue);
             double second = getArgValue(cmd,1,defaultValue);
             return first > second ? first : second;
+        }
+
+        double invokeRandomOf(IScriptCommand*cmd,double defaultValue) {
+            int count = m_args->length();
+            int idx = random(count);
+            return getArgValue(cmd,idx,defaultValue);
         }
 
         double getArgValue(IScriptCommand*cmd, int idx, double defaultValue){
@@ -447,9 +467,9 @@ namespace DevRelief
         virtual ~ScriptRangeValue()
         {
             memLogger->debug("~ScriptRangeValue() start");
-            delete m_start;
-            delete m_end;
-            delete m_animate;
+            m_start->destroy();
+            m_end->destroy();
+            m_animate->destroy();
             memLogger->debug("~ScriptRangeValue() end");
         }
 
@@ -537,11 +557,15 @@ namespace DevRelief
         ScriptPatternElement()
         {
             memLogger->debug("ScriptPatternElement()");
+            m_value = NULL;
         }
         virtual ~ScriptPatternElement()
         {
+            delete m_value;
             memLogger->debug("~ScriptPatternElement()");
         }
+
+        virtual void destroy() { delete this;}
 
     private:
         ScriptValue *m_value;

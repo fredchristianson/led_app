@@ -12,6 +12,7 @@
 #include "./test_suite.h";
 #include "./json_suite.h";
 #include "./string_suite.h";
+#include "./animation_suite.h";
 
 namespace DevRelief {
 
@@ -42,12 +43,16 @@ namespace DevRelief {
 
         bool run() {
             m_logger = new Logger("Tests",TEST_LOGGER_LEVEL);
+            delay(1000); // wait for serial logger to settle
             m_logger->always("force logging to allocate static buffers in order to detect real memory leaks: %f %d %s %d",.123,4567,"abc",true);
             int startHeap = ESP.getFreeHeap();
             m_logger->showMemory();
             bool success = true;
             success = JsonTestSuite::Run(m_logger) && success;
             success = StringTestSuite::Run(m_logger) && success;
+            #if RUN_ANIMATION_TESTS==1
+            success = AnimationTestSuite::Run(m_logger) && success;
+            #endif
             //success = runTest("testSharedPtr",&Tests::testSharedPtr) && success;
             //success = runTest("testStringBuffer",&Tests::testStringBuffer) && success;
             //success = runTest("testDRString",&Tests::testDRString) && success;

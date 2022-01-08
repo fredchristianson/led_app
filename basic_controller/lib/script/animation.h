@@ -377,6 +377,9 @@ namespace DevRelief
         virtual ~ValueAnimator()
         {
             delete m_unfoldValue;
+            delete m_ease;
+            delete m_easeIn;
+            delete m_easeOut;
         };
 
         void destroy() override { delete this; }
@@ -615,12 +618,12 @@ namespace DevRelief
 
             }
             virtual ~DurationValueAnimator(){
-
+                delete m_durationValue;
             }
             AnimationDomain* getDomain(IScriptCommand*cmd,AnimationRange&range) override {
                 TimeDomain* domain = &m_timeDomain;
 
-                int duration = m_durationValue->getIntValue(cmd,1000);
+                int duration = m_durationValue ? m_durationValue->getIntValue(cmd,1000) : 1000;
                 domain->setDuration(duration);
                 return domain;
             }

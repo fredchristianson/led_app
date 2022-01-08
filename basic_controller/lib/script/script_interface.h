@@ -116,6 +116,7 @@ namespace DevRelief
         virtual IHSLStrip* setStrip(IHSLStrip*)=0; // return previous value
         virtual IHSLStrip* getStrip()=0;
         virtual IScriptState* createChild()=0;
+        virtual long msecsSinceLastStep()=0;
     };
 
     class IPositionable {

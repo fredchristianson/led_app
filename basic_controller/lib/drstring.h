@@ -17,9 +17,11 @@ class DRStringData {
             m_length = length;
         }
 
-        ~DRStringData() {
+        virtual ~DRStringData() {
             delete m_data;
         }
+
+        virtual void destroy() { delete this;}
 
         const char * get() const {
             ((DRStringData*)this)->ensureLength(1);

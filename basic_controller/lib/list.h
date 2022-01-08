@@ -292,6 +292,7 @@ template<typename T>
 void LinkedList<T>::deleteNode(ListNode<T>* t){
     m_logger->debug("primitive deleteNode");
     delete t;
+    
 }
 
 template<typename T>
@@ -340,7 +341,8 @@ void PtrList<T>::deleteNode(ListNode<T>*node) {
         LinkedList<T>::m_logger->error("PtrList has NULL node");
     } else {
         LinkedList<T>::m_logger->debug("\tdelete PtrList node data 0x%04X",node->data);
-        delete node->data;
+        //delete node->data;
+        node->data->destroy();
         LinkedList<T>::m_logger->debug("\tdelete PtrList node 0x%04X",node);
         delete node;
     }
