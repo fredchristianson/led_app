@@ -25,6 +25,7 @@ namespace DevRelief
             m_values = NULL;
             m_position = NULL;
             m_logger->debug("Create command %s",type);
+            m_status = SCRIPT_RUNNING;
         }
 
         virtual ~ScriptCommandBase()
@@ -77,6 +78,9 @@ namespace DevRelief
         ScriptStatus execute(IScriptState *state) override
         {
             m_logger->never("ScriptCommandBase.execute %s 0x%x",getType(),this);
+            if (m_status != SCRIPT_RUNNING) {
+                return m_status;
+            }
             m_state = state;
              m_logger->never("get previous");
             m_previousCommand = state->getPreviousCommand();
@@ -90,10 +94,10 @@ namespace DevRelief
             state->setCurrentCommand(this);
             m_logger->never("doCommand");
             beginCommandStep(state);
-            ScriptStatus status = doCommand(state);
+            doCommand(state);
             endCommandStep(state);
             m_logger->never("done %d",state);
-            return status;
+            return m_status;
         }
 
         
@@ -157,8 +161,16 @@ namespace DevRelief
             m_position = pos;
         }
 
-        IScriptState* getState() { return m_state;}
+        void onAnimationComplete(IValueAnimator*animator) override {
+            m_status = SCRIPT_COMPLETE;
+        }
 
+        IScriptState* getState() { return m_state;}
+        ScriptStatus getStatus() override { return m_status;}
+
+        void setStatus(ScriptStatus status)  override{
+            m_status = status;
+        }
 
     protected:
         virtual ScriptStatus doCommand(IScriptState *state) = 0;
@@ -171,6 +183,7 @@ namespace DevRelief
         ScriptValueList *m_values;
         DRString m_type;
         IScriptState* m_state;
+        ScriptStatus m_status;
     };
 
   

@@ -89,9 +89,10 @@ void LinkedList<T>::each(auto&& lambda) const {
   ListNode<T>* node = m_root;
   while(node != NULL) {
       m_logger->debug("\thandle item 0x%04X  --> 0x%04X",node,node->next);
+      ListNode<T>*next = node->next;
       lambda(node->data);
       m_logger->debug("\tdone");
-      node = node->next;
+      node = next;
   }  
 }
 

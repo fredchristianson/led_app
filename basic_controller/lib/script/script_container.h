@@ -163,6 +163,7 @@ namespace DevRelief
                     m_logger->debug("add ChildState %s=%s",nv->getName(),val->toString().get());
                     m_state->setValue(nv->getName(),val);
                 });
+                m_status = SCRIPT_RUNNING;
             }
 
             ~TemplateInstance() {
@@ -171,30 +172,31 @@ namespace DevRelief
 
 
             ScriptStatus run(PtrList<IScriptCommand*>& commands){
+                if (m_status != SCRIPT_RUNNING) {
+                    return m_status;
+                }
                 m_logger->debug("run instance");
-                ScriptStatus status = SCRIPT_RUNNING;
                 m_state->beginStep();
                 m_state->setPreviousCommand(m_parent);
                 commands.each([&](IScriptCommand*cmd) {
-                    m_logger->never("\tcommand 0x%04X - %s - %d",cmd,cmd->getType(),(int)status);
-                    if (status == SCRIPT_RUNNING) {
-                        status = cmd->execute(m_state);
-                        m_state->setPreviousCommand(cmd);
-                    } else {
-                        m_logger->debug("\tscript status %d",(int)status);
-
-                    }
+                    m_logger->never("\tcommand 0x%04X - %s - %d",cmd,cmd->getType(),(int)m_status);
+                    cmd->setStatus(SCRIPT_RUNNING);
+                    m_status = cmd->execute(m_state);
+                    m_state->setPreviousCommand(cmd);
                 });
                 m_state->setPreviousCommand(NULL);
                 m_state->endStep();
                 m_logger->debug("\tinstance done");
-                return status;
+                return m_status;
             }
+
+            ScriptStatus getStatus() { return m_status;}
 
         protected:
             Logger* m_logger;
             IScriptCommand* m_parent;
             IScriptState* m_state;
+            ScriptStatus m_status;
     };
 
     class ScriptTemplate : public ScriptContainer {
@@ -218,31 +220,35 @@ namespace DevRelief
 
            virtual ScriptStatus runCommands(IScriptState* state) {
                 int count = m_count ? m_count->getIntValue(this,0) : 0;
-                int minCount = m_minCount ? m_minCount->getIntValue(this,0) : 0;
-                int maxCount = m_maxCount ? m_maxCount->getIntValue(this,0) : 0;
+                int minCount = m_minCount ? m_minCount->getIntValue(this,count) : count;
+                int maxCount = m_maxCount ? m_maxCount->getIntValue(this,count) : count;
                 minCount = max(minCount,count);
                 maxCount = max(maxCount,count);
+                m_logger->never("counts %d %d %d %d",count,minCount,maxCount,m_instances.size());
                 if (maxCount == 0) {
-                    return SCRIPT_RUNNING;
+                    return SCRIPT_COMPLETE;
                 }
                 m_logger->debug("run template");
                 while(maxCount < m_instances.size()) {
-                    m_logger->debug("\t remove instance");
+                    m_logger->always("\t remove instance");
                     m_instances.removeAt(0);
                 }
                 while(minCount > m_instances.size()) {
-                    m_logger->debug("\t create instance with %d values",m_values.count());
+                    m_logger->always("\t create instance with %d values",m_values.count());
                     TemplateInstance* inst = new TemplateInstance(this,m_values);
-                    m_logger->debug("\t created");
+                    m_logger->always("\t created");
                     m_instances.add(inst);
-                    m_logger->debug("\t added");
+                    m_logger->always("\t added");
                 };
 
                 ScriptStatus status = SCRIPT_RUNNING;
                 m_instances.each([&](TemplateInstance*instance){
                     m_logger->debug("\t run instance 0x%x",instance);
-                    instance->run(m_commands);
-                    m_logger->debug("\t ran");
+                    if (instance->run(m_commands) != SCRIPT_RUNNING) {
+                        m_logger->always("remove instance %x",instance);
+                        m_instances.removeFirst(instance);
+                        m_logger->always("\tremoved");
+                    }
                 });
 
                 return status;

@@ -73,6 +73,7 @@ namespace DevRelief
         {
             m_logger = &AnimationLogger;
             m_changed = true;
+            m_logger->never("create AnimationDomain");
         }
 
         // update based on current state if implementation needs to
@@ -84,7 +85,11 @@ namespace DevRelief
          */
         double getPosition()
         {
-            if (!m_changed) { return m_lastValue;}
+            m_logger->never("AnimationDomain.getPosition");
+            if (!m_changed) { 
+                m_logger->never("\tno change");
+                return m_lastValue;
+            }
             m_logger->debug("getPosition()");
             double value = getValue();
             double low = getMin();
@@ -92,17 +97,17 @@ namespace DevRelief
 
             if (value <= low)
             {
-                m_logger->debug("%f<%f",value,low);
+                m_logger->never("\t low %f<%f",value,low);
                 return 0;
             }
             if (value >= high)
             {
-                m_logger->debug("%f>%f",value,high);
+                m_logger->never("\thigh %f>%f",value,high);
                 return 1;
             }
             double diff = high - low;
             double pct = diff == 0 ? 1 : (value - low) / (diff);
-            m_logger->debug("\thigh=%f low=% diff=% value=% pos=%f",high,low,diff,value,pct);
+            m_logger->never("\thigh=%f low=%f diff=%f value=%f pos=%f",high,low,diff,value,pct);
             m_changed = false;
             m_lastValue = pct;
             return pct;
@@ -134,10 +139,13 @@ namespace DevRelief
             m_max = m_startMillis;
             m_val  = m_startMillis;
             m_repeat = 0;
+            m_lastStep = -1;
         }
 
         void update(IScriptState* state) override {
             if (m_lastStep == state->getStepNumber()) {
+                m_logger->never("time domain no change %d",m_lastStep);
+
                 return;
             }
             m_changed = true;
@@ -148,12 +156,14 @@ namespace DevRelief
                 m_min = m_startMillis;
                 m_max = m_startMillis;
                 m_val  = m_startMillis;
+                m_logger->never("time domain duration==0");
+
             } else {
-                m_val = m_val;
                 int diff = m_val - m_startMillis;
                 m_repeat = diff / m_durationMmsecs;
                 m_min = m_startMillis + m_repeat*m_durationMmsecs;
                 m_max = m_min + m_durationMmsecs;
+                m_logger->never("time domain %d %d %d %d %d",m_val,m_startMillis,m_min,m_max,m_lastStep);
             }
         }
 
@@ -480,6 +490,7 @@ namespace DevRelief
                 m_delayResponseValue = other->m_delayResponseValue ? other->m_delayResponseValue->eval(cmd,0) : NULL;
                 m_iterationCount = 0;
                 m_delayUntil = 0;
+                m_timeDomain.setStart();
             }
 
             virtual  ~TimeValueAnimator(){
@@ -521,6 +532,7 @@ namespace DevRelief
                         if (m_iterationCount>= maxRepeat) {
                             m_logger->debug("\treached max");
                             m_isComplete = true;
+                            cmd->onAnimationComplete(this);
                             return true;
                         }
                     }
@@ -594,9 +606,13 @@ namespace DevRelief
     };
     class DurationValueAnimator : public TimeValueAnimator {
         public:
-            DurationValueAnimator(IScriptValue* duration) { m_durationValue = duration;}
+            DurationValueAnimator(IScriptValue* duration) { 
+                m_durationValue = duration;
+            }
+
             DurationValueAnimator(DurationValueAnimator* other,IScriptCommand*cmd) : TimeValueAnimator(other,cmd) {
                  m_durationValue = other->m_durationValue->eval(cmd,0);
+
             }
             virtual ~DurationValueAnimator(){
 
@@ -612,7 +628,9 @@ namespace DevRelief
             void setDuration(IScriptValue* duration) { m_durationValue = duration;}
 
             IValueAnimator* clone(IScriptCommand* cmd) {
+                m_logger->never("clone duration %f",m_durationValue->getFloatValue(cmd,-2));
                 DurationValueAnimator* other = new DurationValueAnimator(this,cmd); //m_speedValue->eval(cmd,0));
+                m_logger->never("\tcloned duration %f",other->m_durationValue->getFloatValue(cmd,-2));
                 return other;
             }
 
