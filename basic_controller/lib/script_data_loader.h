@@ -432,7 +432,9 @@ class ScriptDataLoader : public DataLoader {
 
         IScriptValue* jsonToValue(JsonElement* jsonValue) {
             IScriptValue* scriptValue = NULL;
-            if (jsonValue->isString()) {
+            if (jsonValue->isNull()) {
+                scriptValue = new ScriptNullValue();
+            } else if (jsonValue->isString()) {
                 const char * val = jsonValue->getString();
                 if (Util::startsWith(val,"var(")){
                     scriptValue = parseVarName(val);
@@ -471,6 +473,66 @@ class ScriptDataLoader : public DataLoader {
             return new ScriptFunction(name,args);
         }
 
+        IScriptValue* jsonToPattern(JsonObject*obj) {
+            m_logger->always("jsonToPattern");
+            if (obj == NULL) { 
+                m_logger->always("no object");
+                return NULL;
+            }
+            JsonArray* elements = obj->getArray("pattern");
+            if (elements == NULL) {
+                m_logger->always("no pattern array");
+                return NULL;
+            }
+            auto patternValue = new PatternValue();
+
+            elements->each([&](JsonElement*item){
+                m_logger->always("check item");
+
+                ScriptPatternElement* pattern = NULL;
+                if (item->isObject()) {
+                    m_logger->always("\tparse object");
+                    pattern = patternElementFromObject(item->asObject());
+                } else if (item->isString()){
+                    m_logger->always("\tparse string");
+                    pattern = patternElementFromString(item);
+                } else {
+                    m_logger->always("\tuse number");
+                    if (item->isNull()) {
+                        pattern = new ScriptPatternElement(1,new ScriptNullValue());
+                    } else {
+                        pattern = new ScriptPatternElement(1,new ScriptNumberValue(item->getFloat()));
+                    }
+                }
+                patternValue->addElement(pattern);
+            });
+            return patternValue;
+        };
+
+        ScriptPatternElement* patternElementFromObject(JsonObject* obj) {
+            IScriptValue* value = jsonToValue(obj,"value");
+            if (value == NULL) {
+                return NULL;
+            }
+            int repeat = jsonInt(obj,"count",1);
+            return new ScriptPatternElement(repeat,value);
+        }
+
+        ScriptPatternElement* patternElementFromString(JsonElement* element) {
+            const char * str = element->getString();
+            if (str == NULL) { return NULL;}
+            const char *  x = strchr(str,'x');
+            int val = 0;
+            int count = 1;
+            if (x == NULL) {
+                val = atof(str);
+            } else {
+                count = atoi(str);
+                val = atof(x+1);
+            }
+            return new ScriptPatternElement(count,new ScriptNumberValue(val));
+        }
+
         IScriptValue* jsonObjectToValue(JsonObject* obj) {
             JsonObject*valueObject = obj;
             JsonElement * funcName = obj->getPropertyValue("function");
@@ -479,14 +541,19 @@ class ScriptDataLoader : public DataLoader {
                 FunctionArgs* args = jsonObjectToFunctionArgs(obj);
                 scriptValue = new ScriptFunction(funcName->getString(),args);
             } else {
-                IScriptValue * start = jsonToValue(valueObject,"start");
-                if (start == NULL) {
-                    start = jsonToValue(valueObject,"value");
+                IScriptValue* pattern = jsonToPattern(valueObject);
+                if (pattern == NULL) {
+                    IScriptValue * start = jsonToValue(valueObject,"start");
+                    if (start == NULL) {
+                        start = jsonToValue(valueObject,"value");
+                    }
+                    IScriptValue * end = jsonToValue(valueObject,"end");
+                    auto rangeValue = new ScriptRangeValue(start,end);
+                    rangeValue->setAnimator(jsonToValueAnimator(valueObject));
+                    scriptValue = rangeValue;
+                } else {
+                    scriptValue = pattern;
                 }
-                IScriptValue * end = jsonToValue(valueObject,"end");
-                auto rangeValue = new ScriptRangeValue(start,end);
-                rangeValue->setAnimator(jsonToValueAnimator(valueObject));
-                scriptValue = rangeValue;
             }
             return scriptValue;
         }

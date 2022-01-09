@@ -32,6 +32,10 @@ namespace DevRelief
               return false;  
             } 
 
+            bool isNull(IScriptCommand* cmd)  override{
+              return false;  
+            } 
+
             bool equals(IScriptCommand*cmd,const char * match) override { return false;}
 
             IScriptValue* eval(IScriptCommand * cmd, double defaultValue=0) override;
@@ -414,6 +418,56 @@ namespace DevRelief
         bool m_value;
     };
 
+    
+    class ScriptNullValue : public ScriptValue
+    {
+    public:
+        ScriptNullValue() 
+        {
+            memLogger->debug("ScriptNullValue()");
+            m_logger->debug("ScriptNullValue()");
+        }
+
+        virtual ~ScriptNullValue()
+        {
+            m_logger->debug("~ScriptNullValue()");
+            memLogger->debug("~ScriptNullValue()");
+        }
+
+        int getIntValue(IScriptCommand* cmd,  int defaultValue) override
+        {
+            return defaultValue;
+        }
+
+        double getFloatValue(IScriptCommand* cmd,  double defaultValue) override
+        {
+            return defaultValue;
+        }
+
+        bool getBoolValue(IScriptCommand* cmd,  bool defaultValue) override {
+            return defaultValue;
+        }
+
+        int getMsecValue(IScriptCommand* cmd,  int defaultValue) override { 
+            return defaultValue;
+        }
+
+        bool isBool(IScriptCommand* cmd) override { return false;}
+        bool isNull(IScriptCommand* cmd)  override{
+            return true;  
+        } 
+
+        DRString toString() override { 
+            m_logger->debug("ScriptNulllValue.toString()");
+            DRString drv("ScriptNullValue");
+            m_logger->debug("\tcreated DRString");
+            return drv;
+        }
+
+    protected:
+
+    };
+
 
     class ScriptStringValue : public ScriptValue
     {
@@ -574,45 +628,126 @@ namespace DevRelief
         IValueAnimator* m_animate;
     };
 
+
+
     class ScriptPatternElement
     {
     public:
-        ScriptPatternElement()
+        ScriptPatternElement(int repeatCount, IScriptValue* value)
         {
             memLogger->debug("ScriptPatternElement()");
-            m_value = NULL;
+            m_value = value;
+            m_repeatCount = repeatCount;
+            ScriptLogger.always("PatternElement %d %s",repeatCount,value->toString().text());
         }
         virtual ~ScriptPatternElement()
         {
-            delete m_value;
+            if (m_value) {m_value->destroy();}
             memLogger->debug("~ScriptPatternElement()");
         }
 
+        int getRepeatCount() { return m_repeatCount;}
+
+        IScriptValue* getValue() { return m_value;}
         virtual void destroy() { delete this;}
 
     private:
-        ScriptValue *m_value;
+        IScriptValue *m_value;
         int m_repeatCount;
     };
 
-    class ScriptPatternValue : public ScriptValue
+   class PatternValue : public ScriptValue
     {
     public:
-        ScriptPatternValue()
+        PatternValue(IValueAnimator* animate=NULL)
         {
-            memLogger->debug("ScriptPatternValue()");
-        }
-        virtual ~ScriptPatternValue()
-        {
-            memLogger->debug("~ScriptPatternValue()");
-        }
-        virtual DRString toString()
-        {
-            return "ScriptPatternValue not implemented";
+            memLogger->debug("PatternValue()");
+            m_animate = animate;
+            m_count = 0;
+
         }
 
-    private:
-        PtrList<ScriptPatternElement *> m_elements;
+        virtual ~PatternValue()
+        {
+            memLogger->debug("~PatternValue() start");
+            if (m_animate) {m_animate->destroy();}
+            memLogger->debug("~PatternValue() end");
+        }
+
+        void addElement(ScriptPatternElement* element) {
+            if (element == NULL) {
+                m_logger->error("ScriptPatternElement cannot be NULL");
+                return;
+            }
+            m_elements.add(element);
+            m_count += element->getRepeatCount();
+        }
+
+        int getMsecValue(IScriptCommand* cmd,  int defaultValue) override { 
+            return getIntValue(cmd,defaultValue);
+        }
+        bool isNumber(IScriptCommand* cmd) override { return false;}
+
+        virtual int getIntValue(IScriptCommand* cmd,  int defaultValue)
+        {
+            return (int)getFloatValue(cmd,(double)defaultValue);
+        }
+
+        virtual double getFloatValue(IScriptCommand* cmd,  double defaultValue)
+        {
+            if (m_count == 0) { return defaultValue; }
+
+            IScriptState* state = cmd->getState();
+            auto domain = cmd->getAnimationPositionDomain();
+            int pos = domain->getValue();
+            int index = pos % m_count;
+            int elementIndex = 0;
+            ScriptPatternElement* element = m_elements.get(0);
+            while(index >= element->getRepeatCount()) {
+                elementIndex ++;
+                index -= element->getRepeatCount();
+                element = m_elements.get(elementIndex);
+            }
+            IScriptValue* val = element?element->getValue() : NULL;
+            if (val == NULL || val->isNull(cmd)) {
+                return defaultValue;
+            }
+            return val->getFloatValue(cmd,defaultValue);
+  
+        }
+        virtual bool getBoolValue(IScriptCommand* cmd,  bool defaultValue)
+        {
+            // bool probably doesn't make sense for a pattern.  return true if there are elements
+           return m_count > 0;
+        }
+
+        virtual DRString toString()
+        {
+            DRString result("pattern:");
+            return result;
+        }
+
+        void setAnimator(IValueAnimator* animator) {
+            m_animate = animator;
+        }
+
+        IScriptValue* eval(IScriptCommand * cmd, double defaultValue=0) override{
+            auto animator = m_animate ? m_animate->clone(cmd) : NULL;
+            auto clone = new PatternValue(animator);
+            m_elements.each([&](ScriptPatternElement*element) {
+                IScriptValue* vclone = element->getValue()->eval(cmd,defaultValue);
+
+                clone->addElement(new ScriptPatternElement(element->getRepeatCount(),vclone));
+            });
+            return clone;
+        }
+
+
+    protected:
+        PtrList<ScriptPatternElement*> m_elements;
+        size_t m_count;
+
+        IValueAnimator* m_animate;
     };
 
     class ScriptVariableValue : public IScriptValue
@@ -695,6 +830,10 @@ namespace DevRelief
         bool isBool(IScriptCommand* cmd) { 
             IScriptValue * val = cmd->getValue(m_name);
             return val ? val->isBool(cmd) : false;
+         }
+         bool isNull(IScriptCommand* cmd) { 
+            IScriptValue * val = cmd->getValue(m_name);
+            return val ? val->isNull(cmd) : false;
          }
 
         IScriptValue* eval(IScriptCommand * cmd, double defaultValue=0) override{

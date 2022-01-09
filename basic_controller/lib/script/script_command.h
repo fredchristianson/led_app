@@ -352,17 +352,23 @@ namespace DevRelief
         void updateLED(int index,  IHSLStrip* strip) override {
             if (m_hue){
                 int h = m_hue->getIntValue(this,  -1);
-                h = mapHue(h);
-                strip->setHue(index, h, m_operation);
+                if (h>=0) {
+                    h = mapHue(h);
+                    strip->setHue(index, h, m_operation);
+                }
             }
             if (m_lightness) {
                 int l = m_lightness ? m_lightness->getIntValue(this, -1) : -1;
                 m_logger->never("HSL op %d",m_operation);
-                strip->setLightness(index, l, m_operation);
+                if (l >= 0) {
+                    strip->setLightness(index, l, m_operation);
+                }
             }
             if (m_saturation){
                 int s = m_saturation ? m_saturation->getIntValue(this, -1) : -1;
-                strip->setSaturation(index, s, m_operation);
+                if (s >= 0) {
+                    strip->setSaturation(index, s, m_operation);
+                }
             }
 
         }

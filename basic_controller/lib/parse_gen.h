@@ -114,7 +114,8 @@ class JsonBase {
         virtual bool isFloat() { return false;}
         virtual bool isVariable() { return false;}
         virtual bool isNumber() { return false;}
-        
+        virtual bool isNull() { return false;}
+
         virtual JsonArray* asArray() { return NULL;}
         virtual JsonObject* asObject() { return NULL;}
         virtual JsonElement* asElement() { return NULL;}
@@ -756,6 +757,8 @@ class JsonNull : public JsonElement {
         JsonNull(JsonRoot& root) : JsonElement(root,JSON_NULL){
 
         }
+        bool isNull() override { return true;}
+
 };
 
 class ParseGen {

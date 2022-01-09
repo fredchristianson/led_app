@@ -59,6 +59,7 @@ namespace DevRelief
         virtual bool isString(IScriptCommand* cmd)=0;
         virtual bool isNumber(IScriptCommand* cmd)=0;
         virtual bool isBool(IScriptCommand* cmd)=0;
+        virtual bool isNull(IScriptCommand* cmd)=0;
 
         // evaluate this IScriptValue with the given command and return a new
         // IScriptValue.  mainly useful to get a random number one time
