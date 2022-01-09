@@ -3,7 +3,7 @@
 
 #define PROD 1
 #define DEV 2
-#define ENV PROD
+#define ENV DEV
 
 #define BUILD_DATE __DATE__
 #define BUILD_TIME __TIME__
@@ -44,7 +44,7 @@
 #else
     #define ENV_DEV
     #define DEBUG
-    #define ENSURE 1
+    #define ENSURE 0
     // RUN_TESTS should be 1 to run tests on start.  otherwise they are not run
     #define RUN_TESTS 1
     #define RUN_STRING_TESTS 0
