@@ -30,8 +30,9 @@ namespace DevRelief
 
         virtual ~ScriptCommandBase()
         {
-            delete m_values;
-            delete m_position;
+            m_logger->always("~ScriptCommandBase");
+            if (m_values){ m_values->destroy();}
+            if (m_position) {m_position->destroy();}
         }
 
         void destroy() override { delete this; }
@@ -332,11 +333,14 @@ namespace DevRelief
         virtual ~HSLCommand()
         {
             memLogger->debug("~HSLCommand() start");
-            delete m_hue;
-            delete m_saturation;
-            delete m_lightness;
+            if (m_hue) m_hue->destroy();
+            if (m_saturation) m_saturation->destroy();
+            if (m_lightness) m_lightness->destroy();
             memLogger->debug("~HSLCommand() start");
         }
+
+        void destroy() override { delete this;}
+
 
         void setHue(IScriptValue *hue) { m_hue = hue; }
         IScriptValue *getHue(IScriptValue *hue) { return m_hue; }
@@ -375,7 +379,11 @@ namespace DevRelief
     class XHSLCommand: public HSLCommand {
         public:
             XHSLCommand() { m_in = NULL; m_out = NULL;}
-            virtual ~XHSLCommand() { delete m_in; delete m_out;}
+            virtual ~XHSLCommand() { 
+                if (m_in) m_in->destroy(); 
+                if (m_out) m_out->destroy();
+            }
+            void destroy() override { delete this;}
 
             void setIn(IScriptValue *in) { m_in = in; }
             void setOut(IScriptValue *out) { m_out = out; }
@@ -403,7 +411,7 @@ namespace DevRelief
     class RGBCommand : public LEDCommand
     {
     public:
-        RGBCommand(IScriptCommand* container,IScriptValue *r = 0, IScriptValue *g = 0, IScriptValue *b = 0) : LEDCommand("RGBCommand")
+        RGBCommand(IScriptValue *r = 0, IScriptValue *g = 0, IScriptValue *b = 0) : LEDCommand("RGBCommand")
         {
             memLogger->debug("RGBCommand()");
             m_red = r;
@@ -414,11 +422,13 @@ namespace DevRelief
         virtual ~RGBCommand()
         {
             memLogger->debug("~RGBCommand() start");
-            delete m_red;
-            delete m_green;
-            delete m_blue;
+             if (m_red) m_red->destroy();
+             if (m_green) m_green->destroy();
+             if (m_blue) m_blue->destroy();
             memLogger->debug("~RGBCommand() done");
         }
+
+        void destroy() override { delete this;}
 
         void setRed(IScriptValue *red) { m_red = red; }
         IScriptValue *getRed(IScriptValue *red) { return m_red; }

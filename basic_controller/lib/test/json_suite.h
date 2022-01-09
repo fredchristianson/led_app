@@ -144,7 +144,7 @@ namespace DevRelief
             test.run();
             return test.isSuccess();
 #else
-            return false;
+            return true;
 #endif
         }
 

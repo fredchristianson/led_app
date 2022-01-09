@@ -376,10 +376,10 @@ namespace DevRelief
 
         virtual ~ValueAnimator()
         {
-            delete m_unfoldValue;
-            delete m_ease;
-            delete m_easeIn;
-            delete m_easeOut;
+            if (m_unfoldValue) {m_unfoldValue->destroy();}
+            if (m_ease) {m_ease->destroy();}
+            if (m_easeIn) {m_easeIn->destroy();}
+            if (m_easeOut) {m_easeOut->destroy();}
         };
 
         void destroy() override { delete this; }
@@ -388,7 +388,7 @@ namespace DevRelief
 
         void setUnfold(IScriptValue *unfold)
         {
-            delete m_unfoldValue;
+            if (m_unfoldValue) {m_unfoldValue->destroy();}
             m_unfoldValue = unfold;
         }
 
@@ -497,21 +497,21 @@ namespace DevRelief
             }
 
             virtual  ~TimeValueAnimator(){
-                delete m_repeatValue;
-                delete m_delayValue;
-                delete m_delayResponseValue;
+                if (m_repeatValue) {m_repeatValue->destroy();}
+                if (m_delayValue) {m_delayValue->destroy();}
+                if (m_delayResponseValue) {m_delayResponseValue->destroy();}
             }
 
             void setRepeatValue(IScriptValue*repeat) { 
-                delete m_repeatValue;
-                m_repeatValue = repeat;
+                if (m_repeatValue) {m_repeatValue->destroy();}
+                    m_repeatValue = repeat;
                 }
             void setRepeatDelayValue(IScriptValue*delay) { 
-                delete m_delayValue;
+                if (m_delayValue) {m_delayValue->destroy();}
                 m_delayValue = delay;
             }
             void setDelayResponseValue(IScriptValue*delayResponse) { 
-                delete m_delayResponseValue;
+                if (m_delayResponseValue) {m_delayResponseValue->destroy();}
                 m_delayResponseValue = delayResponse;
             }
 
@@ -618,7 +618,7 @@ namespace DevRelief
 
             }
             virtual ~DurationValueAnimator(){
-                delete m_durationValue;
+                if (m_durationValue) {m_durationValue->destroy();}
             }
             AnimationDomain* getDomain(IScriptCommand*cmd,AnimationRange&range) override {
                 TimeDomain* domain = &m_timeDomain;

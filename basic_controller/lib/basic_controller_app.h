@@ -152,7 +152,7 @@ namespace DevRelief {
 
             m_httpServer->routeBracesPost( "/api/script/{}",[this](Request* req, Response* resp){
                 m_logger->debug("save script");
-
+                m_executor.endScript();
                 auto body = req->arg("plain").c_str();
                 auto name =req->pathArg(0).c_str();
 

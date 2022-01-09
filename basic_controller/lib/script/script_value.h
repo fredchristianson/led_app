@@ -303,7 +303,7 @@ namespace DevRelief
                 m_funcState = start;
             }
 
-            m_logger->always("Sequence %d %d %d ==> %f",start,end,step,m_funcState);
+            m_logger->never("Sequence %d %d %d ==> %f",start,end,step,m_funcState);
             return m_funcState;
         }
 
@@ -490,9 +490,9 @@ namespace DevRelief
         virtual ~ScriptRangeValue()
         {
             memLogger->debug("~ScriptRangeValue() start");
-            m_start->destroy();
-            m_end->destroy();
-            m_animate->destroy();
+            if (m_start) {m_start->destroy();}
+            if (m_end) {m_end->destroy();}
+            if (m_animate) {m_animate->destroy();}
             memLogger->debug("~ScriptRangeValue() end");
         }
 
@@ -718,11 +718,11 @@ namespace DevRelief
         public:
             ScriptValueList() {
                 m_logger = &ScriptLogger;
-                m_logger->info("create ScriptValueList()");
+                m_logger->debug("create ScriptValueList()");
             }
 
             virtual ~ScriptValueList() {
-                m_logger->info("delete ~ScriptValueList()");
+                m_logger->debug("delete ~ScriptValueList()");
             }
 
             bool hasValue(const char *name) override  {

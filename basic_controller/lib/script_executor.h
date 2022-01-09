@@ -78,8 +78,10 @@ namespace DevRelief {
             }
 
             void endScript() {
-                delete m_script;
-                m_script = NULL;
+                if (m_script) {
+                    m_script->destroy();
+                    m_script = NULL;
+                }
             }
 
             void configChange(Config& config) {

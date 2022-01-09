@@ -13,6 +13,7 @@
 #include "./json_suite.h";
 #include "./string_suite.h";
 #include "./animation_suite.h";
+#include "./script_loader_suite.h"
 
 namespace DevRelief {
 
@@ -52,6 +53,9 @@ namespace DevRelief {
             success = StringTestSuite::Run(m_logger) && success;
             #if RUN_ANIMATION_TESTS==1
             success = AnimationTestSuite::Run(m_logger) && success;
+            #endif
+            #if SCRIPT_LOADER_TESTS==1
+            success = ScriptLoaderTestSuite::Run(m_logger) && success;
             #endif
             //success = runTest("testSharedPtr",&Tests::testSharedPtr) && success;
             //success = runTest("testStringBuffer",&Tests::testStringBuffer) && success;

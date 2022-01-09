@@ -205,10 +205,19 @@ namespace DevRelief
         public:
             ScriptTemplate() : ScriptContainer("ScriptTemplate") {
                 m_logger->never("create ScriptTemplate");
+                m_count=NULL;
+                m_minCount=NULL;
+                m_maxCount=NULL;
+                m_startChance=NULL;
+                m_endChance=NULL;
             }
 
             virtual ~ScriptTemplate(){
-
+                if (m_count) {m_count->destroy();}
+                if (m_minCount) {m_minCount->destroy();}
+                if (m_maxCount) {m_maxCount->destroy();}
+                if (m_startChance) {m_startChance->destroy();}
+                if (m_endChance) {m_endChance->destroy();}
             }
 
             void addValue(const char * name, IScriptValue* value) override {

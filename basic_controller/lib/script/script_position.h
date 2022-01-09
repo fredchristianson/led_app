@@ -40,14 +40,14 @@ namespace DevRelief
         }
 
         ~ScriptPosition() {
-            delete m_startValue;
-            delete m_countValue;
-            delete m_endValue;
-            delete m_skipValue;
-            delete m_wrapValue;
-            delete m_reverseValue;
-            delete m_offsetValue;
-            delete m_physicalStrip;
+            if (m_startValue) {m_startValue->destroy();}
+            if (m_countValue) {m_countValue->destroy();}
+            if (m_endValue) {m_endValue->destroy();}
+            if (m_skipValue) {m_skipValue->destroy();}
+            if (m_wrapValue) {m_wrapValue->destroy();}
+            if (m_reverseValue) {m_reverseValue->destroy();}
+            if (m_offsetValue) {m_offsetValue->destroy();}
+            if (m_physicalStrip) {m_physicalStrip->destroy();}
         }
 
 

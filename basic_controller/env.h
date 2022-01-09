@@ -3,7 +3,7 @@
 
 #define PROD 1
 #define DEV 2
-#define ENV DEV
+#define ENV PROD
 
 #define BUILD_DATE __DATE__
 #define BUILD_TIME __TIME__
@@ -39,6 +39,8 @@
 
 #if ENV==PROD
     #define ENV_PROD
+    #define RUN_TESTS 0
+    #define LOGGING_ON 0
 #else
     #define ENV_DEV
     #define DEBUG
@@ -47,7 +49,8 @@
     #define RUN_TESTS 1
     #define RUN_STRING_TESTS 0
     #define RUN_JSON_TESTS 0
-    #define RUN_ANIMATION_TESTS 1
+    #define RUN_ANIMATION_TESTS 0
+    #define SCRIPT_LOADER_TESTS 1
 #endif
 
 #endif

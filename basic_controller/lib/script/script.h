@@ -36,7 +36,8 @@ namespace DevRelief
         {
             memLogger->debug("~Script()");
             m_logger->debug("~Script()");
-            delete m_state;
+            if (m_state) {m_state->destroy();}
+            if (m_rootContainer) {m_rootContainer->destroy();}
         }
 
         void destroy() override { delete this;}
@@ -89,7 +90,6 @@ namespace DevRelief
     private:
         Logger *m_logger;
         ScriptRootContainer* m_rootContainer;
-        PtrList<IScriptCommand *> m_commands;
         DRString m_name;
         int m_frequencyMSecs;
         ScriptState* m_state;
