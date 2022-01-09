@@ -149,6 +149,7 @@ namespace DevRelief
         virtual bool isUnfolded(IScriptCommand *cmd)=0;
         virtual double get(IScriptCommand*cmd, AnimationRange&range)=0;
         virtual IValueAnimator* clone(IScriptCommand*cmd)=0;
+        virtual AnimationDomain* getDomain(IScriptCommand*cmd, AnimationRange&range)=0;
     };
 
   

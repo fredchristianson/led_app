@@ -474,34 +474,34 @@ class ScriptDataLoader : public DataLoader {
         }
 
         IScriptValue* jsonToPattern(JsonObject*obj) {
-            m_logger->always("jsonToPattern");
+            m_logger->never("jsonToPattern");
             if (obj == NULL) { 
-                m_logger->always("no object");
+                m_logger->never("no object");
                 return NULL;
             }
             JsonArray* elements = obj->getArray("pattern");
             if (elements == NULL) {
-                m_logger->always("no pattern array");
+                m_logger->never("no pattern array");
                 return NULL;
             }
             auto animator = jsonToValueAnimator(obj);
             auto patternValue = new PatternValue(animator);
             auto extend = jsonString(obj,"extend","repeat");
             PatternExtend extendInt = (PatternExtend)Util::mapText2Int("repeat:0,stretch:1,clip:2,none:2",extend,0);
-            m_logger->always("extend %s==>%d",extend,extendInt);
+            m_logger->never("extend %s==>%d",extend,extendInt);
             patternValue->setExtend(extendInt); //repeat-stretch-none
             elements->each([&](JsonElement*item){
-                m_logger->always("check item");
+                m_logger->never("check item");
 
                 ScriptPatternElement* pattern = NULL;
                 if (item->isObject()) {
-                    m_logger->always("\tparse object");
+                    m_logger->never("\tparse object");
                     pattern = patternElementFromObject(item->asObject());
                 } else if (item->isString()){
-                    m_logger->always("\tparse string");
+                    m_logger->never("\tparse string");
                     pattern = patternElementFromString(item);
                 } else {
-                    m_logger->always("\tuse number");
+                    m_logger->never("\tuse number");
                     if (item->isNull()) {
                         pattern = new ScriptPatternElement(1,new ScriptNullValue());
                     } else {

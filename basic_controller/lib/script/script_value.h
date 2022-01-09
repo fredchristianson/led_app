@@ -708,10 +708,16 @@ namespace DevRelief
         {
             if (m_count == 0) { return defaultValue; }
 
-            IScriptState* state = cmd->getState();
-            auto domain = cmd->getAnimationPositionDomain();
-            double pos = domain->getValue();
-
+            double pos = 0;
+            AnimationDomain* domain = cmd->getAnimationPositionDomain();
+            if (m_animate) {
+                AnimationRange range(0,m_count);
+                pos  = m_animate->get(cmd,range);
+                domain = m_animate->getDomain(cmd,range);
+ 
+            } else {
+                pos = domain->getValue();
+            }
             double val = getValueAt(cmd, domain, pos,defaultValue);
             return val;
         }
