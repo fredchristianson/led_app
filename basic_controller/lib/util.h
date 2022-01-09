@@ -53,6 +53,25 @@ class Util {
             UtilLogger.always("toMsec %s ==> %d",s,val);
             return val;
         }
+
+        // text in format "text1:int1,text2:int2,..."
+        // for example "repeat:1,stretch:2,"clip:3" with text "repeat" returns 1
+        static int mapText2Int(const char * text, const char * val, int defaultValue){
+            if (text == NULL || val == NULL) {
+                return defaultValue;
+            }
+            const char * pos = text;
+            int len = strlen(val);
+            while(*pos != 0 && (strncmp(pos,val,len) != 0 || pos[len] != ':')){
+                pos += 1;
+            }
+            if (pos[len] == ':') {
+                return atoi(pos+len+1);
+            } else {
+                return defaultValue;
+            }
+
+        }
 };
 
 

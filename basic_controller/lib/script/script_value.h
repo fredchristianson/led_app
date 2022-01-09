@@ -656,6 +656,12 @@ namespace DevRelief
         int m_repeatCount;
     };
 
+    typedef enum PatternExtend {
+        REPEAT_PATTERN=0,
+        STRETCH_PATTERN=1,
+        NO_EXTEND=2
+    };
+
    class PatternValue : public ScriptValue
     {
     public:
@@ -663,6 +669,7 @@ namespace DevRelief
         {
             memLogger->debug("PatternValue()");
             m_animate = animate;
+            m_extend = REPEAT_PATTERN;
             m_count = 0;
 
         }
@@ -672,6 +679,10 @@ namespace DevRelief
             memLogger->debug("~PatternValue() start");
             if (m_animate) {m_animate->destroy();}
             memLogger->debug("~PatternValue() end");
+        }
+
+        void setExtend(PatternExtend val) {
+            m_extend = val;
         }
 
         void addElement(ScriptPatternElement* element) {
@@ -699,8 +710,28 @@ namespace DevRelief
 
             IScriptState* state = cmd->getState();
             auto domain = cmd->getAnimationPositionDomain();
-            int pos = domain->getValue();
+            double pos = domain->getValue();
+
+            double val = getValueAt(cmd, domain, pos,defaultValue);
+            return val;
+        }
+
+        double getValueAt(IScriptCommand* cmd,AnimationDomain* domain, int pos, double defaultValue) {
+            if (pos < 0 || pos >= m_count) {
+                if (m_extend == NO_EXTEND) {
+                    return defaultValue;
+                } else if (m_extend == REPEAT_PATTERN) {
+                    pos = abs(pos)%m_count;
+                }
+            }
+            
             int index = pos % m_count;
+            if (m_extend == STRETCH_PATTERN) {
+                double pct = (index*1.0/m_count);   
+                double domainVal = domain->getPosition();
+                index = m_count * domainVal;
+
+            }
             int elementIndex = 0;
             ScriptPatternElement* element = m_elements.get(0);
             while(index >= element->getRepeatCount()) {
@@ -748,6 +779,7 @@ namespace DevRelief
         size_t m_count;
 
         IValueAnimator* m_animate;
+        PatternExtend m_extend;
     };
 
     class ScriptVariableValue : public IScriptValue

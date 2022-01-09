@@ -114,12 +114,15 @@ namespace DevRelief
         }
 
         bool isChanged() { return m_changed;}
-
+        double getSpan() {
+            return abs(getMax()-getMin());
+        }
     public:
         Logger *m_logger;
         virtual double getMin() = 0;
         virtual double getMax() = 0;
         virtual double getValue() = 0;
+
         
     protected:
         bool m_changed;

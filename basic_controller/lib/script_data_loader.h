@@ -484,8 +484,12 @@ class ScriptDataLoader : public DataLoader {
                 m_logger->always("no pattern array");
                 return NULL;
             }
-            auto patternValue = new PatternValue();
-
+            auto animator = jsonToValueAnimator(obj);
+            auto patternValue = new PatternValue(animator);
+            auto extend = jsonString(obj,"extend","repeat");
+            PatternExtend extendInt = (PatternExtend)Util::mapText2Int("repeat:0,stretch:1,clip:2,none:2",extend,0);
+            m_logger->always("extend %s==>%d",extend,extendInt);
+            patternValue->setExtend(extendInt); //repeat-stretch-none
             elements->each([&](JsonElement*item){
                 m_logger->always("check item");
 
