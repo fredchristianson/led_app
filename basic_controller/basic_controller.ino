@@ -21,4 +21,3 @@ void loop() {
   app->loop();
   wdt_reset();
 }
-

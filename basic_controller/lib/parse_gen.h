@@ -462,13 +462,15 @@ class JsonObject : public JsonElement {
         JsonObject* getChild(const char * name);
 
         JsonProperty * getProperty(const char * name) {
-            m_logger->debug("get property %s",name);
+            m_logger->never("get property %s",name);
             for(JsonProperty*prop=m_firstProperty;prop!=NULL;prop=prop->getNext()){
-                m_logger->debug("\tcheck%s",prop->getName());
+                m_logger->never("\tcheck %s",prop->getName());
                 if (strcmp(prop->getName(),name)==0) {
+                    m_logger->never("\tmatch");
                     return prop;
                 }
             }
+            m_logger->never("\tno match");
             return NULL;
         }
         JsonProperty* getFirstProperty() { return m_firstProperty;}
@@ -485,6 +487,11 @@ class JsonObject : public JsonElement {
         JsonElement* getAt(size_t idx) {
             return m_firstProperty == NULL ? NULL : m_firstProperty->getAt(idx);
         }
+
+        void clear(){
+            delete m_firstProperty;
+            m_firstProperty=NULL;
+        }
     protected:
         JsonProperty* m_firstProperty;
 };
@@ -494,7 +501,7 @@ class JsonObject : public JsonElement {
 class JsonArrayItem : public JsonElement {
     public:
         JsonArrayItem(JsonRoot& root, JsonElement * value) :JsonElement(root,JSON_ARRAY_ITEM) {
-            m_logger->debug("create JsonArray item for type %d",value->getType());
+            m_logger->never("create JsonArray item for type %d",value->getType());
 
             m_value = value;
             m_next = NULL;
@@ -728,7 +735,7 @@ class JsonFloat : public  JsonValue {
 class JsonBool : public  JsonValue {
     public:
         JsonBool(JsonRoot& root, bool value) : JsonValue(root,JSON_BOOLEAN) {
-            m_logger->debug("create JsonFloat %s ",value?"true":"false");
+            m_logger->never("create JsonBool %s ",value?"true":"false");
 
             m_value = value;
             mem.construct("JsonBool",this);
@@ -1242,22 +1249,22 @@ public:
         m_hasError = false;
         JsonRoot * root = new JsonRoot();
         m_root = root;
-        m_logger->debug("created root");
+        m_logger->never("created root");
 
         if (data == NULL) {
             return root;
         }
         
         TokenParser tokParser(data);
-        m_logger->debug("created TokenParser");
+        m_logger->never("created TokenParser");
         JsonElement * json = parseNext(tokParser);
         if (json != NULL) {
-            m_logger->debug("got top");
+            m_logger->never("got top");
             root->setTopElement(json);
         } else {
-            m_logger->debug("no top element found");
+            m_logger->never("no top element found");
 
-            m_logger->debug("\tpos %d/%d.  line%d/%d.  char %d/%d",
+            m_logger->never("\tpos %d/%d.  line%d/%d.  char %d/%d",
                 tokParser.getCurrentPos(),
                 tokParser.getCharacterCount(),
                 tokParser.getCurrentLine(),
@@ -1265,10 +1272,18 @@ public:
                 tokParser.getLinePos(),
                 tokParser.getLineCharacterCount()
                 );
-            
+            delete root;
+            m_hasError = true;
+
+            root = NULL; 
+            m_errorMessage = "parse error";
+            m_errorLine = tokParser.getCurrentLineText();
+            m_errorLineNumber = tokParser.getCurrentLine();
+            m_errorCharacter = tokParser.getLinePos();
+            m_errorPosition = tokParser.getCurrentPos();
         }
         
-        m_logger->debug("parse complete");
+        m_logger->never("parse complete");
         m_root = NULL;
         return root;
     }
@@ -1431,12 +1446,20 @@ public:
     }
 
     bool hasError() { return m_hasError;}
-    const char * errorMessage() { return m_errorMessage;}
+    const char * errorMessage() { return m_errorMessage.text();}
+    const char * errorLine() { return m_errorLine.text();}
+    int errorLineNumber() { return m_errorLineNumber;}
+    int errorCharacter() { return m_errorCharacter;}
+    int errorPosition() { return m_errorPosition;}
     private:
         Logger * m_logger;
-        const char * m_errorMessage;
         bool        m_hasError;
         JsonRoot* m_root;
+        int m_errorLineNumber;
+        int m_errorCharacter;
+        int m_errorPosition;
+        DRString m_errorMessage;
+        DRString m_errorLine;
 
 };
 
@@ -1459,6 +1482,9 @@ JsonArray* JsonRoot::createArray(){
 
 
 JsonObject* JsonRoot::getTopObject(){
+    if (m_value == NULL) {
+        m_value = createObject();
+    }
     return m_value->asObject();
 }
 
@@ -1554,33 +1580,36 @@ JsonArrayItem* JsonArray::add(bool val) {
 }
 
 bool JsonObject::get(const char *name,bool defaultValue){
-    m_logger->debug("get bool value for %s",name);
+    m_logger->never("get bool value for %s",name);
 
     bool val = defaultValue;
     JsonProperty*prop = getProperty(name);
     if (prop) {
-        prop->get(defaultValue);
+        val = prop->get(defaultValue);
+    } else {
+        m_logger->never("\tproperty not found");
     }
+    m_logger->never("\tvalue %d",val?1:0);
     return val;
 }
 int JsonObject::get(const char *name,int defaultValue){
-    m_logger->debug("get int value for %s",name);
+    m_logger->never("get int value for %s",name);
     int val = defaultValue;
     JsonProperty*prop = getProperty(name);
     if (prop) {
         val = prop->get(defaultValue);
     } else {
-        m_logger->debug("\tprop not found");
+        m_logger->never("\tprop not found");
     }
     return val;
 }
 
 const char * JsonObject::get(const char *name,const char *defaultValue){
-    m_logger->debug("get string value for %s",name);
+    m_logger->never("get string value for %s",name);
     const char * val;
     JsonProperty*prop = getProperty(name);
     if (prop) {
-        m_logger->debug("got prop %s",name);
+        m_logger->never("got prop %s",name);
         val = prop->get(defaultValue);
     } else {
         val = defaultValue;
@@ -1590,7 +1619,7 @@ const char * JsonObject::get(const char *name,const char *defaultValue){
 
 
 double JsonObject::get(const char *name,double defaultValue){
-    m_logger->debug("get float value for %s",name);
+    m_logger->never("get float value for %s",name);
 
     double val = defaultValue;
     JsonProperty*prop = getProperty(name);
@@ -1608,7 +1637,7 @@ JsonArray* JsonObject::createArray(const char * propertyName) {
 }
 
 JsonArray* JsonObject::getArray(const char * name){
-    m_logger->debug("get array value for %s",name);
+    m_logger->never("get array value for %s",name);
 
     JsonProperty * prop = getProperty(name);
     if (prop) {

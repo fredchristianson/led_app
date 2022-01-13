@@ -251,6 +251,10 @@ class ApiResult : public Data {
             m_logger->debug("generated JSON: %s",apiText.text());
             return result;
         }
+
+        int getCode() {
+            return getInt("code",500);
+        }
         void setCode(int code) {
             addProperty("code",code);
         }

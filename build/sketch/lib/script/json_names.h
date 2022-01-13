@@ -9,6 +9,7 @@ const char * S_COMMANDS="commands";
 const char * S_TYPE = "type";
 const char * S_RGB = "rgb";
 const char * S_HSL = "hsl";
+const char * S_XHSL = "xhsl";
 const char * S_RED = "red";
 const char * S_GREEN = "green";
 const char * S_BLUE = "blue";
@@ -49,6 +50,7 @@ const char * S_VARIABLE = "variable";
 const char * S_UPDATE = "update";
 const char * S_PATTERN = "pattern";
 const char * S_SEGMENT = "segment";
+const char * S_CREATE = "create";
 
 
 bool matchName(const char * want, const char * have) {

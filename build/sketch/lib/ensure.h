@@ -30,7 +30,8 @@ class Ensure {
 
 #else 
 class Ensure {
-    static bool notNull(void *ptr,char *msg=NULL,...) {}
+    public:
+    static bool notNull(void *ptr,char *msg=NULL,...) { return true;}
 };
 #endif // ENSURE==1
 }

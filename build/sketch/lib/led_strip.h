@@ -358,18 +358,17 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
         }
 
         void setHue(int index, int16_t hue, HSLOperation op=REPLACE) {
+            m_logger->never("HSL Hue %d %d",index,hue);
             if (index<0 || index>=m_count) {
                 m_logger->periodic(ERROR_LEVEL,5000,"HSL Hue index out of range %d (0-%d)",index,m_count);
                 return;
             } 
             if (index == 0) {
-                m_logger->debug("hue %d %d",index,hue);
+                m_logger->never("hue %d %d",index,hue);
             }
-            m_hue[index] = hue;
-            return;
             m_hue[index] = clamp(0,359,performOperation(op,m_hue[index],hue));
             if (index == 0) {
-                m_logger->periodic(ERROR_LEVEL,5000,"setHue %d %d %d",index,hue,op);
+                //m_logger->periodic(ERROR_LEVEL,5000,"setHue %d %d %d",index,hue,op);
             }
         }
  
@@ -383,13 +382,18 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
         }
 
         void setLightness(int index, int16_t lightness, HSLOperation op=REPLACE) {
+            if (index<=5) {
+                m_logger->never("HSL Lightness op %d %d %d",op,index,lightness);
+            }
             if (index<0 || index>=m_count) {
                 m_logger->periodic(ERROR_LEVEL,5000,"HSL lightness index out of range %d (0-%d)",index,m_count);
                 return;
             } 
             
             if (lightness<0 || lightness>100) { return;}
-            m_lightness[index] = clamp(0,100,performOperation(op,m_lightness[index],lightness));
+            int16_t l = performOperation(op,m_lightness[index],lightness);
+            m_logger->never("op %d %d  %d->%d",op,m_lightness[index],lightness,l);
+            m_lightness[index] = clamp(0,100,l);
         }
 
         void clear() {
@@ -421,7 +425,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
                     light = 0;
                 }
                 if (false && idx < 20) {
-                    m_logger->always("light: %d",light);
+                    m_logger->never("light: %d",light);
                 }
                 CHSL hsl(clamp(0,360,hue),defaultValue(0,100,sat,100),defaultValue(0,100,light,50));
                 if (idx == 0) {
@@ -487,6 +491,7 @@ class HSLStrip: public AlteredStrip, public IHSLStrip{
             case ADD:
                 return currentValue + operand;
             case SUBTRACT:
+                m_logger->never("SUBTRACT %d-%d=%d",currentValue,operand,currentValue-operand);
                 return currentValue - operand;
             case AVERAGE:
                 return (currentValue + operand)/2;

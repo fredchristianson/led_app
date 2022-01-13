@@ -396,17 +396,22 @@ class ScriptDataLoader : public DataLoader {
                 JsonObject* obj = animate;
                 IScriptValue* duration = jsonToValue(obj,"duration");
                 IScriptValue* speed = jsonToValue(obj,"speed");
+                IScriptValue* delayResponse = jsonToValue(obj,"delay-value");
+                if (delayResponse == NULL) {
+                    // try old name if new one is missing
+                    delayResponse = jsonToValue(obj,"delayValue");
+                }
                 if (speed != NULL) {
                     TimeValueAnimator* aspeed = new SpeedValueAnimator(speed);
                     aspeed->setRepeatValue(jsonToValue(obj,"repeat"));
                     aspeed->setRepeatDelayValue(jsonToValue(obj,"delay"));
-                    aspeed->setDelayResponseValue(jsonToValue(obj,"delayValue"));
+                    aspeed->setDelayResponseValue(delayResponse);
                     animator = aspeed;
                 } else if (duration) {
                     TimeValueAnimator* aduration = new DurationValueAnimator(duration);
                     aduration->setRepeatValue(jsonToValue(obj,"repeat"));
                     aduration->setRepeatDelayValue(jsonToValue(obj,"delay"));
-                    aduration->setDelayResponseValue(jsonToValue(obj,"delayValue"));
+                    aduration->setDelayResponseValue(delayResponse);
                     animator = aduration;
                 } else {
                     animator = new PositionValueAnimator();

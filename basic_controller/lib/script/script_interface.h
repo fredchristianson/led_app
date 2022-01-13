@@ -156,7 +156,7 @@ namespace DevRelief
     class IScript {
         public:
             virtual void destroy()=0;
-            virtual void begin(IHSLStrip * ledStrip)=0;
+            virtual void begin(IHSLStrip * ledStrip, JsonObject* params)=0;
             virtual void step()=0;
     };
 

@@ -90,9 +90,10 @@ void LinkedList<T>::each(auto&& lambda) const {
   ListNode<T>* node = m_root;
   while(node != NULL) {
       m_logger->debug("\thandle item 0x%04X  --> 0x%04X",node,node->next);
+      ListNode<T>*next = node->next;
       lambda(node->data);
       m_logger->debug("\tdone");
-      node = node->next;
+      node = next;
   }  
 }
 
@@ -292,6 +293,7 @@ template<typename T>
 void LinkedList<T>::deleteNode(ListNode<T>* t){
     m_logger->debug("primitive deleteNode");
     delete t;
+    
 }
 
 template<typename T>
@@ -308,18 +310,18 @@ class PtrList : public LinkedList<T> {
 
 template<typename T>
 PtrList<T>::~PtrList(){
-    PtrListLogger.debug("~PtrList() start");
+    PtrListLogger.never("~PtrList() start");
     ListNode<T>*node=LinkedList<T>::getNode(0);
     while(node != NULL) {
-        LinkedList<T>::m_logger->debug("\tdelete node");
+        LinkedList<T>::m_logger->never("\tdelete node");
         ListNode<T>*next = node->next;
         deleteNode(node);
-        LinkedList<T>::m_logger->debug("\tdeleted node");
+        LinkedList<T>::m_logger->never("\tdeleted node");
         node = next;
-        LinkedList<T>::m_logger->debug("\tnext 0x%0X",node);
+        LinkedList<T>::m_logger->never("\tnext 0x%0X",node);
     }
     LinkedList<T>::m_root = NULL;
-    PtrListLogger.debug("~PtrList() done");
+    PtrListLogger.never("~PtrList() done");
 
 }
 
@@ -335,13 +337,14 @@ ListNode<T> PtrList<T>::getNodePtr(int idx) {
 */
 template<typename T>
 void PtrList<T>::deleteNode(ListNode<T>*node) {
-    LinkedList<T>::m_logger->debug("delete PtrList node 0x%04X",node);
+    LinkedList<T>::m_logger->never("delete PtrList node 0x%04X",node);
     if (node == 0) {
         LinkedList<T>::m_logger->error("PtrList has NULL node");
     } else {
-        LinkedList<T>::m_logger->debug("\tdelete PtrList node data 0x%04X",node->data);
-        delete node->data;
-        LinkedList<T>::m_logger->debug("\tdelete PtrList node 0x%04X",node);
+        LinkedList<T>::m_logger->never("\tdelete PtrList node data 0x%04X",node->data);
+        //delete node->data;
+        node->data->destroy();
+        LinkedList<T>::m_logger->never("\tdelete PtrList node 0x%04X",node);
         delete node;
     }
 }

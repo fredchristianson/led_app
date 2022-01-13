@@ -572,8 +572,8 @@ namespace DevRelief
                 m_logger->debug("\tno end.  return start %f");
                 return m_start ? m_start->getIntValue(cmd, defaultValue) : defaultValue;
             }
-            double start = m_start->getIntValue(cmd, 0);
-            double end = m_end->getIntValue(cmd,  1);
+            double start = m_start->getFloatValue(cmd, 0);
+            double end = m_end->getFloatValue(cmd,  1);
             double value = 0;
             IScriptState* state = cmd->getState();
             if (m_animate) {
@@ -588,6 +588,7 @@ namespace DevRelief
                 value = animator.get(range,cmd);
                 
             }
+            m_logger->never("Range %f-%f got %f",start,end,value);
             return value;
   
         }

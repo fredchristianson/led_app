@@ -74,8 +74,8 @@ namespace DevRelief
         virtual void setSaturation(int index, int16_t hue, HSLOperation op = REPLACE) {}
         virtual void setLightness(int index, int16_t hue, HSLOperation op = REPLACE) {}
         virtual void setRGB(int index, const CRGB &rgb, HSLOperation op = REPLACE) {}
-        virtual size_t getCount() { return 100; };
-        virtual size_t getStart() { return 0; };
+        virtual int getCount() { return 100; };
+        virtual int getStart() { return 0; };
         virtual void clear() {}
         virtual void show() {}
     protected:
@@ -106,7 +106,7 @@ namespace DevRelief
             m_result = result;
         }
 
-        ScriptStatus doCommand(ScriptState *state) override
+        ScriptStatus doCommand(IScriptState *state) override
         {
             m_logger->debug("TestValuesCommand step");
             m_result->assertEqual(getIntValue("x",0),101,"get x from closest values");
@@ -145,7 +145,7 @@ namespace DevRelief
             test.run();
             return test.isSuccess();
 #else
-            return false;
+            return true;
 #endif
         }
 
@@ -210,10 +210,10 @@ namespace DevRelief
 
         TestStrip strip(m_logger);
         m_logger->debug("created strip");
-        script->begin(&strip);
+        script->begin(&strip,NULL);
         TestValuesCommand* cmd=new TestValuesCommand(&result, m_logger);
         m_logger->debug("created TestValuesCommand");
-        script->add(cmd);
+        script->getContainer()->add(cmd);
         m_logger->debug("added command");
         
         m_logger->debug("began strip");
@@ -243,7 +243,7 @@ namespace DevRelief
         SharedPtr<JsonRoot> root = parser.read(POSITION_SCRIPT);
         SharedPtr<Script> script = loader.jsonToScript(root.get());
         TestPositionStrip strip(m_logger,&result);
-        script->begin(&strip);
+        script->begin(&strip,NULL);
         script->step();
         m_logger->info("\tdone");
     }

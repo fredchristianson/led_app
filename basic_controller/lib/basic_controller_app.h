@@ -16,6 +16,8 @@
 #include "./test/tests.h"
 #include "./util.h"
 #include "./script_data_loader.h"
+#include "./app_state.h"
+#include "./app_state_data_loader.h"
 
 extern EspClass ESP;
 
@@ -38,14 +40,55 @@ namespace DevRelief {
             }
             m_logger->showMemory();
             initialize();
+            resume();
         }
 
+        // resume the api/script that was running when power was turned off
+        const char * resume(bool forceStart=false, bool forceRun=false) {
+            m_logger->debug("resume");
+
+            m_executor.turnOff();
+            AppStateDataLoader loader;
+            m_logger->debug("\tload");
+            if (loader.load(m_appState)){
+                if (forceStart) {
+                    m_appState.setIsStarting(false);
+                }
+                if (forceRun) {
+                    m_appState.setIsRunning(true);
+                }
+                if (!m_appState.isStarting() && m_appState.isRunning() && m_appState.getType() != EXECUTE_NONE) {
+                    m_logger->debug("\tset isStarting");
+                    m_appState.setIsStarting(true);
+                    m_logger->debug("\tsave");
+                    loader.save(m_appState);
+                    if (m_appState.getType() == EXECUTE_API) {
+                        m_logger->debug("\texecute API %s",m_appState.getExecuteValue().text());
+                        ApiResult result;
+                        runApi(m_appState.getExecuteValue().text(),m_appState.getParameters()->asObject(),result);
+                        m_logger->debug("\tAPI ran");
+                    } else if (m_appState.getType() == EXECUTE_SCRIPT) {
+                        m_logger->debug("\tscript state run");
+                        JsonObject* params = m_appState.getParameters();
+                        const char * name = m_appState.getExecuteValue();
+                        ApiResult result;
+                        runScript(name,params,result);                        
+                    }
+                } 
+            }
+            return m_appState.getExecuteValue().text();
+        }
 
 
     protected:       
         void loop() {
             if (!m_initialized) {
                 return;
+            }
+            if (m_appState.isStarting() && m_scriptStartTime+10*1000 < millis()) {
+                m_appState.setIsStarting(false);
+                AppStateDataLoader loader;
+                loader.save(m_appState);
             }
             m_httpServer->handleClient();
             m_executor.step();
@@ -76,6 +119,7 @@ namespace DevRelief {
                 m_config.getBuildDate().text(),
                 m_config.getBuildTime().text());
             m_logger->showMemory();
+            m_scriptStartTime = 0;
             m_initialized = true;
         }
 
@@ -112,6 +156,7 @@ namespace DevRelief {
                 ApiResult result(true);
                 DRString apiText;
                 result.toText(apiText);
+                resume();
                 resp->send(200,"text/json",apiText.text());
             });
 
@@ -128,42 +173,42 @@ namespace DevRelief {
             });
 
             m_httpServer->routeBracesGet( "/api/run/{}",[this](Request* req, Response* resp){
-                ScriptDataLoader loader;
-                LoadResult load;
                 m_logger->debug("run script");
                 ApiResult result;
-                if (loader.loadScriptJson( req->pathArg(0).c_str(),load)){
-                    Script* script = loader.jsonToScript(load);
-                    if (script == NULL) {
-                        result.setCode(500);
-                        DRFormattedString msg("script parse failed: %s",req->pathArg(0).c_str());
-                        result.setMessage(msg);
-                    } else {
-                        m_executor.setScript(script);
-                    }
-                    result.setData(load.getJson());
-                } else {
-                    result.setCode(404);
-                    DRFormattedString msg("script not found: %s",req->pathArg(0).c_str());
-                    result.setMessage(msg);
-                }
+                JsonRoot* params = getParameters(req);
+                const char * name = req->pathArg(0).c_str();
+                runScript(name,params->getTopObject(),result);
                 result.send(req);
             });
+
 
             m_httpServer->routeBracesPost( "/api/script/{}",[this](Request* req, Response* resp){
                 m_logger->debug("save script");
                 m_executor.endScript();
+                m_logger->debug("old script ended");
                 auto body = req->arg("plain").c_str();
+                m_logger->debug("\tgot new script:%s",body);
                 auto name =req->pathArg(0).c_str();
-
-                ScriptDataLoader loader;
-                Script* script = loader.writeScript(name,body);
-                m_executor.setScript(script);
-                ApiResult result(true);
-                DRString apiText;
-                result.toText(apiText);
-                resp->send(200,"text/json",apiText.text());
-                //resp->send(200,"text/json","POST not implemented");
+                m_logger->debug("\tname: %s",name);
+                if (name != NULL) {
+                    ScriptDataLoader loader;
+                    m_logger->debug("\twrite script");
+                    Script* script = loader.writeScript(name,body);
+                    m_logger->debug("\tgot script");
+                    delete script;        
+                    m_logger->debug("\tdeleted script");
+    
+                }
+                m_logger->debug("\tget params");
+                JsonRoot* params = getParameters(req);
+                m_logger->debug("\tgot params");
+                ApiResult result;
+                m_logger->debug("\trun script");
+                runScript(name,params->getTopObject(),result);
+                m_logger->debug("\tsend result");
+                result.send(req);
+                m_logger->debug("\tdelete params");
+                delete params;
             });
 
 
@@ -200,36 +245,88 @@ namespace DevRelief {
 
             JsonObject *params = paramJson->getTopObject();
             ApiResult result;
+            if (runApi(api,params,result))
+            {
+                m_appState.setApi(api,params);
+                AppStateDataLoader loader;
+                loader.save(m_appState);
+            }
+            result.send(resp);
+            //DRString apiText;
+
+            //result.toText(apiText);
+            //resp->send(200,"text/json",apiText.text());
+
+
+        }
+
+        bool runApi(const char * api, JsonObject* params, ApiResult& result){
+            bool saveState=false;
             if (strcmp(api,"off") == 0) {
                 m_executor.turnOff();
-                //result.setText(R"j({"result":true,"message":"lights turned off"})j");
+                saveState = true;
                 result.setCode(200);
                 result.setMessage("lights turned %s","off");
             } else if (strcmp(api,"on") == 0){
                 int level = params->get("level",100);
+                saveState = true;
                 m_executor.white(level);
                 result.setCode(200);
                 result.setMessage("lights turned %s","on");
+            } else if (strcmp(api,"resume") == 0){
+                resume(true,true);
+                result.setCode(200);
+                result.setMessage("resumed last execution");
             } else if (strcmp(api,"color") == 0){
                 m_executor.solid(params);
+                saveState = true;
                 result.setCode(200);
                 result.setMessage("lights turned %s","on");
             } else if (strcmp(api,"mem") == 0){
-                ApiResult result;
-                result.send(req);
-                
+               result.setCode(202);
             } else {
-                code = 404;
                 result.setCode(404);
                 result.setMessage("failed");
             }
-            DRString apiText;
-            result.toText(apiText);
-            resp->send(200,"text/json",apiText.text());
-
+            return saveState;
         }
     
 
+        bool runScript(const char * name, JsonObject* params, ApiResult& result) {
+            ScriptDataLoader loader;
+            LoadResult load;
+            m_logger->debug("load script %s",name);
+            if (loader.loadScriptJson(name ,load)){
+                m_logger->debug("\tloaded file");
+                Script* script = loader.jsonToScript(load);
+                m_logger->debug("\tloaded script");
+                
+                if (script == NULL) {
+                    m_logger->debug("\tno script");
+
+                    result.setCode(500);
+                    DRFormattedString msg("script parse failed: %s",name);
+                    result.setMessage(msg);
+                } else {
+                    m_logger->debug("\tm_executor.setScript");
+                    m_executor.setScript(script,params);
+                    m_scriptStartTime = millis();
+                    m_logger->debug("\tset appState");
+                    m_appState.setScript(name,params);
+                    AppStateDataLoader loader;
+                    m_logger->debug("\tsave appState");
+                    loader.save(m_appState);
+                    m_logger->debug("\tsaved");
+                    return true;
+                }
+            } else {
+                result.setCode(404);
+                DRFormattedString msg("script not found: %s",name);
+                return false;
+            }
+            m_logger->debug("\trunScript failed");
+            return false;
+        };
 
       
         JsonRoot* getParameters(Request*req){
@@ -237,8 +334,10 @@ namespace DevRelief {
             JsonObject* obj = root->createObject();
             m_logger->never("\tloop parameters");
             for(int i=0;i<req->args();i++) {
-                m_logger->debug("\t%s=%s",req->argName(i).c_str(),req->arg(i).c_str());
-                obj->set(req->argName(i).c_str(),req->arg(i).c_str());
+                if (!Util::equal(req->argName(i).c_str(),"plain")){
+                    m_logger->debug("\t%s=%s",req->argName(i).c_str(),req->arg(i).c_str());
+                    obj->set(req->argName(i).c_str(),req->arg(i).c_str());
+                }
             }
             return root;
         }
@@ -247,7 +346,9 @@ namespace DevRelief {
         Logger * m_logger;
         HttpServer * m_httpServer;
         Config m_config;
+        AppState m_appState;
         ScriptExecutor m_executor;
+        long m_scriptStartTime;
         bool m_initialized;
     };
 

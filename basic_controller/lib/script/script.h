@@ -43,10 +43,15 @@ namespace DevRelief
         void destroy() override { delete this;}
 
 
-        void begin(IHSLStrip * ledStrip) override {
+        void begin(IHSLStrip * ledStrip, JsonObject* params) override {
             m_logger->never("begin Script.  frequency %d",m_frequencyMSecs);
             delete m_state;
             m_state = new ScriptState();
+            if (params) {
+                params->eachProperty([&](const char * name, JsonElement*value){
+                    m_state->setValue(name,new ScriptStringValue(value->getString()));
+                });
+            }
             m_logger->never("\tset strip 0x%04X",ledStrip);
             m_rootContainer->setStrip(ledStrip);
             m_logger->never("\tm_state->beginScript");

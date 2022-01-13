@@ -209,7 +209,7 @@ namespace DevRelief
 
         TestStrip strip(m_logger);
         m_logger->debug("created strip");
-        script->begin(&strip);
+        script->begin(&strip,NULL);
         TestValuesCommand* cmd=new TestValuesCommand(&result, m_logger);
         m_logger->debug("created TestValuesCommand");
         script->getContainer()->add(cmd);
@@ -242,7 +242,7 @@ namespace DevRelief
         SharedPtr<JsonRoot> root = parser.read(POSITION_SCRIPT);
         SharedPtr<Script> script = loader.jsonToScript(root.get());
         TestPositionStrip strip(m_logger,&result);
-        script->begin(&strip);
+        script->begin(&strip,NULL);
         script->step();
         m_logger->info("\tdone");
     }

@@ -69,11 +69,11 @@ namespace DevRelief {
             }
 
 
-            void setScript(Script * script) {
+            void setScript(Script * script,JsonObject* params=NULL) {
                 endScript();
                 m_script = script;
                 if (script != NULL) {
-                    script->begin(m_ledStrip);
+                    script->begin(m_ledStrip,params);
                 }
             }
 

@@ -33,7 +33,14 @@ namespace DevRelief
               return false;  
             } 
 
+            bool isNull(IScriptCommand* cmd)  override{
+              return false;  
+            } 
+
             bool equals(IScriptCommand*cmd,const char * match) override { return false;}
+
+            IScriptValue* eval(IScriptCommand * cmd, double defaultValue=0) override;
+            
         protected:
             Logger* m_logger;
     };
@@ -71,14 +78,16 @@ namespace DevRelief
         int getMsecValue(IScriptCommand* cmd,  int defaultValue) override { return defaultValue;}
         bool isNumber(IScriptCommand* cmd) override { return true;}
 
+
+
         DRString toString() { return DRString("System Value: ").append(m_name); }
         private:
             double get(IScriptCommand* cmd, double defaultValue){
                 double val = defaultValue;
                 if (Util::equal(m_name,"start")) {
-                    val = cmd->getStrip()->getStart();
+                    val = cmd->getState()->getStrip()->getStart();
                 } else if (Util::equal(m_name,"count")) {
-                    val = cmd->getStrip()->getCount();
+                    val = cmd->getState()->getStrip()->getCount();
                 } else if (Util::equal(m_name,"step")) {
                     val = cmd->getState()->getStepNumber();
                 } else if (Util::equal(m_name,"red")) {
@@ -125,6 +134,8 @@ namespace DevRelief
             m_value->destroy();
         }
 
+        virtual void destroy() { delete this;}
+
         const char *getName() { return m_name.text(); }
         IScriptValue *getValue() { return m_value; }
 
@@ -140,8 +151,11 @@ namespace DevRelief
 
             void add(IScriptValue* val) { args.add(val);}
             IScriptValue* get(int index) { return args.get(index);}
+            size_t length() { return args.size();}
         PtrList<IScriptValue*> args;
     };
+
+    int randTotal = millis();
 
     class ScriptFunction : public ScriptValue
     {
@@ -150,11 +164,13 @@ namespace DevRelief
         {
             memLogger->debug("ScriptVariableValue()");
             randomSeed(analogRead(0)+millis());
+            m_funcState = -1;
         }
 
         virtual ~ScriptFunction()
         {
             memLogger->debug("~ScriptFunction()");
+            delete m_args;
         }
         int getIntValue(IScriptCommand* cmd,  int defaultValue) override
         {
@@ -187,7 +203,6 @@ namespace DevRelief
             const char * name = m_name.get();
             if (Util::equal("rand",name)){
                 result = invokeRand(cmd,defaultValue);
-                m_logger->always("Rand value: %f",result);
             } else if (Util::equal("add",name) || Util::equal("+",name)) {
                 result = invokeAdd(cmd,defaultValue);
             } else if (Util::equal("subtract",name) ||Util::equal("sub",name) || Util::equal("-",name)) {
@@ -202,6 +217,10 @@ namespace DevRelief
                 result = invokeMin(cmd,defaultValue);
             } else if (Util::equal("max",name)) {
                 result = invokeMax(cmd,defaultValue);
+            } else if (Util::equal("randOf",name)) {
+                result = invokeRandomOf(cmd,defaultValue);
+            } else if (Util::equal("seq",name)||Util::equal("sequence",name)) {
+                result = invokeSequence(cmd,defaultValue);
             } else {
                 m_logger->error("unknown function: %s",name);
             }
@@ -210,13 +229,19 @@ namespace DevRelief
         }
 
         double invokeRand(IScriptCommand*cmd ,double defaultValue) {
-            double low = getArgValue(cmd,0,0);
-            double high = getArgValue(cmd, 1,low);
+            int low = getArgValue(cmd,0,0);
+            int high = getArgValue(cmd, 1,low);
             if (high == low) {
-                return random(high);
-            } else {
-                return random(low,high+1);
+                low = 0;
             }
+            if (high < low) {
+                int t = low;
+                low = high;
+                high = t;
+            }
+            int val = random(low,high+1);
+            return val;
+            
         }
 
         double invokeAdd(IScriptCommand*cmd,double defaultValue) {
@@ -262,6 +287,31 @@ namespace DevRelief
             return first > second ? first : second;
         }
 
+        double invokeRandomOf(IScriptCommand*cmd,double defaultValue) {
+            int count = m_args->length();
+            int idx = random(count);
+            return getArgValue(cmd,idx,defaultValue);
+        }
+
+        double invokeSequence(IScriptCommand*cmd,double defaultValue) {
+            
+            int start = getArgValue(cmd,0,0);
+            int end = getArgValue(cmd,1,100);
+            int step = getArgValue(cmd,2,1);
+
+            if (m_funcState < start){ 
+                m_funcState = start;
+            } else {
+                m_funcState += step;
+            }
+            if (m_funcState > end){
+                m_funcState = start;
+            }
+
+            m_logger->never("Sequence %d %d %d ==> %f",start,end,step,m_funcState);
+            return m_funcState;
+        }
+
         double getArgValue(IScriptCommand*cmd, int idx, double defaultValue){
             if (m_args == NULL) {
                 return defaultValue;
@@ -273,6 +323,7 @@ namespace DevRelief
 
         DRString m_name;
         FunctionArgs * m_args;
+        double m_funcState; // different functions can use in their way
     };
 
     class ScriptNumberValue : public ScriptValue
@@ -281,6 +332,11 @@ namespace DevRelief
         ScriptNumberValue(double value) : m_value(value)
         {
             memLogger->debug("ScriptNumberValue()");
+        }
+
+        ScriptNumberValue(IScriptCommand*cmd, IScriptValue* base,double defaultValue) {
+            double val = base->getFloatValue(cmd,defaultValue);
+            m_value = val;
         }
 
         virtual ~ScriptNumberValue()
@@ -363,6 +419,56 @@ namespace DevRelief
         bool m_value;
     };
 
+    
+    class ScriptNullValue : public ScriptValue
+    {
+    public:
+        ScriptNullValue() 
+        {
+            memLogger->debug("ScriptNullValue()");
+            m_logger->debug("ScriptNullValue()");
+        }
+
+        virtual ~ScriptNullValue()
+        {
+            m_logger->debug("~ScriptNullValue()");
+            memLogger->debug("~ScriptNullValue()");
+        }
+
+        int getIntValue(IScriptCommand* cmd,  int defaultValue) override
+        {
+            return defaultValue;
+        }
+
+        double getFloatValue(IScriptCommand* cmd,  double defaultValue) override
+        {
+            return defaultValue;
+        }
+
+        bool getBoolValue(IScriptCommand* cmd,  bool defaultValue) override {
+            return defaultValue;
+        }
+
+        int getMsecValue(IScriptCommand* cmd,  int defaultValue) override { 
+            return defaultValue;
+        }
+
+        bool isBool(IScriptCommand* cmd) override { return false;}
+        bool isNull(IScriptCommand* cmd)  override{
+            return true;  
+        } 
+
+        DRString toString() override { 
+            m_logger->debug("ScriptNulllValue.toString()");
+            DRString drv("ScriptNullValue");
+            m_logger->debug("\tcreated DRString");
+            return drv;
+        }
+
+    protected:
+
+    };
+
 
     class ScriptStringValue : public ScriptValue
     {
@@ -427,21 +533,21 @@ namespace DevRelief
     class ScriptRangeValue : public ScriptValue
     {
     public:
-        ScriptRangeValue(IScriptValue *start, IScriptValue *end)
+        ScriptRangeValue(IScriptValue *start, IScriptValue *end,IValueAnimator * animate=NULL )
         {
             memLogger->debug("ScriptRangeValue()");
             m_start = start;
             m_end = end;
-            m_animate = NULL;
+            m_animate = animate;
 
         }
 
         virtual ~ScriptRangeValue()
         {
             memLogger->debug("~ScriptRangeValue() start");
-            delete m_start;
-            delete m_end;
-            delete m_animate;
+            if (m_start) {m_start->destroy();}
+            if (m_end) {m_end->destroy();}
+            if (m_animate) {m_animate->destroy();}
             memLogger->debug("~ScriptRangeValue() end");
         }
 
@@ -467,8 +573,8 @@ namespace DevRelief
                 m_logger->debug("\tno end.  return start %f");
                 return m_start ? m_start->getIntValue(cmd, defaultValue) : defaultValue;
             }
-            double start = m_start->getIntValue(cmd, 0);
-            double end = m_end->getIntValue(cmd,  1);
+            double start = m_start->getFloatValue(cmd, 0);
+            double end = m_end->getFloatValue(cmd,  1);
             double value = 0;
             IScriptState* state = cmd->getState();
             if (m_animate) {
@@ -476,14 +582,14 @@ namespace DevRelief
                 value = m_animate->get(cmd,range);
             } else {
                 AnimationRange range(start,end,false);
-                //Animator animator(*(state->getAnimationPositionDomain()));
-                Animator animator(*(cmd->getPosition()->getAnimationPositionDomain()));
+                Animator animator(*(cmd->getAnimationPositionDomain()));
                 CubicBezierEase ease;
                 animator.setEase(&ease);
 
-                value = animator.get(range);
+                value = animator.get(range,cmd);
                 
             }
+            m_logger->never("Range %f-%f got %f",start,end,value);
             return value;
   
         }
@@ -497,8 +603,10 @@ namespace DevRelief
 
         virtual DRString toString()
         {
+            m_logger->never("format range DRString");
             DRString result("range:");
             result.append(m_start ? m_start->toString() : "NULL")
+                .append("--")
                 .append(m_end ? m_end->toString() : "NULL");
             return result;
         }
@@ -507,6 +615,14 @@ namespace DevRelief
             m_animate = animator;
         }
 
+        IScriptValue* eval(IScriptCommand * cmd, double defaultValue=0) override{
+            auto start = m_start ? m_start->eval(cmd,defaultValue) : NULL;
+            auto end = m_end ? m_end->eval(cmd,defaultValue) : NULL;
+            auto animator = m_animate ? m_animate->clone(cmd) : NULL;
+            return new ScriptRangeValue(start,end,animator);
+        }
+
+
     protected:
         IScriptValue *m_start;
         IScriptValue *m_end;
@@ -514,41 +630,164 @@ namespace DevRelief
         IValueAnimator* m_animate;
     };
 
+
+
     class ScriptPatternElement
     {
     public:
-        ScriptPatternElement()
+        ScriptPatternElement(int repeatCount, IScriptValue* value)
         {
             memLogger->debug("ScriptPatternElement()");
+            m_value = value;
+            m_repeatCount = repeatCount;
+            ScriptLogger.always("PatternElement %d %s",repeatCount,value->toString().text());
         }
         virtual ~ScriptPatternElement()
         {
+            if (m_value) {m_value->destroy();}
             memLogger->debug("~ScriptPatternElement()");
         }
 
+        int getRepeatCount() { return m_repeatCount;}
+
+        IScriptValue* getValue() { return m_value;}
+        virtual void destroy() { delete this;}
+
     private:
-        ScriptValue *m_value;
+        IScriptValue *m_value;
         int m_repeatCount;
     };
 
-    class ScriptPatternValue : public ScriptValue
+    typedef enum PatternExtend {
+        REPEAT_PATTERN=0,
+        STRETCH_PATTERN=1,
+        NO_EXTEND=2
+    };
+
+   class PatternValue : public ScriptValue
     {
     public:
-        ScriptPatternValue()
+        PatternValue(IValueAnimator* animate=NULL)
         {
-            memLogger->debug("ScriptPatternValue()");
-        }
-        virtual ~ScriptPatternValue()
-        {
-            memLogger->debug("~ScriptPatternValue()");
-        }
-        virtual DRString toString()
-        {
-            return "ScriptPatternValue not implemented";
+            memLogger->debug("PatternValue()");
+            m_animate = animate;
+            m_extend = REPEAT_PATTERN;
+            m_count = 0;
+
         }
 
-    private:
-        PtrList<ScriptPatternElement *> m_elements;
+        virtual ~PatternValue()
+        {
+            memLogger->debug("~PatternValue() start");
+            if (m_animate) {m_animate->destroy();}
+            memLogger->debug("~PatternValue() end");
+        }
+
+        void setExtend(PatternExtend val) {
+            m_extend = val;
+        }
+
+        void addElement(ScriptPatternElement* element) {
+            if (element == NULL) {
+                m_logger->error("ScriptPatternElement cannot be NULL");
+                return;
+            }
+            m_elements.add(element);
+            m_count += element->getRepeatCount();
+        }
+
+        int getMsecValue(IScriptCommand* cmd,  int defaultValue) override { 
+            return getIntValue(cmd,defaultValue);
+        }
+        bool isNumber(IScriptCommand* cmd) override { return false;}
+
+        virtual int getIntValue(IScriptCommand* cmd,  int defaultValue)
+        {
+            return (int)getFloatValue(cmd,(double)defaultValue);
+        }
+
+        virtual double getFloatValue(IScriptCommand* cmd,  double defaultValue)
+        {
+            if (m_count == 0) { return defaultValue; }
+
+            double pos = 0;
+            AnimationDomain* domain = cmd->getAnimationPositionDomain();
+            if (m_animate) {
+                AnimationRange range(0,m_count);
+                pos  = m_animate->get(cmd,range);
+                domain = m_animate->getDomain(cmd,range);
+ 
+            } else {
+                pos = domain->getValue();
+            }
+            double val = getValueAt(cmd, domain, pos,defaultValue);
+            return val;
+        }
+
+        double getValueAt(IScriptCommand* cmd,AnimationDomain* domain, int pos, double defaultValue) {
+            if (pos < 0 || pos >= m_count) {
+                if (m_extend == NO_EXTEND) {
+                    return defaultValue;
+                } else if (m_extend == REPEAT_PATTERN) {
+                    pos = abs(pos)%m_count;
+                }
+            }
+            
+            int index = pos % m_count;
+            if (m_extend == STRETCH_PATTERN) {
+                double pct = (index*1.0/m_count);   
+                double domainVal = domain->getPosition();
+                index = m_count * domainVal;
+
+            }
+            int elementIndex = 0;
+            ScriptPatternElement* element = m_elements.get(0);
+            while(index >= element->getRepeatCount()) {
+                elementIndex ++;
+                index -= element->getRepeatCount();
+                element = m_elements.get(elementIndex);
+            }
+            IScriptValue* val = element?element->getValue() : NULL;
+            if (val == NULL || val->isNull(cmd)) {
+                return defaultValue;
+            }
+            return val->getFloatValue(cmd,defaultValue);
+  
+        }
+        virtual bool getBoolValue(IScriptCommand* cmd,  bool defaultValue)
+        {
+            // bool probably doesn't make sense for a pattern.  return true if there are elements
+           return m_count > 0;
+        }
+
+        virtual DRString toString()
+        {
+            DRString result("pattern:");
+            return result;
+        }
+
+        void setAnimator(IValueAnimator* animator) {
+            m_animate = animator;
+        }
+
+        IScriptValue* eval(IScriptCommand * cmd, double defaultValue=0) override{
+            auto animator = m_animate ? m_animate->clone(cmd) : NULL;
+            auto clone = new PatternValue(animator);
+            m_elements.each([&](ScriptPatternElement*element) {
+                IScriptValue* vclone = element->getValue()->eval(cmd,defaultValue);
+
+                clone->addElement(new ScriptPatternElement(element->getRepeatCount(),vclone));
+            });
+            return clone;
+        }
+
+
+    protected:
+        PtrList<ScriptPatternElement*> m_elements;
+        size_t m_count;
+
+        IValueAnimator* m_animate;
+        PatternExtend m_extend;
     };
 
     class ScriptVariableValue : public IScriptValue
@@ -576,21 +815,18 @@ namespace DevRelief
         void destroy() override { delete this;}
         virtual int getIntValue(IScriptCommand*cmd,  int defaultValue) override
         {
-            m_recurse = true;
-            IScriptValue * val = cmd->getValue(m_name);
-            int dv = m_hasDefaultValue ? m_defaultValue : defaultValue;
-            if (val != NULL) {
-                dv = val->getIntValue(cmd,dv);
-            }
-            m_recurse = false;
-            return dv;
+            return getFloatValue(cmd,defaultValue);
         }
 
         virtual double getFloatValue(IScriptCommand*cmd,  double defaultValue) override
         {
+            int dv = m_hasDefaultValue ? m_defaultValue : defaultValue;
+            if (m_recurse) {
+                m_logger->always("variable getFloatValue() recurse");
+                return dv;
+            }
             m_recurse = true;
             IScriptValue * val = cmd->getValue(m_name);
-            int dv = m_hasDefaultValue ? m_defaultValue : defaultValue;
             if (val != NULL) {
                 dv = val->getFloatValue(cmd,dv);
             }
@@ -635,6 +871,16 @@ namespace DevRelief
             IScriptValue * val = cmd->getValue(m_name);
             return val ? val->isBool(cmd) : false;
          }
+         bool isNull(IScriptCommand* cmd) { 
+            IScriptValue * val = cmd->getValue(m_name);
+            return val ? val->isNull(cmd) : false;
+         }
+
+        IScriptValue* eval(IScriptCommand * cmd, double defaultValue=0) override{
+            return new ScriptNumberValue(getFloatValue(cmd,defaultValue));
+
+        }
+
         
         virtual DRString toString() { return DRString("Variable: ").append(m_name); }
 
@@ -651,11 +897,11 @@ namespace DevRelief
         public:
             ScriptValueList() {
                 m_logger = &ScriptLogger;
-                m_logger->info("create ScriptValueList()");
+                m_logger->debug("create ScriptValueList()");
             }
 
             virtual ~ScriptValueList() {
-                m_logger->info("delete ~ScriptValueList()");
+                m_logger->debug("delete ~ScriptValueList()");
             }
 
             bool hasValue(const char *name) override  {
@@ -680,11 +926,21 @@ namespace DevRelief
                 NameValue* nv = new NameValue(name,value);
                 m_values.add(nv);
             }
+
+            void each(auto&& lambda) const {
+                m_values.each(lambda);
+            }
  
             void destroy() { delete this;}
+
+            int count() { return m_values.size();}
         private:
             PtrList<NameValue*> m_values;
             Logger* m_logger;
    };
+
+   IScriptValue* ScriptValue::eval(IScriptCommand * cmd, double defaultValue) {
+        return new ScriptNumberValue(getFloatValue(cmd,defaultValue));
+   }
 }
 #endif

@@ -37,18 +37,25 @@ namespace DevRelief
         {
             memLogger->debug("~Script()");
             m_logger->debug("~Script()");
-            delete m_state;
-            delete m_rootContainer;
+            if (m_state) {m_state->destroy();}
+            if (m_rootContainer) {m_rootContainer->destroy();}
         }
 
         void destroy() override { delete this;}
 
 
-        void begin(IHSLStrip * ledStrip) override {
-            m_logger->always("begin Script.  frequency %d",m_frequencyMSecs);
+        void begin(IHSLStrip * ledStrip, JsonObject* params) override {
+            m_logger->never("begin Script.  frequency %d",m_frequencyMSecs);
             delete m_state;
             m_state = new ScriptState();
+            if (params) {
+                params->eachProperty([&](const char * name, JsonElement*value){
+                    m_state->setValue(name,new ScriptStringValue(value->getString()));
+                });
+            }
+            m_logger->never("\tset strip 0x%04X",ledStrip);
             m_rootContainer->setStrip(ledStrip);
+            m_logger->never("\tm_state->beginScript");
             m_state->beginScript(this,ledStrip);
 
         }
@@ -56,21 +63,29 @@ namespace DevRelief
         void step() override
         {
             int ms = m_state->msecsSinceLastStep();
-            m_logger->test("frequency %d %d",m_frequencyMSecs,ms);
+            m_logger->never("frequency %d %d",m_frequencyMSecs,ms);
             if (m_frequencyMSecs > m_state->msecsSinceLastStep())
-            {
+            {   m_logger->never("frequency too soon");
                  return;
             }
-            m_logger->test("Script step");
+            m_logger->never("Script step");
 
             IHSLStrip * strip = m_state->getStrip();
+            m_logger->never("strip 0x%04X",strip);
 
+            int startMs = millis();
 
             strip->clear();
+            m_logger->never("cleared");
             m_state->beginStep();
+            m_logger->never("began");
+            m_logger->never("root container 0x%04X",m_rootContainer);
             m_rootContainer->execute(m_state);
+            m_logger->never("executed");
             m_state->endStep();
+            m_logger->never("ended");
             strip->show();
+            m_logger->never("done %d",millis()-startMs);
         }
 
         void setName(const char *name) { m_name = name; }
@@ -81,7 +96,6 @@ namespace DevRelief
     private:
         Logger *m_logger;
         ScriptRootContainer* m_rootContainer;
-        PtrList<ScriptCommand *> m_commands;
         DRString m_name;
         int m_frequencyMSecs;
         ScriptState* m_state;

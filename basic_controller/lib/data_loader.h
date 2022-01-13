@@ -47,7 +47,7 @@ class LoadResult {
 
     void setJsonRoot(JsonRoot* json) {
         m_jsonRoot = json;
-        m_json = m_jsonRoot->getTopElement()->asObject();
+        m_json = m_jsonRoot ? m_jsonRoot->getTopElement()->asObject() : NULL;
     }
 
     void setSuccess(bool success) { m_success = success;}

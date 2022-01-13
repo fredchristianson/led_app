@@ -115,7 +115,8 @@ class JsonBase {
         virtual bool isFloat() { return false;}
         virtual bool isVariable() { return false;}
         virtual bool isNumber() { return false;}
-        
+        virtual bool isNull() { return false;}
+
         virtual JsonArray* asArray() { return NULL;}
         virtual JsonObject* asObject() { return NULL;}
         virtual JsonElement* asElement() { return NULL;}
@@ -462,13 +463,15 @@ class JsonObject : public JsonElement {
         JsonObject* getChild(const char * name);
 
         JsonProperty * getProperty(const char * name) {
-            m_logger->debug("get property %s",name);
+            m_logger->never("get property %s",name);
             for(JsonProperty*prop=m_firstProperty;prop!=NULL;prop=prop->getNext()){
-                m_logger->debug("\tcheck%s",prop->getName());
+                m_logger->never("\tcheck %s",prop->getName());
                 if (strcmp(prop->getName(),name)==0) {
+                    m_logger->never("\tmatch");
                     return prop;
                 }
             }
+            m_logger->never("\tno match");
             return NULL;
         }
         JsonProperty* getFirstProperty() { return m_firstProperty;}
@@ -485,6 +488,11 @@ class JsonObject : public JsonElement {
         JsonElement* getAt(size_t idx) {
             return m_firstProperty == NULL ? NULL : m_firstProperty->getAt(idx);
         }
+
+        void clear(){
+            delete m_firstProperty;
+            m_firstProperty=NULL;
+        }
     protected:
         JsonProperty* m_firstProperty;
 };
@@ -494,7 +502,7 @@ class JsonObject : public JsonElement {
 class JsonArrayItem : public JsonElement {
     public:
         JsonArrayItem(JsonRoot& root, JsonElement * value) :JsonElement(root,JSON_ARRAY_ITEM) {
-            m_logger->debug("create JsonArray item for type %d",value->getType());
+            m_logger->never("create JsonArray item for type %d",value->getType());
 
             m_value = value;
             m_next = NULL;
@@ -728,7 +736,7 @@ class JsonFloat : public  JsonValue {
 class JsonBool : public  JsonValue {
     public:
         JsonBool(JsonRoot& root, bool value) : JsonValue(root,JSON_BOOLEAN) {
-            m_logger->debug("create JsonFloat %s ",value?"true":"false");
+            m_logger->never("create JsonBool %s ",value?"true":"false");
 
             m_value = value;
             mem.construct("JsonBool",this);
@@ -757,6 +765,8 @@ class JsonNull : public JsonElement {
         JsonNull(JsonRoot& root) : JsonElement(root,JSON_NULL){
 
         }
+        bool isNull() override { return true;}
+
 };
 
 class ParseGen {
@@ -1457,6 +1467,9 @@ JsonArray* JsonRoot::createArray(){
 
 
 JsonObject* JsonRoot::getTopObject(){
+    if (m_value == NULL) {
+        m_value = createObject();
+    }
     return m_value->asObject();
 }
 
@@ -1552,33 +1565,36 @@ JsonArrayItem* JsonArray::add(bool val) {
 }
 
 bool JsonObject::get(const char *name,bool defaultValue){
-    m_logger->debug("get bool value for %s",name);
+    m_logger->never("get bool value for %s",name);
 
     bool val = defaultValue;
     JsonProperty*prop = getProperty(name);
     if (prop) {
-        prop->get(defaultValue);
+        val = prop->get(defaultValue);
+    } else {
+        m_logger->never("\tproperty not found");
     }
+    m_logger->never("\tvalue %d",val?1:0);
     return val;
 }
 int JsonObject::get(const char *name,int defaultValue){
-    m_logger->debug("get int value for %s",name);
+    m_logger->never("get int value for %s",name);
     int val = defaultValue;
     JsonProperty*prop = getProperty(name);
     if (prop) {
         val = prop->get(defaultValue);
     } else {
-        m_logger->debug("\tprop not found");
+        m_logger->never("\tprop not found");
     }
     return val;
 }
 
 const char * JsonObject::get(const char *name,const char *defaultValue){
-    m_logger->debug("get string value for %s",name);
+    m_logger->never("get string value for %s",name);
     const char * val;
     JsonProperty*prop = getProperty(name);
     if (prop) {
-        m_logger->debug("got prop %s",name);
+        m_logger->never("got prop %s",name);
         val = prop->get(defaultValue);
     } else {
         val = defaultValue;
@@ -1588,7 +1604,7 @@ const char * JsonObject::get(const char *name,const char *defaultValue){
 
 
 double JsonObject::get(const char *name,double defaultValue){
-    m_logger->debug("get float value for %s",name);
+    m_logger->never("get float value for %s",name);
 
     double val = defaultValue;
     JsonProperty*prop = getProperty(name);
@@ -1606,7 +1622,7 @@ JsonArray* JsonObject::createArray(const char * propertyName) {
 }
 
 JsonArray* JsonObject::getArray(const char * name){
-    m_logger->debug("get array value for %s",name);
+    m_logger->never("get array value for %s",name);
 
     JsonProperty * prop = getProperty(name);
     if (prop) {

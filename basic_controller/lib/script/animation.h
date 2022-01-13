@@ -56,6 +56,7 @@ namespace DevRelief
         double getHigh() { return m_high; }
         double getDistance() { return (m_high-m_low) * (m_unfold ? 2 : 1);}
         void setUnfolded(bool unfold=true) { m_unfold = unfold;}
+        bool getUnfold() { return m_unfold;}
     private:
         double m_lastPosition;
         double m_lastValue;
@@ -172,6 +173,7 @@ namespace DevRelief
 
         virtual void setStart(int msecs = -1) {
             m_startMillis = (msecs == -1) ? millis() : msecs;
+            m_repeat=0;
         }
 
         virtual double getMin()
@@ -336,7 +338,7 @@ namespace DevRelief
             double ease = m_ease->calculate(position);
             //m_logger->debug("\tpos %f.  ease %f",position,ease);
             double result = range.getValue(ease);
-            //m_logger->debug("\tpos %f.  ease %f. result %f.  ",result);
+            m_logger->never("\tpos %f.  ease %f. result %f.  ",result);
             return result;
         };
 
@@ -428,7 +430,7 @@ namespace DevRelief
             }
             double value = animator.get(range,cmd);
             m_lastValue = value;
-            m_logger->debug("\tvalue=%f",value);
+            m_logger->never("ValueAnimator value=%f",value);
 
             return value;
           
@@ -439,27 +441,45 @@ namespace DevRelief
         void setEaseParameters(IScriptCommand* cmd) {
             double in = 1;
             double out = 1;
-            if (m_ease == NULL || (m_ease->equals(cmd,"linear"))){
+            if ((m_ease != NULL && m_ease->equals(cmd,"linear"))){
                 m_selectedEase = &m_linearEase;
+                return;
+            } else {
+                m_selectedEase = &m_cubicBeszierEase;
             }
             if (m_ease) {
                 in = 1-m_ease->getFloatValue(cmd,1);
                 out = 1-in;
+                m_logger->never("got ease %x %f %f",this,in,out);
             }
             if (m_easeIn) {
-                in = 1-m_easeIn->getFloatValue(cmd,0);
+                in = 1-m_easeIn->getFloatValue(cmd,0.123);
+                m_logger->never("got ease-in %x %f",this,in);
+
             }
 
             if (m_easeOut) {
                 out = m_easeOut->getFloatValue(cmd,0);
+                m_logger->never("got ease-out %x %f",this,out);
             }
+            m_logger->never("ease in/out  %f/%f",in,out);
             m_cubicBeszierEase.setValues(in,out);
         }
 
 
-        void setEase(IScriptValue* ease) { m_ease = ease;}
-        void setEaseIn(IScriptValue* ease) { m_easeIn = ease;}
-        void setEaseOut(IScriptValue* ease) { m_easeOut = ease;}
+        void setEase(IScriptValue* ease) { 
+            m_logger->never("ease %x %x %s",this,ease, (ease ? ease->toString().text():""));
+            m_ease = ease;
+        }
+
+        void setEaseIn(IScriptValue* ease) {
+            m_logger->never("ease-in %x %x %s",this,ease, (ease ? ease->toString().text():""));
+            m_easeIn = ease;
+        }
+        void setEaseOut(IScriptValue* ease) {
+            m_logger->never("ease-out %x %x %s",this,ease, (ease ? ease->toString().text():""));
+            m_easeOut = ease;
+        }
 
     protected:
         virtual bool isPaused(IScriptCommand* cmd, AnimationRange&range) { return false;}
@@ -564,9 +584,12 @@ namespace DevRelief
             
             double getPauseValue(IScriptCommand* cmd, AnimationRange&range) override {
                 if (m_delayResponseValue != NULL) {
-                    return m_delayResponseValue->getFloatValue(cmd,m_lastValue);
+                    double val = m_delayResponseValue->getFloatValue(cmd,m_lastValue);
+                    m_logger->never("return response value %f (high=%f)",val,range.getHigh());
+                    return val;
                 }
-                return range.getHigh();
+                m_logger->never("return high value %f",range.getHigh());
+                return range.getUnfold() ? range.getLow() :  range.getHigh();
             }
 
 

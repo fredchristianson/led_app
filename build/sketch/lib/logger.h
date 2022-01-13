@@ -292,7 +292,7 @@ private:
         void periodic(int level,long frequencyMS, long * lastTimer,const char * message,...){}
         void periodic(int level,long frequencyMS,const char * message,...){}
         void periodicNever(int level,long frequencyMS, const char * message,...){}
-        void periodic(int level,long frequencyMS, long*, const char * message,...){}
+        void periodicNever(int level,long frequencyMS, long*, const char * message,...){}
         const char * getLevelName(int level) {return NULL;}
         void showMemory(const char*ignore=NULL) {}
     };

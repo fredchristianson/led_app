@@ -38,12 +38,12 @@ namespace DevRelief
     class ScriptState;
     class Script;
     class ScriptCommand;
+    class ScriptPosition;
     class AnimationDomain;
     class AnimationRange;
     class TimeDomain;
     class PositionDomain;
-    class IStripModifier;
-    class IStripModifier;
+    class IValueAnimator;
 
     Logger *memLogger = &ScriptMemoryLogger;
     class IScriptCommand;
@@ -60,6 +60,12 @@ namespace DevRelief
         virtual bool isString(IScriptCommand* cmd)=0;
         virtual bool isNumber(IScriptCommand* cmd)=0;
         virtual bool isBool(IScriptCommand* cmd)=0;
+        virtual bool isNull(IScriptCommand* cmd)=0;
+
+        // evaluate this IScriptValue with the given command and return a new
+        // IScriptValue.  mainly useful to get a random number one time
+        virtual IScriptValue* eval(IScriptCommand*cmd, double defaultValue)=0; 
+
 
         virtual bool isRecursing() = 0; // mainly for variable values
         // for debugging
@@ -96,21 +102,45 @@ namespace DevRelief
         public:
         virtual void destroy() =0; // cannot delete pure virtual interfaces. they must all implement destroy    
 
+        virtual void beginStep()=0;
+        virtual void endStep()=0;
         virtual int getStepStartTime()=0;
         virtual int getStepNumber()=0;
+        virtual void setValue(const char * valueName, IScriptValue* val)=0;
+        virtual void setValue(void*owner, const char * valueName, IScriptValue* val)=0;
+        virtual void setPreviousCommand(IScriptCommand* cmd)=0;
+        virtual void setCurrentCommand(IScriptCommand* cmd)=0;
+        virtual IScriptCommand* getPreviousCommand()=0;
+        virtual IScriptValue* getValue(const char * valueName)=0;
+        virtual IScriptValue* getValue(void* owner,const char * valueName)=0;
+        virtual IScriptCommand* setContainer(IScriptCommand*)=0;// return previous value
+        virtual IScriptCommand* getContainer()=0;
+        virtual IHSLStrip* setStrip(IHSLStrip*)=0; // return previous value
+        virtual IHSLStrip* getStrip()=0;
+        virtual IScriptState* createChild()=0;
+        virtual long msecsSinceLastStep()=0;
+    };
+
+    class IPositionable {
+        public:
+            virtual ScriptPosition* getPosition()=0;
+            virtual PositionDomain* getAnimationPositionDomain()=0;
+            virtual void setPositionIndex(int index)=0;
+            virtual PositionUnit getPositionUnit()=0;
+            virtual int getOffset()=0;
     };
     
-    class IScriptCommand 
+    class IScriptCommand: public IPositionable
     {
         public:
             virtual void destroy() =0; // cannot delete pure virtual interfaces. they must all implement destroy            
-            virtual ScriptStatus execute(ScriptState*state)=0;
+            virtual ScriptStatus getStatus() =0;
+            virtual void setStatus(ScriptStatus status)=0;
+            virtual ScriptStatus execute(IScriptState*state)=0;
             virtual IScriptValue* getValue(const char* name)=0;
             virtual const char * getType()=0;
-            virtual IHSLStrip * getHSLStrip()=0;
-            virtual IStripModifier* getStrip()=0;
             virtual IScriptState* getState()=0;
-            virtual IStripModifier* getPosition()=0;
+            virtual void onAnimationComplete(IValueAnimator*animator)=0;
     };
 
     class IValueAnimator
@@ -119,29 +149,21 @@ namespace DevRelief
         virtual void destroy() =0; // cannot delete pure virtual interfaces. they must all implement destroy    
         virtual bool isUnfolded(IScriptCommand *cmd)=0;
         virtual double get(IScriptCommand*cmd, AnimationRange&range)=0;
+        virtual IValueAnimator* clone(IScriptCommand*cmd)=0;
+        virtual AnimationDomain* getDomain(IScriptCommand*cmd, AnimationRange&range)=0;
     };
 
   
     class IScript {
         public:
             virtual void destroy()=0;
-            virtual void begin(IHSLStrip * ledStrip)=0;
+            virtual void begin(IHSLStrip * ledStrip, JsonObject* params)=0;
             virtual void step()=0;
     };
 
-    class IStripModifier : public IHSLStrip {
-        public:
-            virtual void destroy()=0;
-            virtual PositionUnit getPositionUnit()=0;
-            virtual int getEnd()=0;
-            virtual int getOffset()=0;
-    };
-
-    class ICommandContainer  {
+    class ICommandContainer{
         public:
             virtual void add(IScriptCommand*cmd)=0;
-            virtual IHSLStrip * getHSLStrip()=0;
-            virtual IStripModifier* getStrip()=0;
     };
 }
 #endif
